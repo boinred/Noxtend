@@ -1,0 +1,4 @@
+interface:
+  display_name: "TDD Cycle"
+  short_description: "작은 Red-Green-Refactor 단위로 코드 변경 검증"
+  default_prompt: "Use $tdd-cycle to implement this change with targeted and full regression tests."

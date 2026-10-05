@@ -1,0 +1,30 @@
+{
+  "folders": [
+    { "name": "root", "path": "." },
+    { "name": "frontend", "path": "apps/frontend" },
+    { "name": "backend", "path": "apps/backend" },
+    { "name": "proto", "path": "packages/proto" },
+    { "name": "docs", "path": "docs" }
+  ],
+  "settings": {
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit"
+    },
+    "typescript.tsdk": "node_modules/typescript/lib",
+    "files.exclude": {
+      "**/node_modules": true,
+      "**/dist": true
+    },
+    "search.exclude": {
+      "**/pnpm-lock.yaml": true
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "dbaeumer.vscode-eslint",
+      "ms-dotnettools.csharp",
+      "zxh404.vscode-proto3"
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Design Ref: §2.4 — Tuning.Domain 과 Domain 만 참조한다.
+
+    `Noxtend.Application` 을 참조하지 않는 것이 계약이다. 참조하면 파이프라인
+    유스케이스와 튜닝 유스케이스가 서로를 부를 수 있게 되고, 그 순간 분리가 의미를 잃는다.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Noxtend.Tuning.Domain\Noxtend.Tuning.Domain.csproj" />
+    <ProjectReference Include="..\Noxtend.Domain\Noxtend.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

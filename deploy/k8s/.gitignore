@@ -1,0 +1,2 @@
+# Real secrets never enter the repository (§7 · §10.3). Only the example is tracked.
+secrets.yaml

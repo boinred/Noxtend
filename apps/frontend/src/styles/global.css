@@ -1,0 +1,77 @@
+/* Design Ref: §5.2 — 목업의 리셋과 body 규칙을 이식 */
+@import '@fontsource/inter/300.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+@import '@fontsource/jetbrains-mono/600.css';
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--background);
+    color: var(--foreground);
+    overflow: hidden;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Form controls inherit the same typography as surrounding UI. */
+  input,
+  textarea,
+  select {
+    font-family: inherit;
+  }
+
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  /* Persistent keyboard focus indicator across custom controls. */
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+}
+
+/*
+ * 오버레이의 "이동" 이 데려간 파츠 줄을 잠깐 밝힌다 (사이클 #9 §8.2.4).
+ *
+ * 없으면 스크롤이 끝난 뒤 어느 줄로 내려왔는지 모른다 — 파츠가 비슷한 모양으로
+ * 아홉 줄 늘어서 있어 특히 그렇다.
+ */
+@keyframes land {
+  0%,
+  55% {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 18%, transparent);
+  }
+  100% {
+    border-color: transparent;
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-landed='true'] {
+    animation: none;
+    border-color: var(--primary);
+  }
+}

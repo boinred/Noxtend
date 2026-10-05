@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Noxtend - Live Result UI Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-app: oklch(15% 0.010 145);
+      --bg-panel: oklch(19% 0.012 145);
+      --bg-card: oklch(21% 0.013 145);
+      --bg-card-hover: oklch(25% 0.015 145);
+      --border-color: rgba(255, 255, 255, 0.1);
+      --border-active: oklch(72% 0.140 140);
+      --text-main: oklch(94% 0.008 145);
+      --text-muted: oklch(72% 0.010 145);
+      --text-dim: oklch(55% 0.010 145);
+      --accent-sage: oklch(72% 0.140 140);
+      --accent-sage-bg: rgba(74, 222, 128, 0.12);
+      --accent-destructive: #f87171;
+      --accent-destructive-bg: rgba(248, 113, 113, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: var(--bg-app);
+      color: var(--text-main);
+      line-height: 1.5;
+      padding: 32px 24px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      max-width: 1100px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* 헤더 */
+    .app-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 1.25rem;
+      color: var(--text-main);
+    }
+
+    .brand-badge {
+      background: var(--accent-sage-bg);
+      color: var(--accent-sage);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(74, 222, 128, 0.3);
+    }
+
+    /* LiveActionBar (신설 컴포넌트) */
+    .live-action-bar {
+      background: linear-gradient(90deg, rgba(74, 222, 128, 0.08) 0%, rgba(34, 197, 94, 0.03) 100%);
+      border: 1px solid rgba(74, 222, 128, 0.3);
+      border-radius: 12px;
+      padding: 14px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      animation: pulse-glow 3s infinite alternate;
+    }
+
+    @keyframes pulse-glow {
+      0% { border-color: rgba(74, 222, 128, 0.25); }
+      100% { border-color: rgba(74, 222, 128, 0.5); }
+    }
+
+    .live-status-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .live-indicator {
+      width: 10px;
+      height: 10px;
+      background: var(--accent-sage);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--accent-sage);
+      animation: blink 1.5s infinite ease-in-out;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .live-title {
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--accent-sage);
+    }
+
+    .live-meta {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .cancel-button {
+      background: transparent;
+      border: 1px solid var(--accent-destructive);
+      color: var(--accent-destructive);
+      padding: 7px 14px;
+      border-radius: 7px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .cancel-button:hover {
+      background: var(--accent-destructive-bg);
+      transform: translateY(-1px);
+    }
+
+    /* 장면 분석 요약 패널 */
+    .scene-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .scene-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .scene-desc {
+      font-size: 0.92rem;
+      color: var(--text-main);
+      line-height: 1.6;
+    }
+
+    /* 파츠 갤러리 섹션 */
+    .gallery-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-top: 8px;
+    }
+
+    .gallery-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .gallery-tally {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .part-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 18px;
+    }
+
+    /* 파츠 카드 공통 */
+    .part-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: border-color 0.2s ease;
+    }
+
+    .part-card.completed {
+      border-color: rgba(74, 222, 128, 0.2);
+    }
+
+    .part-card.in-progress {
+      border-style: dashed;
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .part-header {
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .part-name {
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .status-badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .badge-success {
+      background: var(--accent-sage-bg);
+      color: var(--accent-sage);
+      border: 1px solid rgba(74, 222, 128, 0.3);
+    }
+
+    .badge-running {
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+
+    .badge-pending {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-dim);
+    }
+
+    /* 4방향 텍스처 미리보기 */
+    .texture-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      padding: 12px 16px;
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .texture-thumb {
+      aspect-ratio: 1;
+      border-radius: 6px;
+      background: #111;
+      display: grid;
+      place-items: center;
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .texture-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .direction-tag {
+      position: absolute;
+      bottom: 2px;
+      right: 3px;
+      font-size: 0.6rem;
+      color: #aaa;
+      background: rgba(0,0,0,0.6);
+      padding: 1px 3px;
+      border-radius: 3px;
+    }
+
+    /* 3D 뷰포트 / 슬롯 */
+    .mesh-viewport {
+      aspect-ratio: 16 / 10;
+      background: radial-gradient(circle at center, rgba(255,255,255,0.04) 0%, rgba(0,0,0,0.4) 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      padding: 16px;
+    }
+
+    .model-mock {
+      font-size: 2.8rem;
+      filter: drop-shadow(0 10px 15px rgba(0,0,0,0.5));
+    }
+
+    .mesh-footer {
+      padding: 10px 16px;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      display: flex;
+      justify-content: space-between;
+      border-top: 1px solid var(--border-color);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* 미완성 슬롯 로딩 UI */
+    .slot-spinner {
+      width: 28px;
+      height: 28px;
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top-color: #38bdf8;
+      border-radius: 50%;
+      animation: spin 1s infinite linear;
+      margin-bottom: 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .slot-text {
+      font-size: 0.82rem;
+      color: #38bdf8;
+      font-weight: 500;
+    }
+
+    .slot-subtext {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      margin-top: 3px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+
+    <!-- 헤더 -->
+    <header class="app-header">
+      <div class="brand">
+        <span>Noxtend Studio</span>
+        <span class="brand-badge">Dynamic Pipeline</span>
+      </div>
+      <div style="font-size: 0.85rem; color: var(--text-muted);">
+        작업 ID: <code style="color: var(--text-main); font-family: 'JetBrains Mono';">job-c4b4e95f</code>
+      </div>
+    </header>
+
+    <!-- 1. 신설 컴포넌트: LiveActionBar -->
+    <div class="live-action-bar">
+      <div class="live-status-group">
+        <div class="live-indicator"></div>
+        <div>
+          <span class="live-title">실시간 제작 진행 중</span>
+          <span class="live-meta"> · 3D 메시 재구성 중 (3/6 파츠 완성 · 4방향 이미지 24/24 완료)</span>
+        </div>
+      </div>
+      <button class="cancel-button" onclick="alert('작업 취소 요청이 전송됩니다.')">
+        <span>✕</span> 작업 취소
+      </button>
+    </div>
+
+    <!-- 2. 장면 분석 요약 -->
+    <section class="scene-card">
+      <div class="scene-title">장면 명세 (Scene Specification)</div>
+      <div class="scene-desc">
+        SF 사이버펑크 도시 배경의 자율 비행 정찰 드론 및 모듈형 파츠 구성. 전면 메인 바디, 회전형 쿼드 프로펠러, 고해상도 광학 센서 마운트 포함.
+      </div>
+    </section>
+
+    <!-- 3. 파츠 제작 리스트 (완성 + 진행 중 슬롯 공존) -->
+    <section>
+      <div class="gallery-header">
+        <h2 class="gallery-title">파츠 제작 리스트</h2>
+        <div class="gallery-tally">파츠 6 · 이미지 24/24 · 3D 3/6 완료</div>
+      </div>
+
+      <div class="part-grid" style="margin-top: 14px;">
+
+        <!-- 파츠 1: 3D 완성 -->
+        <div class="part-card completed">
+          <div class="part-header">
+            <span class="part-name">1. 메인 프레임 바디</span>
+            <span class="status-badge badge-success">✓ 3D 완성</span>
+          </div>
+          <div class="texture-row">
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">정면</span>🤖</div>
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">우측</span>🤖</div>
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">후면</span>🤖</div>
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">좌측</span>🤖</div>
+          </div>
+          <div class="mesh-viewport">
+            <div class="model-mock">🛸</div>
+            <div style="font-size: 0.75rem; color: var(--accent-sage); margin-top: 8px;">3D 뷰어 렌더링 준비 완료</div>
+          </div>
+          <div class="mesh-footer">
+            <span>Tripo H3 v3.1</span>
+            <span>42.5k Poly · GLB</span>
+          </div>
+        </div>
+
+        <!-- 파츠 2: 3D 완성 -->
+        <div class="part-card completed">
+          <div class="part-header">
+            <span class="part-name">2. 쿼드 프로펠러 암</span>
+            <span class="status-badge badge-success">✓ 3D 완성</span>
+          </div>
+          <div class="texture-row">
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">정면</span>⚙️</div>
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">우측</span>⚙️</div>
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">후면</span>⚙️</div>
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">좌측</span>⚙️</div>
+          </div>
+          <div class="mesh-viewport">
+            <div class="model-mock">⚙️</div>
+            <div style="font-size: 0.75rem; color: var(--accent-sage); margin-top: 8px;">3D 뷰어 렌더링 준비 완료</div>
+          </div>
+          <div class="mesh-footer">
+            <span>Tripo H3 v3.1</span>
+            <span>18.2k Poly · GLB</span>
+          </div>
+        </div>
+
+        <!-- 파츠 3: 3D 완성 -->
+        <div class="part-card completed">
+          <div class="part-header">
+            <span class="part-name">3. 옵티컬 센서 포드</span>
+            <span class="status-badge badge-success">✓ 3D 완성</span>
+          </div>
+          <div class="texture-row">
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">정면</span>📷</div>
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">우측</span>📷</div>
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">후면</span>📷</div>
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">좌측</span>📷</div>
+          </div>
+          <div class="mesh-viewport">
+            <div class="model-mock">👁️</div>
+            <div style="font-size: 0.75rem; color: var(--accent-sage); margin-top: 8px;">3D 뷰어 렌더링 준비 완료</div>
+          </div>
+          <div class="mesh-footer">
+            <span>Tripo H3 v3.1</span>
+            <span>12.0k Poly · GLB</span>
+          </div>
+        </div>
+
+        <!-- 파츠 4: 3D 재구성 진행 중 (LiveMeshSlot) -->
+        <div class="part-card in-progress">
+          <div class="part-header">
+            <span class="part-name">4. 에너지 배터리 팩</span>
+            <span class="status-badge badge-running">⏳ 3D 재구성 중</span>
+          </div>
+          <div class="texture-row">
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">정면</span>🔋</div>
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">우측</span>🔋</div>
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">후면</span>🔋</div>
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">좌측</span>🔋</div>
+          </div>
+          <div class="mesh-viewport">
+            <div class="slot-spinner"></div>
+            <div class="slot-text">3D 메시 생성 중...</div>
+            <div class="slot-subtext">약 1~2분 소요 예상 · 자리를 지킵니다</div>
+          </div>
+          <div class="mesh-footer">
+            <span>Tripo H3 대기</span>
+            <span>진행 중...</span>
+          </div>
+        </div>
+
+        <!-- 파츠 5: 대기 중 (LiveMeshSlot) -->
+        <div class="part-card in-progress">
+          <div class="part-header">
+            <span class="part-name">5. 서브 추진기 노즐</span>
+            <span class="status-badge badge-pending">대기 중</span>
+          </div>
+          <div class="texture-row">
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">정면</span>🚀</div>
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">우측</span>🚀</div>
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">후면</span>🚀</div>
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">좌측</span>🚀</div>
+          </div>
+          <div class="mesh-viewport">
+            <div style="font-size: 1.5rem; opacity: 0.3; margin-bottom: 6px;">⏳</div>
+            <div style="font-size: 0.8rem; color: var(--text-dim);">이전 파츠 완료 후 순차 시작</div>
+          </div>
+          <div class="mesh-footer">
+            <span>대기열 등록</span>
+            <span>Queue</span>
+          </div>
+        </div>
+
+        <!-- 파츠 6: 대기 중 (LiveMeshSlot) -->
+        <div class="part-card in-progress">
+          <div class="part-header">
+            <span class="part-name">6. 통신 안테나 모듈</span>
+            <span class="status-badge badge-pending">대기 중</span>
+          </div>
+          <div class="texture-row">
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">정면</span>📡</div>
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">우측</span>📡</div>
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">후면</span>📡</div>
+            <div class="texture-thumb" style="background: #1e293b;"><span class="direction-tag">좌측</span>📡</div>
+          </div>
+          <div class="mesh-viewport">
+            <div style="font-size: 1.5rem; opacity: 0.3; margin-bottom: 6px;">⏳</div>
+            <div style="font-size: 0.8rem; color: var(--text-dim);">이전 파츠 완료 후 순차 시작</div>
+          </div>
+          <div class="mesh-footer">
+            <span>대기열 등록</span>
+            <span>Queue</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </div>
+
+</body>
+</html>

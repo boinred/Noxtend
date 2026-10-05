@@ -1,0 +1,4 @@
+interface:
+  display_name: "Noxtend Workflow"
+  short_description: "Noxtend 영역별 구현 절차와 검증 명령 선택"
+  default_prompt: "Use $noxtend-workflow to select the relevant Noxtend implementation and verification procedure."

@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="Noxtend.Api/Noxtend.Api.csproj" />
+  <Project Path="Noxtend.Application/Noxtend.Application.csproj" />
+  <Project Path="Noxtend.Domain/Noxtend.Domain.csproj" />
+  <Project Path="Noxtend.Infrastructure/Noxtend.Infrastructure.csproj" />
+  <Project Path="Noxtend.Tuning.Application/Noxtend.Tuning.Application.csproj" />
+  <Project Path="Noxtend.Tuning.Domain/Noxtend.Tuning.Domain.csproj" />
+  <Project Path="Noxtend.Tests/Noxtend.Tests.csproj" />
+</Solution>

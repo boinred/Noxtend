@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Design Ref: §9.2 — Domain must reference nothing.
+
+    .NET enforces layer boundaries through project references; folder separation is
+    convention, not a rule. Logging.Abstractions is the single allowed dependency:
+    it is an abstraction package with no runtime, so it does not drag EF Core,
+    HttpClient, Redis or ASP.NET into the domain.
+
+    Adding any other PackageReference here is itself a design-violation signal.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      ImplicitUsings puts System.Net.Http in scope for free, so `new HttpClient()` would
+      compile in the domain without any visible import. The guard in §9.2 is meant to make
+      an infrastructure dependency conspicuous; dropping this one using restores that.
+    -->
+    <Using Remove="System.Net.Http" />
+  </ItemGroup>
+
+</Project>

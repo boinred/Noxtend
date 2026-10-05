@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Noxtend — AI 에셋 제작 스튜디오</title>
+    <script>
+      /*
+       * Design Ref: §2.2 — 테마 부트스트랩.
+       *
+       * React 가 로드되기 전에 동기로 실행돼 <html data-theme> 을 확정한다.
+       * 이게 없으면 다크가 한 프레임 보였다가 라이트로 바뀌는 번쩍임(FOUC)이 남는다.
+       * 이 요구 때문에 테마를 Zustand 에 두는 설계안(Option A)을 배제했다.
+       *
+       * 해석 규칙은 src/infra/theme/themeStorage.ts 의 resolveTheme 과 동일해야 한다.
+       * 저장 값은 화이트리스트로만 받는다 — 외부 입력을 그대로 DOM 에 넣지 않는다.
+       */
+      ;(function () {
+        var theme = 'dark'
+        try {
+          var saved = localStorage.getItem('nextend.theme')
+          if (saved === 'dark' || saved === 'light') {
+            theme = saved
+          } else if (window.matchMedia('(prefers-color-scheme: light)').matches) {
+            theme = 'light'
+          }
+        } catch (e) {
+          /* 저장소 접근이 막혀도 앱을 멈추지 않는다 */
+        }
+        document.documentElement.dataset.theme = theme
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

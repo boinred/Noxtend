@@ -1,0 +1,21 @@
+{
+  "name": "nextend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Project T — AI 3D Node Pipeline Editor monorepo",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @nextend/frontend dev",
+    "build": "pnpm --filter @nextend/frontend build",
+    "preview": "pnpm --filter @nextend/frontend preview",
+    "typecheck": "pnpm --filter @nextend/frontend typecheck",
+    "lint": "pnpm --filter @nextend/frontend lint",
+    "format": "pnpm --filter @nextend/frontend format",
+    "format:check": "pnpm --filter @nextend/frontend format:check",
+    "test": "pnpm --filter @nextend/frontend test",
+    "test:e2e": "pnpm --filter @nextend/frontend test:e2e"
+  },
+  "packageManager": "pnpm@11.9.0"
+}

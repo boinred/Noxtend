@@ -1,0 +1,110 @@
+# Design Ref: §10.3 — tunables live in a ConfigMap, secrets in a Secret.
+# Lease/sweep values are operational knobs; changing them must not need a rebuild.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: noxtend-config
+  namespace: noxtend
+data:
+  ASPNETCORE_ENVIRONMENT: Development
+  ASPNETCORE_URLS: http://+:8080
+  # Must match the volumeMount below — the key ring lives on the PVC, not in the pod
+  DataProtection__KeysPath: /keys
+  Jobs__LeaseSeconds: "120"
+  # Upper bound on cancellation latency (§2.2) — the worker checks job state on renew
+  Jobs__LeaseRenewSeconds: "15"
+  Jobs__SweepIntervalSeconds: "60"
+  Jobs__MaxAttempts: "3"
+  Llm__UseFake: "false"
+---
+# Design Ref: §7 — Data Protection keys must outlive the pod.
+# Without this the ring is regenerated on restart and every stored provider key
+# becomes undecryptable, which reads as data loss rather than a config mistake.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: api-dataprotection
+  namespace: noxtend
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 128Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: noxtend
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+        - name: api
+          image: noxtend-api:local
+          # Local image built straight into the Docker Desktop daemon — never pulled
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: noxtend-config
+            - secretRef:
+                name: noxtend-secrets
+          volumeMounts:
+            - name: dataprotection
+              mountPath: /keys
+          # Probes deliberately target /health/live, not /health.
+          # /health reports dependency state and returns 503 when Redis or the DB
+          # is down; probing it would pull the pod out of the Service and turn a
+          # readable 503 into a connection refused (§6 — the banner needs a response).
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            # 첫 부팅 시 Program.cs 가 Kestrel 바인딩 전에 MigrateAsync 를 돌린다 —
+            # 콜드 마이그레이션+시드가 기존 70초 한도보다 오래 걸려 라이브니스가 죽여버렸다
+            failureThreshold: 20
+          readinessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 40
+          resources:
+            requests:
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+      volumes:
+        - name: dataprotection
+          persistentVolumeClaim:
+            claimName: api-dataprotection
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: noxtend
+spec:
+  type: NodePort
+  selector:
+    app: api
+  ports:
+    - port: 8080
+      targetPort: 8080
+      # Reachable at http://localhost:30080 on Docker Desktop
+      nodePort: 30080

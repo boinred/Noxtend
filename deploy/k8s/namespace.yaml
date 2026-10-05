@@ -1,0 +1,5 @@
+# Design Ref: §11.1 — single namespace for the whole local stack
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: noxtend

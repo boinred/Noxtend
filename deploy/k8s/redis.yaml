@@ -1,0 +1,46 @@
+# Design Ref: §1.2 · §3.3 — Redis is a dispatch mechanism, not a system of record.
+# No PVC on purpose: losing the stream degrades to a delay because the sweeper
+# re-enqueues from the database. Persisting it would imply a durability guarantee
+# the design deliberately does not depend on.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: noxtend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: noxtend
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379

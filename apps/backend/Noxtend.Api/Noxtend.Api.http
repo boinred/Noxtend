@@ -1,0 +1,6 @@
+@Noxtend.Api_HostAddress = http://localhost:5252
+
+GET {{Noxtend.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

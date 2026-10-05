@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Design Ref: §2.4 — 튜닝은 파이프라인을 안다. 반대는 금지.
+
+    `Noxtend.Domain` 참조는 `TaskKind` 때문이다 — 프롬프트가 단계별로 존재한다.
+    이 방향이 맞는 이유: 튜닝은 파이프라인을 **관찰하고 조정하는** 상위 관심사다.
+    파이프라인이 프롬프트를 써야 해서 생길 뻔한 순환은, Port 를 소비자 쪽
+    (`Noxtend.Domain/Ports`)에 두고 여기서 구현해 끊는다.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Noxtend.Domain\Noxtend.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Domain 과 같은 이유. 인프라 의존이 눈에 띄지 않게 들어오는 길을 막는다 -->
+    <Using Remove="System.Net.Http" />
+  </ItemGroup>
+
+</Project>

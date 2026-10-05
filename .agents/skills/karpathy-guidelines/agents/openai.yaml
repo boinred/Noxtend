@@ -1,0 +1,4 @@
+interface:
+  display_name: "Karpathy Guidelines"
+  short_description: "단순하고 검증 가능한 코드 작성 기준"
+  default_prompt: "Apply $karpathy-guidelines while writing or reviewing this code change."

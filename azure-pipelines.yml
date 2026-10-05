@@ -1,0 +1,37 @@
+trigger:
+  batch: false
+  branches:
+    include:
+      - main
+
+pr: none
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  # Full history for first-parent merge diffs
+  - checkout: self
+    fetchDepth: 0
+
+  # CI-only Slack notification
+  - task: PowerShell@2
+    displayName: Send commit summary to Slack
+    condition: >-
+      and(succeeded(),
+      eq(variables['Build.SourceBranch'], 'refs/heads/main'),
+      in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'))
+    inputs:
+      targetType: filePath
+      filePath: .github/scripts/Send-SlackCommitNotification.ps1
+      arguments: >-
+        -CollectionUri "$(System.CollectionUri)"
+        -ProjectName "$(System.TeamProject)"
+        -RepositoryName "$(Build.Repository.Name)"
+        -CommitSha "$(Build.SourceVersion)"
+        -BuildId "$(Build.BuildId)"
+        -BuildNumber "$(Build.BuildNumber)"
+      pwsh: true
+    env:
+      SLACK_WEBHOOK_URL: $(SLACK_WEBHOOK_URL)
+      SYSTEM_ACCESSTOKEN: $(System.AccessToken)

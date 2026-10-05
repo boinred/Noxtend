@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Noxtend — Scene Assembly UI Preview</title>
+  <style>
+    /* live-result-preview.html 과 같은 토큰 — 화면 시안의 연속성 */
+    :root {
+      --bg-app: oklch(15% 0.010 145);
+      --bg-panel: oklch(19% 0.012 145);
+      --bg-card: oklch(21% 0.013 145);
+      --bg-card-hover: oklch(25% 0.015 145);
+      --border-color: rgba(255, 255, 255, 0.1);
+      --border-active: oklch(72% 0.140 140);
+      --text-main: oklch(94% 0.008 145);
+      --text-muted: oklch(72% 0.010 145);
+      --text-dim: oklch(55% 0.010 145);
+      --accent-sage: oklch(72% 0.140 140);
+      --accent-sage-bg: rgba(74, 222, 128, 0.12);
+      --warn: #fbbf24;
+      --warn-bg: rgba(251, 191, 36, 0.10);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, 'Apple SD Gothic Neo', sans-serif;
+      background: var(--bg-app);
+      color: var(--text-main);
+      line-height: 1.5;
+      padding: 32px 24px;
+      display: flex;
+      justify-content: center;
+    }
+    .page { width: min(1080px, 100%); }
+    .crumb { font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+    h1 { font-size: 18px; font-weight: 650; margin-bottom: 4px; }
+    .note { font-size: 12.5px; color: var(--text-muted); margin-bottom: 20px; }
+    .note code { color: var(--accent-sage); font-family: ui-monospace, monospace; font-size: 11.5px; }
+
+    /* ─── 탭 (설계 §5.1 StudioViewTabs) ─── */
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border-color); margin-bottom: 16px; }
+    .tab {
+      appearance: none; background: none; border: none; cursor: pointer;
+      padding: 9px 16px; font-size: 13.5px; font-weight: 600; color: var(--text-dim);
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+      font-family: inherit; transition: color .15s;
+    }
+    .tab:hover { color: var(--text-muted); }
+    .tab[aria-selected="true"] { color: var(--accent-sage); border-bottom-color: var(--accent-sage); }
+
+    /* ─── 분석 탭: 기존 화면 축약 표현 ─── */
+    .analysis-mock { display: flex; flex-direction: column; gap: 12px; }
+    .mock-block {
+      border: 1px dashed var(--border-color); border-radius: 12px;
+      background: var(--bg-panel); padding: 18px 20px;
+      font-size: 13px; color: var(--text-dim);
+    }
+    .mock-block b { color: var(--text-muted); font-weight: 600; }
+    .mock-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+    .mock-tile { height: 72px; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border-color); }
+
+    /* ─── 3D 배경 탭 (설계 §5.1 SceneAssemblyView) ─── */
+    .scene-wrap { position: relative; border-radius: 14px; overflow: hidden;
+      border: 1px solid var(--border-color); background: var(--bg-panel); }
+    #scene { display: block; width: 100%; height: min(68vh, 620px); cursor: grab; touch-action: none; }
+    #scene.dragging { cursor: grabbing; }
+
+    /* 우상단 이름표 토글 (FR-07) */
+    .scene-controls { position: absolute; top: 14px; right: 14px; display: flex; gap: 8px; }
+    .ctl-btn {
+      appearance: none; cursor: pointer; font-family: inherit;
+      font-size: 12.5px; font-weight: 600; padding: 7px 13px; border-radius: 8px;
+      background: rgba(0,0,0,0.45); color: var(--text-muted);
+      border: 1px solid var(--border-color); backdrop-filter: blur(6px);
+      transition: color .15s, border-color .15s, background .15s;
+    }
+    .ctl-btn:hover { color: var(--text-main); }
+    .ctl-btn[aria-pressed="true"] {
+      color: var(--accent-sage); border-color: var(--border-active); background: var(--accent-sage-bg);
+    }
+
+    /* 좌하단 요약 (FR-08) */
+    .scene-meta {
+      position: absolute; left: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 6px;
+      font-size: 12px; pointer-events: none;
+    }
+    .meta-line { display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px;
+      border-radius: 8px; background: rgba(0,0,0,0.45); backdrop-filter: blur(6px);
+      border: 1px solid var(--border-color); color: var(--text-muted); width: fit-content; }
+    .meta-line.warn { color: var(--warn); background: var(--warn-bg); border-color: rgba(251,191,36,0.25); }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-sage); }
+
+    /* 이름표 (drei Html 대응) */
+    #labels { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+    .label {
+      position: absolute; transform: translate(-50%, -100%);
+      font-size: 11px; font-weight: 600; white-space: nowrap;
+      padding: 3px 8px; border-radius: 6px;
+      background: rgba(0,0,0,0.62); color: var(--text-main);
+      border: 1px solid var(--border-color); backdrop-filter: blur(4px);
+    }
+    .label::after { content: ''; position: absolute; left: 50%; top: 100%;
+      width: 1px; height: 7px; background: var(--border-color); }
+
+    .hint { margin-top: 10px; font-size: 12px; color: var(--text-dim); }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="crumb">배경 스튜디오 · 미리보기 시안</div>
+    <h1>scene-assembly — 3D 배경 탭</h1>
+    <p class="note">
+      상자들은 실제 GLB 자리의 대역이고, <b>배치·크기·깊이는 설계 §3.2 유도 공식 그대로</b>
+      (<code>depth = (footY−horizonY)/(1−horizonY)</code> · <code>scale = h·K/depth</code>) 계산됩니다.
+      드래그로 자유 회전(D-02), 휠로 줌.
+    </p>
+
+    <!-- 탭 (설계 §5.1) -->
+    <div class="tabs" role="tablist">
+      <button class="tab" id="tab-analysis" role="tab" aria-selected="false">분석</button>
+      <button class="tab" id="tab-scene" role="tab" aria-selected="true">3D 배경</button>
+    </div>
+
+    <!-- 분석 탭: 기존 화면은 무변경(NFR-05) — 축약 표현만 -->
+    <div class="analysis-mock hidden" id="panel-analysis" role="tabpanel">
+      <div class="mock-block"><b>장면 명세</b> — 팔레트 · 시간대 · 광원 (기존 ScenePanel 그대로)</div>
+      <div class="mock-block"><b>파츠 오버레이</b> — 원본 위 배치 상자 (기존 PartsOverlay 그대로)</div>
+      <div class="mock-block">
+        <b>파츠 제작 리스트</b> — 방향 이미지 4장 + 3D 타일 (기존 PartGallery 그대로)
+        <div class="mock-tiles"><div class="mock-tile"></div><div class="mock-tile"></div><div class="mock-tile"></div></div>
+      </div>
+    </div>
+
+    <!-- 3D 배경 탭 -->
+    <div class="scene-wrap" id="panel-scene" role="tabpanel">
+      <canvas id="scene"></canvas>
+      <div id="labels" class="hidden"></div>
+
+      <div class="scene-controls">
+        <button class="ctl-btn" id="btn-labels" aria-pressed="false">이름표</button>
+        <button class="ctl-btn" id="btn-reset">원본 구도</button>
+      </div>
+
+      <div class="scene-meta">
+        <span class="meta-line"><span class="dot"></span><span id="meta-count">파츠 6 · 인스턴스 8</span></span>
+        <span class="meta-line warn">빠진 파츠 1 — 성벽 상부의 어두운 경사 지붕 (3D 없음)</span>
+      </div>
+    </div>
+    <p class="hint" id="scene-hint">드래그: 회전 · 휠: 줌 · 우상단 토글: 이름표 — 어긋나 보이는 각도가 곧 배치 데이터의 품질 정보입니다.</p>
+  </div>
+
+<script>
+'use strict';
+// ─── 설계 §3.2 유도 공식 (서버 SceneLayoutComposer 대응) ───
+const HORIZON = 0.42, W = 10, ZFAR = 12, SPREAD = 1.5, K = 3;
+
+function compose(parts) {
+  const out = [];
+  for (const p of parts) {
+    if (!p.hasMesh) continue;                       // FR-08: GLB 없는 파츠 제외
+    p.placements.forEach((b, ordinal) => {
+      const footY = b.y + b.h;
+      const depth = Math.min(1, Math.max(0.05, (footY - HORIZON) / (1 - HORIZON)));
+      const z = -ZFAR * (1 - depth) - p.depthOrder * 0.1;
+      const cx = (b.x + b.w / 2 - 0.5) * W * (1 + (1 - depth) * SPREAD);
+      const scale = b.h * K / depth;
+      out.push({ part: p, ordinal, x: cx, z, h: scale, w: scale * (b.w / b.h) });
+    });
+  }
+  return out;
+}
+
+// 실측 작업 c4b4e95f 를 본뜬 성문 장면 — 배치 여러 개인 파츠 포함
+const PARTS = [
+  { name: '중앙 석조 성문탑',        depthOrder: 2, hasMesh: true,  hue: 150, placements: [{ x: 0.36, y: 0.18, w: 0.28, h: 0.55 }] },
+  { name: '아치형 흑갈색 목재 대문',  depthOrder: 1, hasMesh: true,  hue: 40,  placements: [{ x: 0.42, y: 0.46, w: 0.16, h: 0.27 }] },
+  { name: '좌우 석조 성벽',          depthOrder: 3, hasMesh: true,  hue: 150, placements: [
+      { x: 0.02, y: 0.36, w: 0.30, h: 0.30 }, { x: 0.66, y: 0.36, w: 0.30, h: 0.30 }] },
+  { name: '교량 양측의 젖은 석재 난간', depthOrder: 0, hasMesh: true, hue: 200, placements: [
+      { x: 0.01, y: 0.66, w: 0.21, h: 0.23 }, { x: 0.78, y: 0.66, w: 0.21, h: 0.23 }] },
+  { name: '우측 후방의 석조 성곽 건물', depthOrder: 4, hasMesh: true, hue: 120, placements: [{ x: 0.67, y: 0.12, w: 0.26, h: 0.40 }] },
+  { name: '성벽 상부의 어두운 경사 지붕', depthOrder: 5, hasMesh: false, hue: 0, placements: [{ x: 0.30, y: 0.10, w: 0.40, h: 0.14 }] },
+];
+const INSTANCES = compose(PARTS);
+
+// ─── 최소 3D: 수동 투영 + 페인터 정렬 (미리보기 전용 — 실제 구현은 three/fiber) ───
+const canvas = document.getElementById('scene');
+const ctx = canvas.getContext('2d');
+const labelsBox = document.getElementById('labels');
+
+// 원본 구도 초기값: 낮은 시점에서 장면 중심을 본다 (§5.2 초기 카메라)
+const HOME = { yaw: 0, pitch: 0.12, dist: 15 };
+let cam = { ...HOME };
+const TARGET = { x: 0, y: 1.6, z: -5 };
+
+function project(p, view) {
+  // 카메라 공간 변환 (yaw → pitch) 후 원근 나눗셈
+  const dx = p.x - view.ex, dy = p.y - view.ey, dz = p.z - view.ez;
+  const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw);
+  const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+  let x = cy * dx - sy * dz, z1 = sy * dx + cy * dz;
+  let y = cp * dy - sp * z1, z = sp * dy + cp * z1;
+  if (z >= -0.1) return null;                      // 카메라 뒤
+  const f = (canvas.height * 0.9) / -z;
+  return { x: canvas.width / 2 + x * f, y: canvas.height / 2 - y * f, z };
+}
+
+function viewpoint() {
+  const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw);
+  const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+  return {
+    ex: TARGET.x + cam.dist * (sy * cp),
+    ey: TARGET.y + cam.dist * sp,
+    ez: TARGET.z + cam.dist * (cy * cp),
+  };
+}
+
+function boxFaces(inst) {
+  // 발끝을 바닥에 붙인 상자 (§3.2 — Y = 0, 바닥 중심 원점)
+  const hw = inst.w / 2, hd = Math.max(0.6, inst.w * 0.4);
+  const [x, z, h] = [inst.x, inst.z, inst.h];
+  const c = [
+    [x-hw,0,z-hd],[x+hw,0,z-hd],[x+hw,0,z+hd],[x-hw,0,z+hd],
+    [x-hw,h,z-hd],[x+hw,h,z-hd],[x+hw,h,z+hd],[x-hw,h,z+hd],
+  ].map(([px,py,pz]) => ({ x:px, y:py, z:pz }));
+  return [
+    { pts: [c[3],c[2],c[6],c[7]], shade: 1.00 },   // 앞
+    { pts: [c[0],c[1],c[5],c[4]], shade: 0.55 },   // 뒤
+    { pts: [c[0],c[3],c[7],c[4]], shade: 0.75 },   // 왼쪽 (광원: 좌상 — §5.2 light)
+    { pts: [c[1],c[2],c[6],c[5]], shade: 0.62 },   // 오른쪽
+    { pts: [c[4],c[5],c[6],c[7]], shade: 0.88 },   // 위
+  ];
+}
+
+function draw() {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  if (canvas.width !== rect.width * dpr) { canvas.width = rect.width * dpr; canvas.height = rect.height * dpr; }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  canvas.width = canvas.width;   // clear
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const view = viewpoint();
+  const pj = (p) => {
+    const r = project(p, view);
+    return r ? { x: r.x / dpr, y: r.y / dpr, z: r.z } : null;
+  };
+
+  // 하늘·바닥 그라데이션
+  const g = ctx.createLinearGradient(0, 0, 0, rect.height);
+  g.addColorStop(0, 'oklch(20% 0.015 220)'); g.addColorStop(1, 'oklch(14% 0.01 145)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, rect.width, rect.height);
+
+  // 바닥 그리드 (§5.2 바닥 — 팔레트 톤의 옅은 격자)
+  ctx.strokeStyle = 'rgba(120, 160, 130, 0.14)'; ctx.lineWidth = 1;
+  for (let i = -8; i <= 8; i += 2) {
+    let a = pj({ x: i, y: 0, z: 2 }), b = pj({ x: i, y: 0, z: -14 });
+    if (a && b) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+    a = pj({ x: -8, y: 0, z: -i - 6 }); b = pj({ x: 8, y: 0, z: -i - 6 });
+    if (a && b) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+  }
+
+  // 페인터 정렬: 카메라에서 먼 인스턴스부터
+  const order = [...INSTANCES].sort((p, q) => {
+    const d = (i) => (i.x - view.ex) ** 2 + (i.z - view.ez) ** 2;
+    return d(q) - d(p);
+  });
+
+  for (const inst of order) {
+    for (const face of boxFaces(inst)) {
+      const pts = face.pts.map(pj);
+      if (pts.some((p) => !p)) continue;
+      ctx.beginPath();
+      pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.closePath();
+      const l = 26 + face.shade * 30;
+      ctx.fillStyle = `oklch(${l}% 0.03 ${inst.part.hue})`;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.stroke();
+    }
+  }
+
+  // 이름표 — 상자 머리 위를 화면 좌표로 투영 (drei Html 대응)
+  labelsBox.innerHTML = '';
+  if (labelsOn) {
+    for (const inst of order) {
+      const p = pj({ x: inst.x, y: inst.h + 0.25, z: inst.z });
+      if (!p) continue;
+      const el = document.createElement('div');
+      el.className = 'label';
+      el.textContent = inst.part.placements.length > 1
+        ? `${inst.part.name} #${inst.ordinal + 1}` : inst.part.name;
+      el.style.left = `${p.x}px`; el.style.top = `${p.y}px`;
+      labelsBox.appendChild(el);
+    }
+  }
+}
+
+// ─── 조작: 드래그 회전 + 휠 줌 (D-02 자유 회전) ───
+let drag = null, labelsOn = false;
+canvas.addEventListener('pointerdown', (e) => {
+  drag = { x: e.clientX, y: e.clientY }; canvas.classList.add('dragging'); canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  cam.yaw += (e.clientX - drag.x) * 0.006;
+  cam.pitch = Math.min(1.3, Math.max(-0.15, cam.pitch + (e.clientY - drag.y) * 0.004));
+  drag = { x: e.clientX, y: e.clientY };
+  draw();
+});
+canvas.addEventListener('pointerup', () => { drag = null; canvas.classList.remove('dragging'); });
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  cam.dist = Math.min(30, Math.max(5, cam.dist + e.deltaY * 0.02));
+  draw();
+}, { passive: false });
+
+document.getElementById('btn-labels').addEventListener('click', (e) => {
+  labelsOn = !labelsOn;
+  e.currentTarget.setAttribute('aria-pressed', String(labelsOn));
+  labelsBox.classList.toggle('hidden', !labelsOn);
+  draw();
+});
+document.getElementById('btn-reset').addEventListener('click', () => { cam = { ...HOME }; draw(); });
+
+// ─── 탭 전환 ───
+const tabs = { analysis: document.getElementById('tab-analysis'), scene: document.getElementById('tab-scene') };
+const panels = { analysis: document.getElementById('panel-analysis'), scene: document.getElementById('panel-scene') };
+const hint = document.getElementById('scene-hint');
+function selectTab(name) {
+  for (const k of Object.keys(tabs)) {
+    tabs[k].setAttribute('aria-selected', String(k === name));
+    panels[k].classList.toggle('hidden', k !== name);
+  }
+  hint.classList.toggle('hidden', name !== 'scene');
+  if (name === 'scene') draw();
+}
+tabs.analysis.addEventListener('click', () => selectTab('analysis'));
+tabs.scene.addEventListener('click', () => selectTab('scene'));
+
+window.addEventListener('resize', draw);
+draw();
+</script>
+</body>
+</html>

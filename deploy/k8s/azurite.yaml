@@ -1,0 +1,93 @@
+# Design Ref: §2.1 — Azurite stands in for Azure Blob Storage locally.
+# The adapter behind IBlobStorage is the same in both environments; only the
+# connection string changes, so the emulator never leaks into the code.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: azurite-data
+  namespace: noxtend
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: azurite
+  namespace: noxtend
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: azurite
+  template:
+    metadata:
+      labels:
+        app: azurite
+    spec:
+      containers:
+        - name: azurite
+          image: mcr.microsoft.com/azure-storage/azurite:latest
+          # Default bind is 127.0.0.1, which is unreachable from other pods
+          args:
+            - azurite
+            - --blobHost
+            - 0.0.0.0
+            - --queueHost
+            - 0.0.0.0
+            - --tableHost
+            - 0.0.0.0
+            - --location
+            - /data
+            # The Azure SDK negotiates a newer service version than the emulator knows,
+            # and Azurite answers 400 rather than falling back. Emulator-only concern —
+            # real Azure accepts the same requests, so the app code stays unpinned.
+            - --skipApiVersionCheck
+          ports:
+            - containerPort: 10000
+              name: blob
+            - containerPort: 10001
+              name: queue
+            - containerPort: 10002
+              name: table
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            tcpSocket:
+              port: 10000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: azurite-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: azurite
+  namespace: noxtend
+spec:
+  selector:
+    app: azurite
+  ports:
+    - port: 10000
+      targetPort: 10000
+      name: blob
+    - port: 10001
+      targetPort: 10001
+      name: queue
+    - port: 10002
+      targetPort: 10002
+      name: table

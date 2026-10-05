@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.10" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="SkiaSharp" Version="4.151.1" />
+    <PackageReference Include="Testcontainers.MsSql" Version="4.13.0" />
+    <PackageReference Include="Testcontainers.Redis" Version="4.13.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageReference Include="Xunit.SkippableFact" Version="1.5.61" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Noxtend.Domain\Noxtend.Domain.csproj" />
+    <ProjectReference Include="..\Noxtend.Application\Noxtend.Application.csproj" />
+    <ProjectReference Include="..\Noxtend.Infrastructure\Noxtend.Infrastructure.csproj" />
+    <ProjectReference Include="..\Noxtend.Tuning.Domain\Noxtend.Tuning.Domain.csproj" />
+    <ProjectReference Include="..\Noxtend.Tuning.Application\Noxtend.Tuning.Application.csproj" />
+    <ProjectReference Include="..\Noxtend.Api\Noxtend.Api.csproj" />
+  </ItemGroup>
+
+</Project>
