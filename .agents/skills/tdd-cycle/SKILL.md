@@ -10,7 +10,6 @@ Implement the user's latest natural-language request in the smallest verifiable 
 ## Plan → Design → Implement → Verify
 
 1. Plan: establish the requirement and baseline.
-   - Use the complete user request and incorporate later steering without discarding the active objective.
    - State only assumptions that affect behavior, scope, or verification.
    - Inspect relevant code, tests, project commands, and the working tree.
    - Define observable success criteria before editing.
@@ -52,7 +51,5 @@ Ordinary documentation, `AGENTS.md`, or formatting configuration changes do not 
 
 ## Execution Rules
 
-- Use agent-native execution in Codex sessions.
-- Use `Tools/TddAgent` only for CLI, API, or MCP automation that explicitly requires an external provider runtime.
 - Never overwrite, revert, or include unrelated user changes.
 - Keep each Red-Green-Refactor slice independently understandable and verifiable.

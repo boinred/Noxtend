@@ -125,7 +125,7 @@ public sealed class RunTaskHandler(
             PromptTemplate.Render(prompt.System, variables),
             PromptTemplate.Render(prompt.User, variables),
             image is null ? [] : [new LlmImage("original", image)],
-            prompt.JsonSchema);
+            stage.BuildJsonSchema(job, prompt.JsonSchema));
 
         // 사전 예방 (text-generation-rate-limiting) — 이미지 경로(RunGenerationTaskHandler)와
         // 같은 순서. 남은 횟수가 0으로 기록돼 있으면 초기화 시각까지 여기서 기다린다

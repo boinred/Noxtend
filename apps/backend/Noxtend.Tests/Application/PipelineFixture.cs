@@ -400,6 +400,12 @@ public sealed class RecordingDelayedActionScheduler : Noxtend.Domain.Ports.IDela
 /// </summary>
 public sealed class StubPromptCatalog : IPromptCatalog
 {
+    private const string RewriteSchema = """
+        { "type": "object", "properties": { "parts": { "type": "array", "items": {
+          "type": "object", "properties": { "name": { "type": "string" } }
+        } } } }
+        """;
+
     private readonly Dictionary<LlmOperationKind, PromptSnapshot> _active = new()
     {
         [LlmOperationKind.Analyze] = Snapshot(LlmOperationKind.Analyze, "장면을 분석하라", string.Empty),
@@ -442,7 +448,7 @@ public sealed class StubPromptCatalog : IPromptCatalog
             Version: 1,
             system,
             user,
-            JsonSchema: "{}");
+            JsonSchema: kind == LlmOperationKind.RewriteDescriptions ? RewriteSchema : "{}");
 
     /// <summary>해당 단계의 활성 프롬프트를 없앤다 — PROMPT_NOT_ACTIVE 재현.</summary>
     public void Remove(LlmOperationKind kind) => _active.Remove(kind);

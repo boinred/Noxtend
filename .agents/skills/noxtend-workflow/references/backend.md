@@ -2,6 +2,8 @@
 
 파일 경로는 `apps/backend/` 기준이고 `apps/`로 시작하는 경로는 저장소 루트 기준이다. 명령은 저장소 루트에서 실행한다. 상시 계층·상태·보안 규칙은 `apps/backend/AGENTS.md`를 따른다.
 
+LLM·AI 공급자·프롬프트·호출 기록 작업은 [LLM 개발 안내](../../../../docs/llm/README.md)에서 관련 참조 문서를 선택한다.
+
 ## 변경 전 확인
 
 - 진입점은 `Noxtend.Api/Program.cs`, DI는 `Noxtend.Infrastructure/InfrastructureServiceCollectionExtensions.cs`다. 계약은 `Noxtend.Api/Controllers`·`Contracts`, 상태는 `Noxtend.Domain/Job`, 저장 형식은 `Noxtend.Infrastructure/Persistence`에서 확인한다.

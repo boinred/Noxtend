@@ -26,6 +26,9 @@ public interface IStage
     /// </summary>
     IReadOnlyDictionary<string, string> BuildVariables(PipelineJob job);
 
+    /// <summary>작업 값으로 공급자에게 보낼 응답 스키마를 좁힌다.</summary>
+    string BuildJsonSchema(PipelineJob job, string promptSchema) => promptSchema;
+
     /// <summary>이 단계가 이미지를 보는가. 지금은 셋 다 보지만 계약으로 열어둔다.</summary>
     bool NeedsImage => true;
 

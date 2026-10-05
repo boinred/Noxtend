@@ -10,7 +10,7 @@
 
 ## 제품과 아키텍처
 
-- Noxtend는 이미지 분석·파츠 분해·방향 이미지 생성·3D 재구성을 연결하는 AI 에셋 제작 스튜디오다. [PRODUCT.md](PRODUCT.md)가 제품 방향의 정본이며 오래된 노드 캔버스 설명을 되살리지 않는다.
+- Noxtend는 이미지 분석·파츠 분해·방향 이미지 생성·3D 재구성을 연결하는 AI 에셋 제작 스튜디오다. [PRODUCT.md](PRODUCT.md)가 제품 방향의 정본이며 노드 캔버스 방식은 제품 범위에 포함하지 않는다.
 - 작업 상태의 정본은 SQL Server다. Redis Streams는 디스패치 수단이며 UI·큐 메시지가 서버 상태를 대신 결정하지 않는다.
 - API와 Worker는 같은 ASP.NET Core 호스트에서 실행된다. 단계·워커 수·동시성은 현재 등록 코드·설정으로 확인한다.
 - 현재 클라이언트 계약은 HTTP JSON과 파일 응답이다. `packages/proto/README.md`의 Protobuf·gRPC-Web는 후속 계획이며 실제 호출·생성 코드로 사용 여부를 판단한다.
@@ -25,6 +25,7 @@
 | 코드 작성·수정·디버깅·테스트·리뷰 | [karpathy-guidelines](.agents/skills/karpathy-guidelines/SKILL.md) |
 | 기능·버그 수정·리팩터링·테스트 구현 | [tdd-cycle](.agents/skills/tdd-cycle/SKILL.md): 계획 → 설계 → 구현 → 검증 |
 | Backend | [apps/backend/AGENTS.md](apps/backend/AGENTS.md), [noxtend-workflow](.agents/skills/noxtend-workflow/SKILL.md)의 Backend·검증 자료 |
+| LLM·AI 공급자·프롬프트·호출 내역 | 변경 전 [docs/llm/README.md](docs/llm/README.md)에서 작업별 Backend 자료 선택 |
 | Frontend·UI·모션 | [apps/frontend/AGENTS.md](apps/frontend/AGENTS.md), [DESIGN.md](DESIGN.md), 위 스킬의 Frontend·검증 자료 |
 | 인프라·Azure·Kubernetes·루트 CI | [deploy/AGENTS.md](deploy/AGENTS.md), 위 스킬의 배포·검증 자료 |
 | PDCA 문서·단계·복구·구현 자동화 | [pdca-cycle](.agents/skills/pdca-cycle/SKILL.md)와 해당 기능의 canonical 문서 |

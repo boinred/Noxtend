@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Noxtend.Application.Job;
 using Noxtend.Domain.Job;
@@ -404,6 +405,23 @@ public sealed class RewriteDescriptionsStage : IStage
             ["targets"] = string.Join("\n", job.DescriptionsStale.Select(name => Describe(job, name))),
         };
 
+    public string BuildJsonSchema(PipelineJob job, string promptSchema)
+    {
+        var root = JsonNode.Parse(promptSchema)?.AsObject()
+            ?? throw new ProviderBadResponseException("RewriteDescriptions JSON Schema가 객체가 아닙니다");
+        var nameSchema = root["properties"]?["parts"]?["items"]?["properties"]?["name"] as JsonObject
+            ?? throw new ProviderBadResponseException("RewriteDescriptions JSON Schema에 name 속성이 없습니다");
+        var allowedNames = new JsonArray();
+
+        foreach (var name in job.DescriptionsStale)
+        {
+            allowedNames.Add(name);
+        }
+
+        nameSchema["enum"] = allowedNames;
+        return root.ToJsonString();
+    }
+
     private static string Describe(PipelineJob job, string name)
     {
         var part = job.Parts.Single(p => p.Name == name);
@@ -449,36 +467,41 @@ public sealed class RewriteDescriptionsStage : IStage
 
         var targets = job.DescriptionsStale.ToList();
         var known = job.Parts.Select(p => p.Name).ToHashSet();
+        var targetNames = targets.ToHashSet(StringComparer.Ordinal);
+        var matchedTargets = new HashSet<string>(StringComparer.Ordinal);
+        var mismatched = new List<(string Name, string Description, string? Category)>();
         var rewrites = new List<(string Name, string Description, string? Category)>();
 
-        for (var i = 0; i < rawRewrites.Count; i++)
+        foreach (var item in rawRewrites)
         {
-            var item = rawRewrites[i];
-            var resolvedName = item.Name;
-
-            if (!known.Contains(resolvedName))
+            if (targetNames.Contains(item.Name))
             {
-                if (targets.Count == 1)
+                if (!matchedTargets.Add(item.Name))
                 {
-                    resolvedName = targets[0];
+                    throw new ProviderBadResponseException("재작성 대상 이름이 중복되었습니다");
                 }
-                else if (i < targets.Count && !rewrites.Any(r => r.Name == targets[i]))
-                {
-                    resolvedName = targets[i];
-                }
-                else
-                {
-                    var fallback = targets.FirstOrDefault(t =>
-                        t.Equals(item.Name, StringComparison.OrdinalIgnoreCase) ||
-                        t.Replace(" ", "").Equals(item.Name.Replace(" ", ""), StringComparison.OrdinalIgnoreCase));
-                    if (fallback != null)
-                    {
-                        resolvedName = fallback;
-                    }
-                }
-            }
 
-            rewrites.Add((resolvedName, item.Description, item.Category));
+                rewrites.Add(item);
+            }
+            else if (!known.Contains(item.Name))
+            {
+                mismatched.Add(item);
+            }
+            else
+            {
+                rewrites.Add(item);
+            }
+        }
+
+        var missingTargets = targets.Where(target => !matchedTargets.Contains(target)).ToList();
+        if (mismatched.Count == 1 && missingTargets.Count == 1)
+        {
+            var item = mismatched[0];
+            rewrites.Add((missingTargets[0], item.Description, item.Category));
+        }
+        else if (mismatched.Count > 0 || missingTargets.Count > 0)
+        {
+            throw new ProviderBadResponseException("요청한 재작성 대상과 응답 파츠 이름이 일치하지 않습니다");
         }
 
         // 반영 전에 검증한다 — 공정을 성공으로 확정한 뒤 실패하면 되돌릴 자리가 없다
