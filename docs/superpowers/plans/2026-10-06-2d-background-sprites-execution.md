@@ -108,7 +108,7 @@ SSH.NET2025.1.0 NU1903 high advisory `GHSA-mggc-4xg6-vcxf`와`GHSA-q939-rpr3-328
 
 자체검토에서는 작업 범위7파일, 기존 테스트의 실제 binding/disposal 검출성, mutation 원본 복원, nullable/enum/receipt/ZIP계약, 이미지/알파/패딩 해석, Ruling61행 순서·원문 일치, 문서/링크32개와 추가secret pattern0을 확인했다. 앱 기능 변경·새프레임워크·plan staging은 없고 비밀값/공백 결함을 찾지 못했다. 픽셀Fixture/브라우저Fake는 실AI품질을 확인하지 못한다는 제약과 baseline경고는 유지한다.
 
-Task15 scoped 독립 리뷰와 전체 브랜치 독립 리뷰의 최종 판정은 부모 controller가 이 절에 추가한다. 현재 판정 대기이며 구현자 자체검토를 독립리뷰로 계산하지 않는다. 부모가 계획checkbox/실행 기록 링크를 관리한다. ignored scratch 정리는 모든 Ruling과 필요한 증거가 본 기록에 보존되고 전체 리뷰가 끝난 뒤 부모가 수행하며 Task15 구현자는 삭제하지 않는다.
+Task15 scoped 독립 리뷰는 `703acb9`의 7개 변경 파일을 검토하여 Spec compliant / Approved, Critical0 / Important0으로 통과했다. 전체 브랜치 독립 리뷰는 아직 대기다. 구현자 자체검토를 독립리뷰로 계산하지 않는다. 부모가 계획checkbox/실행 기록 링크를 관리한다. ignored scratch 정리는 모든 Ruling과 필요한 증거가 본 기록에 보존되고 전체 리뷰가 끝난 뒤 부모가 수행하며 Task15 구현자는 삭제하지 않는다.
 
 ## 시간순 Ruling 원문
 

@@ -10,6 +10,8 @@
 
 **Spec:** [승인한 설계](../specs/2026-10-06-2d-background-sprites-design.md). 기준 코드: `19bad98`. 이 문서의 신규 타입·테스트·명령은 구현할 계약이며 현재 구현 완료나 테스트 통과를 뜻하지 않는다.
 
+**Execution:** [최종 검증·판단 기록](2026-10-06-2d-background-sprites-execution.md). 구현 Task 1..15의 검증·개별 독립 리뷰 완료. 전체 브랜치 리뷰는 후속 게이트다.
+
 ## Global Constraints
 
 - 범위는 이미지 입력의 2D 배경이며 `sideView / topDown / isometric`, `layers / tiles`를 작업마다 선택한다.
@@ -540,15 +542,15 @@ test('detail url activates its parent group and restores menu focus')
 
 **Interfaces:** 구현·자동 검증·수동 UI·실 AI 품질을 구분해 보고한다. 실 AI 미실행이면 반복 경계·시점 재구성·loop 자연스러움은 미확인으로 기록한다.
 
-- [ ] API 계약을 C#/TS/Fake에서 대조한다. 새 kind/operation의 label/grid/usage, migration 순서, mode를 무시한 mesh/review 경로, Blob 삭제·request receipt 수명을 확인한다.
-- [ ] `dotnet build apps/backend/Noxtend.slnx`를 실행한다.
-- [ ] `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName~Noxtend.Tests.Domain|FullyQualifiedName~Noxtend.Tests.Application|FullyQualifiedName~Noxtend.Tests.Api|FullyQualifiedName~Noxtend.Tests.Architecture'`를 실행한다.
-- [ ] Docker 이용 시 `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName!~TripoSmokeTests&FullyQualifiedName!~SimilaritySmokeTests'`를 실행한다. 새 SQL 테스트는 기존 공유 collection으로 직렬 실행한다.
-- [ ] `pnpm test`, `pnpm lint`, `pnpm typecheck`, `pnpm build`, `pnpm test:e2e`를 실행한다. Vitest 수집은 현재 vite.config.ts의 `src/**/*.test.ts`이며 DOM 동작은 Playwright에서 확인한다.
-- [ ] 최신 build preview에서 1440×900/390px·키보드·focus·reduced-motion·subset 종료·401/429/500 표시·새로고침·PNG/ZIP 다운로드를 수동 확인하고 관찰 결과만 기록한다.
-- [ ] PNG/manifest/ZIP fixture의 크기·alpha·anchor·프레임 순서·2px padding·여러 페이지·256MiB 경계를 대조한다.
-- [ ] 각 view×kind의 입력·검수 기준·최대 호출 수를 실 AI 품질 검증용으로 기록한다. 유료 생성·smoke는 별도 사용자 요청으로 승인되기 전까지 실행하지 않는다.
-- [ ] 이번 diff의 비밀값·링크·`git diff --check`·문서 동기화를 확인한다. 미실행/실패/skip을 포함해 결과를 기록하고 이번 파일만 `test(sprites): verify workflow and legacy regressions`로 커밋한다.
+- [x] API 계약을 C#/TS/Fake에서 대조한다. 새 kind/operation의 label/grid/usage, migration 순서, mode를 무시한 mesh/review 경로, Blob 삭제·request receipt 수명을 확인한다.
+- [x] `dotnet build apps/backend/Noxtend.slnx`를 실행한다.
+- [x] `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName~Noxtend.Tests.Domain|FullyQualifiedName~Noxtend.Tests.Application|FullyQualifiedName~Noxtend.Tests.Api|FullyQualifiedName~Noxtend.Tests.Architecture'`를 실행한다.
+- [x] Docker 이용 시 `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName!~TripoSmokeTests&FullyQualifiedName!~SimilaritySmokeTests'`를 실행한다. 새 SQL 테스트는 기존 공유 collection으로 직렬 실행한다.
+- [x] `pnpm test`, `pnpm lint`, `pnpm typecheck`, `pnpm build`, `pnpm test:e2e`를 실행한다. Vitest 수집은 현재 vite.config.ts의 `src/**/*.test.ts`이며 DOM 동작은 Playwright에서 확인한다.
+- [x] 최신 build preview에서 1440×900/390px·키보드·focus·reduced-motion·subset 종료·401/429/500 표시·새로고침·PNG/ZIP 다운로드를 수동 확인하고 관찰 결과만 기록한다.
+- [x] PNG/manifest/ZIP fixture의 크기·alpha·anchor·프레임 순서·2px padding·여러 페이지·256MiB 경계를 대조한다.
+- [x] 각 view×kind의 입력·검수 기준·최대 호출 수를 실 AI 품질 검증용으로 기록한다. 유료 생성·smoke는 별도 사용자 요청으로 승인되기 전까지 실행하지 않는다.
+- [x] 이번 diff의 비밀값·링크·`git diff --check`·문서 동기화를 확인한다. 미실행/실패/skip을 포함해 결과를 기록하고 이번 파일만 `test(sprites): verify workflow and legacy regressions`로 커밋한다.
 
 ## 설계 요구와 작업 연결
 
