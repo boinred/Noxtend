@@ -130,7 +130,7 @@ Manifest JSON은 camelCase, `coordinateOrigin="topLeft"`, `coordinateUnits="pixe
 
 **Interfaces:** `SpriteRules.ValidateSettings(SpriteSettings settings, SpriteCanvas source) -> Result<bool>`는 분석 전 입력만 검사한다. 기존 `PipelineJob.Create(...)`는 ThreeD를 만든다. `CreateSprites(Guid sourceImageId, Guid imageProviderConfigId, string imageModel, SpriteSettings settings, SpriteCanvas sourceCanvas, SpriteCanvas generationCanvas, DateTimeOffset now) -> Result<PipelineJob>`. `SpriteRules.Validate(SpriteSettings settings, SpriteCanvas source, IReadOnlyList<SpriteAssetPlan> assets) -> Result<bool>`, `OutputCanvas(settings, source) -> SpriteCanvas`. 새 작업은 Background·TwoD·Analyzing이고 아직 공정을 만들지 않는다.
 
-- [ ] 아래 테스트와 입력별 Theory를 작성한다. 픽셀·범위·프레임·FPS·대상·notes·64프레임 경계의 바로 안/밖을 모두 검사한다.
+- [x] 아래 테스트와 입력별 Theory를 작성한다. 픽셀·범위·프레임·FPS·대상·notes·64프레임 경계의 바로 안/밖을 모두 검사한다.
 
 ```csharp
 [Fact] public void OutputCanvas_Layers_PreservesRatioWithoutUpscale()
@@ -144,11 +144,11 @@ Manifest JSON은 camelCase, `coordinateOrigin="topLeft"`, `coordinateUnits="pixe
         SpriteRules.OutputCanvas(new(SpriteView.Isometric, SpriteOutputKind.Tiles), new(800, 600)));
 ```
 
-- [ ] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpriteRulesTests` 실행; 처음은 신규 심볼 미정의로 실패해야 한다.
-- [ ] 기존 PipelineJob을 partial로 바꾸고 위 타입·검증만 구현한다. 유한값·`X+W<=1`·`Y+H<=1`을 검사하며 기존 3D Bounds의 오차 허용을 바꾸지 않는다. `Transform(SpriteCanvas generation, SpriteCanvas output) -> SpriteTransform`은 순수 계산이므로 여기서 구현해 CreateSprites가 고정 변환을 저장하게 한다. SpriteImage/Export/AcceptedRequest와 그 factory는 Task 2의 입력·manifest 타입과 함께 구현하며 Task 1에는 초기 state 필드만 둔다.
-- [ ] 같은 명령을 재실행해 통과시킨다. `LegacyCreate_WithoutMesh_RemainsThreeD`도 추가하여 기존 생성 경로를 검증한다.
-- [ ] `GeneratedImageRepositoryTests` 등에서 아직 매핑하지 않은 sprite 타입의 EF 자동 탐색 실패가 실제 재현되면 `B/Noxtend.Infrastructure/Persistence/Configurations/PipelineJobConfiguration.cs`에서 Sprites/ProductionMode만 임시 Ignore한다. Task 4가 매핑·migration과 함께 제거하며 영속화 완료로 기록하지 않는다.
-- [ ] backend 문서에 모드와 초기 상한을 동기화하고 이번 파일만 `feat(domain): add sprite production settings`로 커밋한다.
+- [x] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpriteRulesTests` 실행; 처음은 신규 심볼 미정의로 실패해야 한다.
+- [x] 기존 PipelineJob을 partial로 바꾸고 위 타입·검증만 구현한다. 유한값·`X+W<=1`·`Y+H<=1`을 검사하며 기존 3D Bounds의 오차 허용을 바꾸지 않는다. `Transform(SpriteCanvas generation, SpriteCanvas output) -> SpriteTransform`은 순수 계산이므로 여기서 구현해 CreateSprites가 고정 변환을 저장하게 한다. SpriteImage/Export/AcceptedRequest와 그 factory는 Task 2의 입력·manifest 타입과 함께 구현하며 Task 1에는 초기 state 필드만 둔다.
+- [x] 같은 명령을 재실행해 통과시킨다. `LegacyCreate_WithoutMesh_RemainsThreeD`도 추가하여 기존 생성 경로를 검증한다.
+- [x] `GeneratedImageRepositoryTests` 등에서 아직 매핑하지 않은 sprite 타입의 EF 자동 탐색 실패가 실제 재현되면 `B/Noxtend.Infrastructure/Persistence/Configurations/PipelineJobConfiguration.cs`에서 Sprites/ProductionMode만 임시 Ignore한다. Task 4가 매핑·migration과 함께 제거하며 영속화 완료로 기록하지 않는다.
+- [x] backend 문서에 모드와 초기 상한을 동기화하고 이번 파일만 `feat(domain): add sprite production settings`로 커밋한다.
 
 ## Task 2: 슬롯·승인·revision·상태 도메인
 
@@ -178,7 +178,7 @@ Assert.Equal(oldImageIds, job.Sprites.Assets[0].Frames.Select(x => x.CurrentImag
 ```
 
 - [ ] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpriteLifecycleTests`로 신규 동작의 실패를 확인한다.
-- [ ] 상태 메서드와 에러 코드를 구현한다. 생성 입력 변경만 해당 asset PlanRevision을 증가시키고 표시·결과·승인 변경은 ReviewRevision을 증가시킨다. FPS/name/order만 바뀌면 기존 프레임과 PlanRevision을 유지한다. SpriteFrameInput.Plan은 생성 접수 시의 immutable snapshot이며 worker는 frameCount/motion/transparency를 현재 편집 상태에서 다시 읽지 않는다. 공통 view/kind/canvas는 수정 계약에 넣지 않는다.
+- [ ] 상태 메서드와 에러 코드를 구현한다. 생성 입력 변경만 해당 asset PlanRevision을 증가시키고 표시·결과·승인 변경은 ReviewRevision을 증가시킨다. FPS/name/order만 바뀌면 기존 프레임과 PlanRevision을 유지한다. SpriteFrameInput.Plan은 생성 접수 시의 immutable snapshot이며 worker는 frameCount/motion/transparency를 현재 편집 상태에서 다시 읽지 않는다. 공통 view/kind/canvas는 수정 계약에 넣지 않는다. 요청 expectedRevision은 전역 검수 revision을 검사하며 비동기 export 유효성은 포함 승인 snapshot과 고정 task input을 비교한다. 다른 대상의 변경은 기존·진행 export를 보존하고 대상 추가·제거는 included/excluded 의미가 바뀌므로 모두 무효화한다.
 - [ ] `PlanReadyFollowUpTasks / IsReadyToRun / ReconcileFromTasks`에 모드별 분기만 추가한다. frame input을 반환하는 승인과 실제 task 생성은 Task 8에서 같은 트랜잭션으로 연결한다.
 - [ ] 같은 테스트를 통과시키고 기존 `PartGenerationPlanningTests / JobLifecycleTests`도 실행한다. 도메인 문서를 동기화해 `feat(domain): add sprite review and frame lifecycle`로 커밋한다.
 
@@ -240,7 +240,7 @@ await Assert.ThrowsAsync<DbUpdateException>(() => saveDuplicateRequest);
 ```
 
 - [ ] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpritePersistenceTests`로 실패를 확인한다. Docker가 없으면 환경 제약으로 기록하고 통과로 계산하지 않는다.
-- [ ] Task 1의 Sprites/ProductionMode 임시 Ignore가 있으면 제거한다. Jobs에 nullable owned state, SpriteAssets/Frames/Images/Exports/Requests 테이블을 매핑한다. Jobs/Tasks rowversion을 유지하고 소유 관계·FK·cascade 경로를 SQL로 검증한다. JSON의 image ID·Blob key를 검증 없이 사용하지 않는다.
+- [ ] Task 1의 Sprites/ProductionMode와 Task 2의 SpriteInput/SpriteExportInput/RequestId 임시 Ignore가 있으면 모두 제거한다. Jobs에 nullable owned state, SpriteAssets/Frames/Images/Exports/Requests 테이블을 매핑한다. Jobs/Tasks rowversion을 유지하고 소유 관계·FK·cascade 경로를 SQL로 검증한다. JSON의 image ID·Blob key를 검증 없이 사용하지 않는다.
 - [ ] owned request 조회는 Jobs에서 projection으로 수행한다. 이미지·export 이력은 job이 소유하며 제작 대상 제거가 과거 snapshot의 결과를 삭제하지 않게 한다.
 - [ ] `dotnet ef --version`을 확인한다. 도구가 없거나 버전이 다르면 실행 환경의 임시 tool-path에 EF 패키지와 같은 `10.0.10`을 설치해 사용한다. 기존 전역 도구나 저장소 의존성을 바꾸지 않는다.
 - [ ] `dotnet ef migrations add AddSpriteProduction --project apps/backend/Noxtend.Infrastructure --startup-project apps/backend/Noxtend.Api`를 실행하고 생성 SQL을 리뷰한다. DesignTimeDbContextFactory를 사용하며 개발 DB에 update를 실행하지 않는다.
