@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Noxtend.Domain.Ports;
+using Noxtend.Domain.Provider;
 
 namespace Noxtend.Infrastructure.Image;
 
@@ -24,6 +25,8 @@ public sealed class GoogleImageProvider(HttpClient http, string apiKey, string m
 {
     public async Task<ImageResult> GenerateAsync(ImageRequest request, CancellationToken ct)
     {
+        ImageModels.ValidateSpriteRequest(ProviderKind.Google, model, request);
+
         var input = new List<object> { new { type = "text", text = request.Prompt } };
 
         // 프롬프트 reference 번호와 동일한 참조 이미지 순서

@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Noxtend.Domain.Ports;
+using Noxtend.Domain.Provider;
 
 namespace Noxtend.Infrastructure.Image;
 
@@ -37,6 +38,8 @@ public sealed partial class OpenAiImageProvider(HttpClient http, string apiKey, 
 
     public async Task<ImageResult> GenerateAsync(ImageRequest request, CancellationToken ct)
     {
+        ImageModels.ValidateSpriteRequest(ProviderKind.OpenAI, model, request);
+
         using var message = request.Reference.Count > 0
             ? BuildEditRequest(request)
             : BuildGenerateRequest(request);
@@ -144,18 +147,26 @@ public sealed partial class OpenAiImageProvider(HttpClient http, string apiKey, 
     private static partial System.Text.RegularExpressions.Regex ResetDurationPattern();
 
     private HttpRequestMessage BuildGenerateRequest(ImageRequest request)
-        => new(HttpMethod.Post, "https://api.openai.com/v1/images/generations")
+    {
+        var payload = new Dictionary<string, object>
         {
-            Content = JsonContent.Create(new
-            {
-                model,
-                prompt = request.Prompt,
-                size = request.Size,
-                quality = Quality,
-                n = 1,
-                response_format = "b64_json",
-            }),
+            ["model"] = model,
+            ["prompt"] = request.Prompt,
+            ["size"] = request.Size,
+            ["quality"] = Quality,
+            ["n"] = 1,
+            ["output_format"] = "png",
         };
+        if (request.Background is { } background)
+        {
+            payload["background"] = background == ImageBackground.Transparent ? "transparent" : "opaque";
+        }
+
+        return new(HttpMethod.Post, "https://api.openai.com/v1/images/generations")
+        {
+            Content = JsonContent.Create(payload),
+        };
+    }
 
     /// <summary>
     /// 참조 목록을 동반한 편집 요청 (Plan D-5 · workstream B §5.2).
@@ -173,7 +184,13 @@ public sealed partial class OpenAiImageProvider(HttpClient http, string apiKey, 
             { new StringContent(request.Size), "size" },
             { new StringContent(Quality), "quality" },
             { new StringContent("1"), "n" },
+            { new StringContent("png"), "output_format" },
         };
+
+        if (request.Background is { } background)
+        {
+            content.Add(new StringContent(background == ImageBackground.Transparent ? "transparent" : "opaque"), "background");
+        }
 
         for (var index = 0; index < request.Reference.Count; index++)
         {

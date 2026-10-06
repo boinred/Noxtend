@@ -25,7 +25,7 @@ public sealed class ModelPriceMigrationTests(SqlServerFixture sql)
     private readonly string connectionString = sql.FreshDatabase(nameof(ModelPriceMigrationTests));
 
     [Fact]
-    public async Task MigratedDatabase_PricesEveryCatalogImageModel()
+    public async Task MigratedDatabase_PricesCatalogImagesAndPreservesUnknownSpritePrice()
     {
         await using var db = Context();
         await db.Database.MigrateAsync();
@@ -33,15 +33,16 @@ public sealed class ModelPriceMigrationTests(SqlServerFixture sql)
         var book = new ModelPriceBook(await db.ModelPrices.ToListAsync());
         var at = new DateTimeOffset(2026, 8, 10, 0, 0, 0, TimeSpan.Zero);
 
-        // 카탈로그에서 고를 수 있는 모델은 전부 비용이 나와야 한다. Fake 목록은 청구되지
-        // 않으므로 뺀다
+        // 기존 모델 단가 보장과 확인하지 않은 sprite 단가의 null 유지
         var unpriced = Enum.GetValues<ProviderKind>()
             .SelectMany(ImageModels.For)
             .Select(model => model.Id)
             .Where(id => book.Estimate(id, at, 2_075, 1_377, images: 1) is null)
             .ToList();
 
-        Assert.Empty(unpriced);
+        Assert.Equal(["gpt-image-2.5-sunburst"], unpriced);
+        Assert.False(book.IsKnown("gpt-image-2.5-sunburst", at));
+        Assert.Null(book.Estimate("gpt-image-2.5-sunburst", at, 2_075, 1_377, images: 1));
     }
 
     /// <summary>

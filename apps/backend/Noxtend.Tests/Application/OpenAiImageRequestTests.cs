@@ -38,6 +38,8 @@ public sealed class OpenAiImageRequestTests
 
         using var document = JsonDocument.Parse(handler.Body!);
         Assert.Equal("medium", document.RootElement.GetProperty("quality").GetString());
+        Assert.Equal("png", document.RootElement.GetProperty("output_format").GetString());
+        Assert.False(document.RootElement.TryGetProperty("response_format", out _));
     }
 
     [Fact]
@@ -56,6 +58,9 @@ public sealed class OpenAiImageRequestTests
 
         Assert.Contains("name=quality", handler.Body, StringComparison.Ordinal);
         Assert.Contains("medium", handler.Body!, StringComparison.Ordinal);
+        Assert.Contains("name=output_format", handler.Body!, StringComparison.Ordinal);
+        Assert.Contains("png", handler.Body!, StringComparison.Ordinal);
+        Assert.DoesNotContain("name=response_format", handler.Body!, StringComparison.Ordinal);
     }
 
     [Fact]

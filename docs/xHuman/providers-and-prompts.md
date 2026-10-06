@@ -27,6 +27,19 @@
 - Factory·어댑터·기록: `apps/backend/Noxtend.Infrastructure/Image/`
 - 호출·응답 검증: `apps/backend/Noxtend.Tests/Application/RunGenerationTaskHandlerTests.cs`, `ImageProviderUsageTests.cs`
 
+### 스프라이트 모델·요청 계약
+
+`ProviderModel.Sprite`와 모델 목록 응답의 optional `sprite`는 `SpriteImageCapabilities(SupportsTransparency, Sizes)`를 전달한다. null은 지원 미확인이며 Google과 기존 `gpt-image-2`에는 sprite 지원을 추정하지 않는다. `ImageModels`의 `gpt-image-2.5-sunburst`와 Fake 두 모델에만 투명 및 초기 생성 크기 `1024x1024 / 1536x1024 / 1024x1536 / 1536x768 / 768x1536 / 1536x864 / 864x1536`를 명시한다. 실 목록은 기존 remote ID 교차를 유지하므로 허용목록에 있어도 해당 자격 증명의 목록에 없으면 반환하지 않는다.
+
+`ImageRequest.Background`가 명시된 요청은 sprite 계약을 사용한다. OpenAI JSON·multipart 양쪽에 지정 size와 `background=opaque|transparent`, `output_format=png`를 전송하며 quality는 기존 medium을 유지한다. 모델의 sprite capability·배경 값·허용 크기가 확인되지 않으면 HTTP 전 비재시도 오류로 거부한다. Google은 명시 sprite 요청을 거부하고 기존 Background=null의 1:1·1K 요청을 유지한다. 현재 catalog의 두 GPT image 모델은 기존 3D 요청에서도 `response_format`을 전송하지 않고 공통 JSON·edit builder에서 `output_format=png`를 사용한다. Background=null이면 background는 추가하지 않으며 quality=medium·n=1·size·base64 응답 읽기는 유지한다. PNG 응답 형식만으로 실제 투명을 판단하지 않으며 아래 픽셀 검증을 거친다.
+
+`SpriteRules.GenerationCanvas`는 확인된 크기 중 출력 비율과의 로그 비율 차이가 가장 작은 크기를 선택한다. 동률은 catalog 순서를 유지하며 `Transform`의 공통 contain 배치를 따른다. `ImageCallContext`는 기존 PartId GUID를 보존하고 sprite에는 null을 허용하며 Kind 기본값은 Generate다. 기록 데코레이터는 Kind를 기존 operation 매핑에 넘기고 TaskId·프롬프트 버전·모델 및 배경·크기 metadata를 남긴다. sprite asset/index는 Tasks에서 조회하며 LlmCalls에 중복 열을 추가하지 않는다.
+
+- 계약·선택: `apps/backend/Noxtend.Domain/Ports/IImageProvider.cs`, `IModelCatalog.cs`, `Noxtend.Domain/Sprites/SpriteRules.cs`
+- catalog·전송·기록: `apps/backend/Noxtend.Infrastructure/Image/ImageModels.cs`, `OpenAiImageProvider.cs`, `GoogleImageProvider.cs`, `RecordingImageProvider.cs`
+- wire 매핑: `apps/backend/Noxtend.Api/Contracts/ProviderResponse.cs`의 `ProviderModelResponse`
+- 가짜 HTTP·기록·capability 회귀: `apps/backend/Noxtend.Tests/Application/SpriteProviderRequestTests.cs`, `ImageModelCatalogTests.cs`
+
 ### 스프라이트 이미지 검증·정규화
 
 `IImageTranscoder.InspectSpriteAsync`는 MIME 문자열 대신 PNG·JPEG·WebP 디코딩 결과를 검사한다. 입력 바이트는 비seek 스트림에서도 지정 상한+1바이트까지만 읽고, 64비트 픽셀 곱과 최대 16,777,216픽셀을 비트맵 할당 전에 확인한다. 잘린 디코딩·전체 투명 이미지·지원하지 않는 형식은 `ProviderBadResponseException`으로 실패한다. 원본 업로드는 호출자가 12 MiB를 지정하며 생성 응답·PNG 결과는 32 MiB 상한을 적용한다.
@@ -52,6 +65,7 @@
 - `RecordingLlmProvider`와 `RecordingImageProvider`는 Factory가 씌우는 데코레이터다. 두 경로는 `ILlmCallRecorder`와 `TuningLlmCallRecorder`를 통해 같은 호출 저장소에 기록된다. 기록 실패는 호출 자체를 실패시키지 않고 경고 로그로 남긴다.
 - 텍스트 호출 기록에는 렌더된 프롬프트·응답 문자열이 포함될 수 있다. 텍스트 요청에 첨부한 이미지는 이름·형식·크기·SHA-256만 기록한다. 이미지 생성 호출은 프롬프트·크기·참조 개수와 응답 형식·크기만 남기며 입력·출력 이미지 바이트는 저장하지 않는다. 텍스트 입력도 개인정보·비밀값 포함 여부를 확인한다.
 - API 키, 인증 헤더, 원본 외부 요청 본문, 이미지 bytes/base64를 로그나 호출 기록에 추가하지 않는다. 실패 기록은 원문 예외 전체 대신 현재의 정규화 규칙을 따른다.
+- 새 `gpt-image-2.5-sunburst` 단가는 미확인으로 seed하지 않으며 실제 calculator 비용은 null이다. `SeedModelPricesTests`와 SQL `ModelPriceMigrationTests`는 기존 이미지 모델의 등록 비용과 신규 모델의 unknown 비용을 각각 검증한다.
 - 비용은 `Noxtend.Tuning.Domain/Call/ModelPriceBook.cs`와 등록 단가를 따른다. 실측 토큰·이미지 수를 확인할 수 없거나 단가가 없을 때 0으로 꾸며내지 않는다.
 - 키 암호화·Data Protection key ring 보존·응답 마스킹은 [Backend 개발 지침](../../apps/backend/AGENTS.md)과 [배포 지침](../../deploy/AGENTS.md)을 따른다.
 

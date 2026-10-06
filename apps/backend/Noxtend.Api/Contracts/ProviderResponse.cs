@@ -95,8 +95,9 @@ public sealed record ProviderTestResponse(
 ///
 /// 이미 걸러진 목록이다. 추출이 요구하는 이미지 입력·구조화 출력을 갖춘 모델만 실린다.
 /// </summary>
-public sealed record ProviderModelResponse(string Id, string DisplayName)
+public sealed record ProviderModelResponse(
+    string Id, string DisplayName, Domain.Ports.SpriteImageCapabilities? Sprite = null)
 {
     public static ProviderModelResponse From(Domain.Ports.ProviderModel model)
-        => new(model.Id, model.DisplayName);
+        => new(model.Id, model.DisplayName, model.Sprite);
 }

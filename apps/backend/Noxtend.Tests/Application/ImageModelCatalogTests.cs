@@ -33,6 +33,7 @@ public sealed class ImageModelCatalogTests
             {
               "data": [
                 { "id": "gpt-image-2" },
+                { "id": "gpt-image-2.5-sunburst" },
                 { "id": "gpt-image-1.5" },
                 { "id": "gpt-5.6-sol" }
               ]
@@ -48,7 +49,21 @@ public sealed class ImageModelCatalogTests
 
         var models = await catalog.ListImageModelsAsync(providerId, CancellationToken.None);
 
-        Assert.Equal(["gpt-image-2"], models.Select(model => model.Id));
+        Assert.Equal(["gpt-image-2", "gpt-image-2.5-sunburst"], models.Select(model => model.Id));
+        Assert.True(models[1].Sprite!.SupportsTransparency);
+    }
+
+    [Fact]
+    public async Task OpenAiImageModels_DoesNotOfferSpriteModelAbsentFromRemoteList()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{ "data": [{ "id": "gpt-image-2" }] }""", Encoding.UTF8, "application/json"),
+        });
+        var (catalog, providerId) = await CreateCatalogAsync(handler, ProviderKind.OpenAI, "test-openai-key");
+        var models = await catalog.ListImageModelsAsync(providerId, CancellationToken.None);
+        Assert.Equal("gpt-image-2", Assert.Single(models).Id);
+        Assert.Null(models[0].Sprite);
     }
 
     [Fact]
@@ -95,7 +110,7 @@ public sealed class ImageModelCatalogTests
     public void StaticImageModelCatalog_UsesCurrentStableModelIds()
     {
         Assert.Equal(
-            ["gpt-image-2"],
+            ["gpt-image-2", "gpt-image-2.5-sunburst"],
             Noxtend.Infrastructure.Image.ImageModels.For(ProviderKind.OpenAI)
                 .Select(model => model.Id));
 

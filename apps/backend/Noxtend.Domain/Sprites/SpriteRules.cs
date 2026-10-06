@@ -93,6 +93,18 @@ public static class SpriteRules
             Math.Max(1, (int)Math.Round(source.Height * scale, MidpointRounding.AwayFromZero)));
     }
 
+    public static SpriteCanvas GenerationCanvas(SpriteCanvas output, IReadOnlyList<SpriteCanvas> supported)
+    {
+        if (output is null || output.Width <= 0 || output.Height <= 0)
+            throw new ArgumentOutOfRangeException(nameof(output));
+        if (supported is null || supported.Count == 0
+            || supported.Any(size => size is null || size.Width <= 0 || size.Height <= 0))
+            throw new ArgumentException("확인된 양수 생성 크기가 필요합니다", nameof(supported));
+
+        var ratio = (double)output.Width / output.Height;
+        return supported.MinBy(size => Math.Abs(Math.Log((double)size.Width / size.Height / ratio)))!;
+    }
+
     public static SpriteTransform Transform(SpriteCanvas generation, SpriteCanvas output)
     {
         var scale = Math.Min((double)output.Width / generation.Width, (double)output.Height / generation.Height);
