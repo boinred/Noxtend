@@ -513,11 +513,11 @@ test('fps edit updates metadata without generation requests')
 
 ## Task 14: 홈·3D·2D 메뉴와 기존 결과 진입
 
-**Files:** Modify `F/src/routes/{paths.ts,navItems.ts,navItems.test.ts,prefetch.ts,index.tsx}`, `F/src/features/shell/layout/{Sidebar.tsx,SidebarItem.tsx,sidebarStyles.ts}`, `F/src/features/screens/{categoryLabels.ts,home/HomeScreen.tsx,home/ActiveJobSpotlight.tsx,home/WorkStatusSection.tsx,background/BackgroundStudioScreen.tsx,character/CharacterStudioScreen.tsx,admin/CallsScreen.tsx}`, jobPath 호출과 `F/src/features/screens/background/PartGallery.tsx`의 기존 결과 2D 진입 버튼, `F/tests/e2e/{app-shell-responsive.spec.ts,home-active-job.spec.ts}`와 기존 호출 내역의 목록 오류 검사, `PRODUCT.md`, `DESIGN.md`, `docs/xHuman/frontend.md`.
+**Files:** Create `F/src/features/shell/layout/MobileStudioMenu.tsx`의 모바일 그룹 메뉴 lazy 경계. Modify `F/src/routes/{paths.ts,navItems.ts,navItems.test.ts,prefetch.ts,index.tsx}`, `F/src/features/shell/layout/{Sidebar.tsx,SidebarItem.tsx,sidebarStyles.ts}`, `F/src/features/screens/{categoryLabels.ts,home/HomeScreen.tsx,home/ActiveJobSpotlight.tsx,home/WorkStatusSection.tsx,background/BackgroundStudioScreen.tsx,character/CharacterStudioScreen.tsx,admin/CallsScreen.tsx}`, jobPath 호출과 `F/src/features/screens/background/PartGallery.tsx`의 기존 결과 2D 진입 버튼, `F/tests/e2e/{app-shell-responsive.spec.ts,home-active-job.spec.ts}`와 기존 호출 내역의 목록 오류 검사, `PRODUCT.md`, `DESIGN.md`, `docs/xHuman/frontend.md`.
 
 **Interfaces:** `NavGroup={key:'threeD'|'twoD';label:string;items:readonly NavItem[]}`와 NAV_GROUPS, home/footer는 별도로 둔다. `jobPath(category:string,jobId:string,productionMode:'threeD'|'twoD'='threeD'):string`. `/2d/character`, `/2d/object`는 기존 ComingSoonScreen을 사용한다.
 
-- [ ] route/nav 단위 테스트와 responsive/home E2E를 갱신한다.
+- [x] route/nav 단위 테스트와 responsive/home E2E를 갱신한다.
 
 ```typescript
 it('LegacyAndSpriteJobs_RouteByMode', () => {
@@ -528,11 +528,11 @@ test('MobileGroups_HaveDistinctAccessibleNames')
 test('detail url activates its parent group and restores menu focus')
 ```
 
-- [ ] `pnpm --filter @nextend/frontend test src/routes/navItems.test.ts`, build 후 `pnpm --filter @nextend/frontend test:e2e tests/e2e/app-shell-responsive.spec.ts tests/e2e/home-active-job.spec.ts`로 실패를 확인한다.
-- [ ] desktop은 항상 보이는 3D/2D 제목과 하위 항목을 그린다. 그룹별 접힘 상태를 추가하지 않는다. icon rail의 tooltip/accessible name에 '3D 배경'·'2D 배경'을 포함한다.
-- [ ] ≤720px에서는 home/3D/2D/admin 하단 nav를 사용하고 그룹 버튼으로 기존 Radix menu를 연다. 키보드·Escape·focus 복원·준비 중 표시를 유지한다. 3D object도 현재 준비 중 상태를 유지한다.
-- [ ] 홈·기존 스튜디오·공유 작업 목록을 사용하는 호출 내역에서 Task11의 error/404/정상 빈 결과를 구분해 표시한다. 홈 카드에 mode/category를 표시하고 모든 jobPath 호출에 mode를 전달한다. 기존 결과에서는 source job/image ID를 가지고 2D 입력으로 이동한다. 외부 URL·Blob key는 넘기지 않는다. route/prefetch를 함께 갱신하고 lazy import를 유지한다.
-- [ ] 1440×900·390px, 접힌 nav, 직접 job URL, legacy mode 누락, reduced-motion을 같은 테스트로 확인한다. PRODUCT/DESIGN/xHuman을 동기화하고 `feat(navigation): group studios by 3d and 2d modes`로 커밋한다.
+- [x] `pnpm --filter @nextend/frontend test src/routes/navItems.test.ts`, build 후 `pnpm --filter @nextend/frontend test:e2e tests/e2e/app-shell-responsive.spec.ts tests/e2e/home-active-job.spec.ts`로 실패를 확인한다.
+- [x] desktop은 항상 보이는 3D/2D 제목과 하위 항목을 그린다. 그룹별 접힘 상태를 추가하지 않는다. icon rail의 tooltip/accessible name에 '3D 배경'·'2D 배경'을 포함한다.
+- [x] ≤720px에서는 home/3D/2D/admin 하단 nav를 사용하고 그룹 버튼으로 기존 Radix menu를 연다. 키보드·Escape·focus 복원·준비 중 표시를 유지한다. 3D object도 현재 준비 중 상태를 유지한다.
+- [x] 홈·기존 스튜디오·공유 작업 목록을 사용하는 호출 내역에서 Task11의 error/404/정상 빈 결과를 구분해 표시한다. 홈 카드에 mode/category를 표시하고 모든 jobPath 호출에 mode를 전달한다. 기존 결과에서는 source job/image ID를 가지고 2D 입력으로 이동한다. 외부 URL·Blob key는 넘기지 않는다. route/prefetch를 함께 갱신하고 lazy import를 유지한다.
+- [x] 1440×900·390px, 접힌 nav, 직접 job URL, legacy mode 누락, reduced-motion을 같은 테스트로 확인한다. PRODUCT/DESIGN/xHuman을 동기화하고 `feat(navigation): group studios by 3d and 2d modes`로 커밋한다.
 
 ## Task 15: 양쪽 스택 회귀·품질 경계·완료 기록
 
