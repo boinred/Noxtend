@@ -14,6 +14,7 @@
 | Frontend 화면·쿼리·API 연동 | [frontend.md](frontend.md) | `apps/frontend/src/features`, `src/app/queries`, `src/infra/api`, `src/domain` |
 | HTTP 계약 변경 | [backend.md](backend.md), [frontend.md](frontend.md) | `Noxtend.Api/Controllers`·`Contracts`, `apps/frontend/src/infra/api`, `apps/frontend/src/domain` |
 | 로컬 실행·인프라·배포 | [인프라 구성도](../infrastructure.md), [로컬 기동 절차](../../deploy/k8s/README.md), [배포 지침](../../deploy/AGENTS.md) | `deploy/local-up.sh`, `deploy/k8s/`, `deploy/azure/` |
+| 설계·계획 문서와 검사 훅 | [검증 자료](../../.agents/skills/noxtend-workflow/references/verification.md#설계계획-문서-훅) | `.githooks/check-design-docs.mjs`, `.codex/hooks.json`, `.claude/settings.json` |
 
 ## 에이전트 작업 규칙
 

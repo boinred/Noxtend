@@ -62,6 +62,24 @@ pnpm hooks:test
 - `hooks:install`은 이 checkout의 Git 설정에 `.githooks` 경로를 등록한다. 새 clone에는 한 번 등록해야 한다. Git의 `--no-verify`로 우회할 수 있으므로 훅 통과가 CI·전체 회귀·수동 검증을 대신하지 않는다.
 - `hooks:test`는 임시 Git 저장소와 가짜 pnpm으로 실행·건너뜀·실패 전파 및 실제 커밋 차단을 확인한다. 실제 Frontend 검사 명령은 위의 `pnpm lint`를 사용한다.
 
+## 설계·계획 문서 훅
+
+```bash
+pnpm docs:check
+pnpm docs:check docs/superpowers/specs/2026-10-06-2d-background-sprites-design.md
+pnpm hooks:test
+```
+
+- 정본 검사는 `.githooks/check-design-docs.mjs`다. 대상은 `docs/superpowers/specs/`와 `docs/superpowers/plans/`의 Markdown이며 다른 문서를 검사했다고 주장하지 않는다.
+- 제목·닫히지 않은 코드 블록·설명에 혼입된 일본어 가나·미완성 TODO/TBD/FIXME·로컬 inline Markdown 링크의 대상 존재를 검사한다. 코드 블록·inline code의 일본어는 제외한다. reference-style 링크·anchor·코드 심볼·전체 언어 판별·설계의 타당성은 자동 검사 범위가 아니다.
+- 설계는 목적·범위·검증 제목이 필요하다. 계획은 Goal·Spec 링크·Global Constraints·Review Focus와 Task별 Files·체크리스트가 필요하며 한국어 대응 항목도 허용한다. 신규 파일은 계획의 코드 표기로 적고 아직 없는 파일을 현재 근거처럼 링크하지 않는다.
+- 500행 초과는 중복과 과도한 상세화를 검토하라는 경고다. 프로젝트의 초기 휴리스틱이며 품질·처리 시간 기준이나 업계 표준이 아니다. 경고는 커밋을 차단하지 않는다.
+- Git `pre-commit`은 기존 Frontend lint 전에 변경된 staged 문서와 링크 대상의 index 상태를 검사한다. 작업 트리 내용으로 부분 stage 오류를 숨기지 않는다. 문서만 바뀌면 Frontend lint는 실행하지 않으며 검사 실패·Git 오류는 커밋을 차단한다.
+- `.codex/hooks.json`과 `.claude/settings.json`은 같은 검사를 PostToolUse·Stop에 등록한다. PostToolUse는 Write/Edit/apply_patch/Bash의 입력에 대상 문서 경로가 포함될 때 변경·untracked 문서를 검사한다. 상대 경로를 생략한 shell 쓰기와 다른 도구는 Stop에서 보완한다. 완료된 파일 쓰기를 되돌리지 않고 수정 피드백을 전달한다.
+- Stop 실패는 수정 작업을 한 번 더 요청한다. `stop_hook_active`인 재진입에서는 검사하지 않아 무한 반복을 피하며 최종 커밋은 Git 검사로 다시 제한한다. 자동 포맷·stage·파일 수정·유료 LLM 호출은 없다.
+- Codex 프로젝트 훅은 신뢰된 프로젝트에서만 로드하며 새·변경 훅은 CLI `/hooks`에서 정의를 검토하고 신뢰해야 실행된다. 등록 파일 작성만으로 현재 Desktop 세션에서 자동 실행되었다고 판단하지 않는다. [Codex 공식 안내](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks), [Claude Code 공식 안내](https://code.claude.com/docs/en/hooks#hook-locations)를 따른다.
+- `hooks:test`는 임시 저장소에서 오류·경고·에이전트 JSON 피드백·부분 stage·미stage 링크 대상과 실제 커밋 차단을 확인한다. 네이티브 에이전트 이벤트의 실제 발화는 별도로 확인해야 한다.
+
 ## 코딩 스타일 도구
 
 - 기본 공백·인코딩·줄 끝은 루트 `.editorconfig`를 따른다. Frontend 포맷은 `apps/frontend/.prettierrc.json`·`.prettierignore`, 코드 품질·계층 검사는 `apps/frontend/eslint.config.js`·기존 Oxlint를 사용한다. `eslint-config-prettier`로 포맷 규칙 충돌을 막고 `pnpm lint`에 포맷 검사도 포함한다.

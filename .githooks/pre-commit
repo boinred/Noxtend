@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+node "$(git rev-parse --show-toplevel)/.githooks/check-design-docs.mjs" --staged
+
 status=0
 git diff --cached --quiet -- apps/frontend/ package.json pnpm-lock.yaml pnpm-workspace.yaml .editorconfig .githooks/ || status=$?
 

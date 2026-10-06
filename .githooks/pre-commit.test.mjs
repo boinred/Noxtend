@@ -41,6 +41,7 @@ test('frontend lint gates Git commits without blocking backend-only changes', ()
     ok('add', 'apps/backend/server.cs')
     ok('commit', '--quiet', '-m', 'baseline')
     write('.githooks/pre-commit', readFileSync(new URL('./pre-commit', import.meta.url)), 0o755)
+    write('.githooks/check-design-docs.mjs', readFileSync(new URL('./check-design-docs.mjs', import.meta.url)))
     write(
       'bin/pnpm',
       '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$NOXTEND_HOOK_LOG"\nexit "$NOXTEND_LINT_EXIT"\n',
@@ -52,6 +53,18 @@ test('frontend lint gates Git commits without blocking backend-only changes', ()
     write('apps/backend/server.cs', 'backend change')
     ok('add', 'apps/backend/server.cs')
     ok('commit', '--quiet', '-m', 'backend')
+    assert.equal(existsSync(log), false)
+
+    const doc = 'docs/superpowers/specs/example.md'
+    write(doc, '# 설계\n\n## 목적과 범위\nテスト\n\n## 검증\nFake 확인\n')
+    ok('add', doc)
+    const docHead = ok('rev-parse', 'HEAD')
+    assert.notEqual(git('commit', '--quiet', '-m', 'invalid design').status, 0)
+    assert.equal(ok('rev-parse', 'HEAD'), docHead)
+    assert.equal(existsSync(log), false)
+    write(doc, '# 설계\n\n## 목적과 범위\n이미지 입력\n\n## 검증\nFake 확인\n')
+    ok('add', doc)
+    ok('commit', '--quiet', '-m', 'valid design')
     assert.equal(existsSync(log), false)
 
     for (const path of ['apps/frontend/src/file with spaces.ts', 'pnpm-lock.yaml']) {
