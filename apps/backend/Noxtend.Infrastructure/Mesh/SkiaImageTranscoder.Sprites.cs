@@ -167,7 +167,14 @@ public sealed partial class SkiaImageTranscoder
             var swap = codec.EncodedOrigin is SKEncodedOrigin.LeftTop or SKEncodedOrigin.RightTop
                 or SKEncodedOrigin.RightBottom or SKEncodedOrigin.LeftBottom;
             return (bitmap, codec.EncodedOrigin, new SpriteImageInfo(
-                swap ? bitmap.Height : bitmap.Width, swap ? bitmap.Width : bitmap.Height, transparent, visible));
+                swap ? bitmap.Height : bitmap.Width, swap ? bitmap.Width : bitmap.Height, transparent, visible,
+                codec.EncodedFormat switch
+                {
+                    SKEncodedImageFormat.Png => "image/png",
+                    SKEncodedImageFormat.Jpeg => "image/jpeg",
+                    SKEncodedImageFormat.Webp => "image/webp",
+                    _ => throw new ProviderBadResponseException("지원하지 않는 이미지 형식입니다"),
+                }));
         }
         catch
         {

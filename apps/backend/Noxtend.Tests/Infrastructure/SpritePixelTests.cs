@@ -120,7 +120,7 @@ public sealed class SpritePixelTests
     {
         using var source = Image(5, 3, (_, _) => SKColors.Red, format);
         var info = await _transcoder.InspectSpriteAsync(source, MaxBytes, MaxPixels, default);
-        Assert.Equal(new SpriteImageInfo(5, 3, false, true), info);
+        Assert.Equal(new SpriteImageInfo(5, 3, false, true, format == SKEncodedImageFormat.Jpeg ? "image/jpeg" : format == SKEncodedImageFormat.Webp ? "image/webp" : "image/png"), info);
     }
 
     [Theory]

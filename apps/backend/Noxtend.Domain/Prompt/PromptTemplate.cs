@@ -29,6 +29,7 @@ public static partial class PromptTemplate
     /// </summary>
     public static IReadOnlySet<string> AllowedVariables(LlmOperationKind kind) => kind switch
     {
+        LlmOperationKind.AnalyzeSprites => new HashSet<string> { "settings", "sourceCanvas" },
         LlmOperationKind.Analyze => new HashSet<string>(),
 
         // 유사도 평가 — 두 이미지가 입력의 전부다. 변수 없음 (background-similarity-tuning §15.1)
@@ -65,25 +66,16 @@ public static partial class PromptTemplate
     /// <summary>
     /// 템플릿에 값을 끼운다.
     ///
-    /// 치환 후 `{{...}}` 가 남아 있으면 예외다 — 값을 안 준 변수가 있다는 뜻이고,
-    /// 그대로 보내면 공급자가 리터럴 중괄호를 읽는다.
+    /// 템플릿에 값을 안 준 변수가 있으면 예외다. 삽입한 데이터의 중괄호는 재해석하지 않는다.
     /// </summary>
     public static string Render(string template, IReadOnlyDictionary<string, string> values)
     {
-        var rendered = VariablePattern().Replace(template, match =>
+        return VariablePattern().Replace(template, match =>
         {
             var name = match.Groups[1].Value;
-            return values.TryGetValue(name, out var value) ? value : match.Value;
+            return values.TryGetValue(name, out var value) ? value
+                : throw new InvalidOperationException($"치환되지 않은 변수가 있습니다: {{{{{name}}}}}");
         });
-
-        var leftover = VariablePattern().Match(rendered);
-        if (leftover.Success)
-        {
-            throw new InvalidOperationException(
-                $"치환되지 않은 변수가 있습니다: {{{{{leftover.Groups[1].Value}}}}}");
-        }
-
-        return rendered;
     }
 
     /// <summary>

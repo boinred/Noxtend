@@ -30,6 +30,7 @@ public static class TaskWorkerRegistration
     /// </summary>
     private static readonly Dictionary<TaskKind, Func<IServiceProvider, ITaskHandler>> Handlers = new()
     {
+        [TaskKind.AnalyzeSprites] = sp => sp.GetRequiredService<Noxtend.Application.Sprites.RunSpriteAnalysisTaskHandler>(),
         [TaskKind.Analyze] = sp => sp.GetRequiredService<RunTaskHandler>(),
         [TaskKind.Extract] = sp => sp.GetRequiredService<RunTaskHandler>(),
         [TaskKind.Decompose] = sp => sp.GetRequiredService<RunTaskHandler>(),

@@ -116,3 +116,18 @@ test.describe('유사도 평가 슬롯 (background-similarity-tuning §15.1)', (
     await expect(page.getByTestId('prompt-empty-category')).toHaveCount(0)
   })
 })
+
+test('2D 분석은 배경 전용이며 설정·원본 캔버스 변수를 편집한다', async ({ page }) => {
+  await installFakeApi(page)
+  await page.goto('/admin/prompts')
+  const row = page.locator('[data-testid="prompt-row"][data-kind="analyzeSprites"]')
+  await expect(row.getByTestId('prompt-cell-dedicated')).toHaveCount(1)
+  await expect(row.getByTestId('prompt-cell-na')).toHaveCount(3)
+  await page.goto('/admin/prompts/analyzeSprites')
+  await expect(page.getByTestId('prompt-category-tab')).toHaveCount(1)
+  await expect(page.getByTestId('prompt-version')).toHaveCount(1)
+  await expect(page.getByTestId('prompt-user-input')).toHaveValue('{{settings}} {{sourceCanvas}}')
+  await page.getByTestId('prompt-system-input').fill('설정 {{settings}} 원본 {{sourceCanvas}}')
+  await page.getByTestId('prompt-save').click()
+  await expect(page.getByTestId('prompt-version')).toHaveCount(2)
+})

@@ -81,7 +81,7 @@ public sealed class PromptGridTests
 
         // LLM 을 부르는 슬롯 전부 — 파이프라인 다섯(재서술 포함) + 유사도 평가.
         // Reconstruct 는 없다 (§7.1·§15.1)
-        Assert.Equal(6, rows.Count);
+        Assert.Equal(Enum.GetValues<LlmOperationKind>().Order(), rows.Select(row => row.Kind).Order());
         foreach (var row in rows)
         {
             var categories = row.Columns.Select(c => c.Category).ToList();

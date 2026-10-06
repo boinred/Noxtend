@@ -21,6 +21,7 @@ public enum LlmOperationKind
     RewriteDescriptions = 3,
 
     Generate = 4,
+    AnalyzeSprites = 5,
     SimilarityEvaluate = 100,
 }
 
@@ -36,6 +37,7 @@ public static class LlmOperation
         TaskKind.Extract => LlmOperationKind.Extract,
         TaskKind.Decompose => LlmOperationKind.Decompose,
         TaskKind.RewriteDescriptions => LlmOperationKind.RewriteDescriptions,
+        TaskKind.AnalyzeSprites => LlmOperationKind.AnalyzeSprites,
         TaskKind.Generate => LlmOperationKind.Generate,
         _ => throw new ArgumentOutOfRangeException(
             nameof(kind), kind, "LLM 을 호출하지 않는 공정입니다"),

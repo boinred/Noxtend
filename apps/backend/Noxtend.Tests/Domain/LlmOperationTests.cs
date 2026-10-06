@@ -41,6 +41,14 @@ public sealed class LlmOperationTests
         Assert.Equal(100, (int)LlmOperationKind.SimilarityEvaluate);
     }
 
+    [Fact]
+    public void SpriteAnalysis_HasExplicitIndependentNumbers()
+    {
+        Assert.Equal(7, (int)TaskKind.AnalyzeSprites);
+        Assert.Equal(5, (int)LlmOperationKind.AnalyzeSprites);
+        Assert.Equal(LlmOperationKind.AnalyzeSprites, LlmOperation.FromTask(TaskKind.AnalyzeSprites));
+    }
+
     // ─── 호출 상관관계 — Task 또는 SimilarityEvaluation 정확히 하나 (§7.3) ───
 
     [Fact]

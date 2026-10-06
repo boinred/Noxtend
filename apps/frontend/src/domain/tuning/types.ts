@@ -21,6 +21,7 @@ const PROMPT_KIND_LABELS: Record<PromptKind, string> = {
   rewriteDescriptions: '서술 재작성',
   generate: '파츠 생성',
   similarityEvaluate: '유사도 평가',
+  analyzeSprites: '2D 배경 분석',
 }
 
 export function promptKindLabel(kind: PromptKind): string {
@@ -33,7 +34,7 @@ export function promptKindLabel(kind: PromptKind): string {
  * 프롬프트가 없다는 오해를 만든다 (실측 피드백).
  */
 export function promptKindCategories(kind: PromptKind): (AssetCategory | null)[] {
-  return kind === 'similarityEvaluate'
+  return kind === 'similarityEvaluate' || kind === 'analyzeSprites'
     ? ['background']
     : [null, 'character', 'object', 'background']
 }

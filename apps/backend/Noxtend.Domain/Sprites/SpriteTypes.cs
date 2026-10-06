@@ -9,7 +9,7 @@ public enum SpriteTileLayout { Square, Diamond }
 public enum SpriteRequestKind { Create, UpdatePlan, ApprovePlan, ApproveBases, RegenerateFrame, ApproveAsset, Export }
 public enum SpritePhase { Analyzing, PlanReview, BaseGeneration, BaseReview, FrameGeneration, FrameReview, ExportReady, Packaging, Completed }
 
-public sealed record SpriteImageInfo(int Width, int Height, bool HasTransparentPixels, bool HasVisiblePixels);
+public sealed record SpriteImageInfo(int Width, int Height, bool HasTransparentPixels, bool HasVisiblePixels, string ContentType);
 public sealed record SpriteCanvas(int Width, int Height);
 public sealed record SpriteAnchor(double X, double Y);
 public sealed record SpriteTransform(double Scale, double OffsetX, double OffsetY);

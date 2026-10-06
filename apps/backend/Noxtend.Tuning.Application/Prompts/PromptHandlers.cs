@@ -36,7 +36,7 @@ public sealed class GetPromptGridHandler(IPromptCatalog catalog, IPromptVersionR
     private static readonly LlmOperationKind[] PipelineKinds =
         [LlmOperationKind.Analyze, LlmOperationKind.Extract, LlmOperationKind.Decompose,
          LlmOperationKind.RewriteDescriptions, LlmOperationKind.Generate,
-         LlmOperationKind.SimilarityEvaluate];
+         LlmOperationKind.AnalyzeSprites, LlmOperationKind.SimilarityEvaluate];
 
     // 열 순서: 기본(null) → 캐릭터 → 소품 → 배경. 기본 열은 폴백 대상이 없다
     private static readonly AssetCategory?[] Columns =
@@ -140,10 +140,10 @@ public sealed class CreatePromptVersionHandler(IPromptVersionRepository prompts,
         CancellationToken ct)
     {
         // 유사도 평가는 Background 전용 슬롯이다 (background-similarity-tuning §7.1)
-        if (kind == LlmOperationKind.SimilarityEvaluate && category != AssetCategory.Background)
+        if ((kind is LlmOperationKind.SimilarityEvaluate or LlmOperationKind.AnalyzeSprites) && category != AssetCategory.Background)
         {
             return Result<PromptVersion>.Fail(
-                ErrorCode.PromptSchemaInvalid, "유사도 평가 프롬프트는 Background 전용입니다");
+                ErrorCode.PromptSchemaInvalid, "이 프롬프트는 Background 전용입니다");
         }
 
         // 두 필드를 모두 본다 — 변수는 어느 쪽에도 쓸 수 있다

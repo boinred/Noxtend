@@ -460,6 +460,7 @@ export async function installFakeApi(page: Page, options: FakeApiOptions = {}) {
   /** 단계별 허용 변수 — 서버의 `PromptTemplate.AllowedVariables` 와 같아야 한다 */
   const ALLOWED_VARIABLES: Record<string, string[]> = {
     analyze: [],
+    analyzeSprites: ['settings', 'sourceCanvas'],
     // gender·partHints 는 캐릭터 고유 변수다 (character-studio §D-03). 종류는 추출, 개수는 분해로 흐른다
     extract: ['scene', 'gender', 'partHints'],
     decompose: ['scene', 'parts', 'gender', 'partHints'],
@@ -495,6 +496,20 @@ export async function installFakeApi(page: Page, options: FakeApiOptions = {}) {
     allowedVariables: string[]
     createdAt: string
   }[]
+
+  prompts.push({
+    id: 'prompt-seed-sprites',
+    kind: 'analyzeSprites',
+    category: 'background',
+    version: 1,
+    system: '2D 배경 제작 대상을 분석하라',
+    user: '{{settings}} {{sourceCanvas}}',
+    jsonSchema: '{}',
+    note: '초기 버전',
+    isActive: true,
+    allowedVariables: ALLOWED_VARIABLES.analyzeSprites!,
+    createdAt: new Date(Date.UTC(2026, 9, 6)).toISOString(),
+  })
 
   // 유사도 평가 슬롯 — 실제 시드처럼 Background 전용 활성이다 (background-similarity-tuning §15.1)
   prompts.push({
@@ -1571,7 +1586,7 @@ export async function installFakeApi(page: Page, options: FakeApiOptions = {}) {
       const activeExact = (kind: string, category: string | null) =>
         prompts.find((p) => p.kind === kind && p.category === category && p.isActive)
 
-      const rows = [...PROMPT_STAGES, 'similarityEvaluate'].map((kind) => ({
+      const rows = [...PROMPT_STAGES, 'similarityEvaluate', 'analyzeSprites'].map((kind) => ({
         kind,
         cells: [null, ...PROMPT_CATEGORIES].map((category) => {
           const dedicated = activeExact(kind, category)

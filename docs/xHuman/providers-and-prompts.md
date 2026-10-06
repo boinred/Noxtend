@@ -16,6 +16,12 @@
 - 어댑터: `apps/backend/Noxtend.Infrastructure/Llm/OpenAiProvider.cs`, `AnthropicProvider.cs`, `GoogleProvider.cs`
 - 설정·장식: `apps/backend/Noxtend.Infrastructure/InfrastructureServiceCollectionExtensions.cs`의 `AddLlm`
 
+### 2D 배경 분석
+
+`AnalyzeSprites`는 TaskKind=7, LlmOperationKind=5의 독립 분석 operation이며 Background 전용 프롬프트다. `RunSpriteAnalysisTaskHandler`는 settings·sourceCanvas를 camelCase JSON 데이터로 렌더하고 실제 디코딩 형식의 독립 입력 이미지를 첨부한다. `PromptTemplate.Render`는 원래 템플릿만 한 번 치환하여 삽입한 notes의 `{{...}}`를 재확장하거나 미치환 변수로 거부하지 않는다. 원래 템플릿의 누락 변수는 계속 실패한다.
+
+`SeedPrompts.AnalyzeSprites()`와 `SeedSpriteAnalyzePrompt` migration은 정확한 시점·유형과 대상 schema를 등록한다. 기존 AnalyzeSprites/Background 슬롯이 있으면 운영자 내용을 보존하며 기존 3D·평가 프롬프트는 변경하지 않는다. `FakeLlmProvider`도 같은 schema를 반환하고 관리자 격자·편집·Frontend operation 라벨은 새 분석을 포함한다. 단가가 없는 모델 비용은 기존 ModelPriceBook의 null 규칙을 따른다.
+
 ### 이미지 생성
 
 `RunGenerationTaskHandler`가 활성 Generate 프롬프트를 조회하고 `GenerationStage` 변수·참조 이미지로 `ImageRequest`를 만든다. 이미지 어댑터 응답을 `GenerationStage.Validate`로 검증하고 Blob 저장 후 작업 상태에 반영한다. 성공 확정 전에 검증과 저장을 끝내는 순서를 유지한다.
@@ -42,7 +48,7 @@
 
 ### 스프라이트 이미지 검증·정규화
 
-`IImageTranscoder.InspectSpriteAsync`는 MIME 문자열 대신 PNG·JPEG·WebP 디코딩 결과를 검사한다. 입력 바이트는 비seek 스트림에서도 지정 상한+1바이트까지만 읽고, 64비트 픽셀 곱과 최대 16,777,216픽셀을 비트맵 할당 전에 확인한다. 잘린 디코딩·전체 투명 이미지·지원하지 않는 형식은 `ProviderBadResponseException`으로 실패한다. 원본 업로드는 호출자가 12 MiB를 지정하며 생성 응답·PNG 결과는 32 MiB 상한을 적용한다.
+`IImageTranscoder.InspectSpriteAsync`는 MIME 문자열 대신 PNG·JPEG·WebP 디코딩 결과를 검사하고 SpriteImageInfo.ContentType으로 실제 MIME을 반환한다. 입력 바이트는 비seek 스트림에서도 지정 상한+1바이트까지만 읽고, 64비트 픽셀 곱과 최대 16,777,216픽셀을 비트맵 할당 전에 확인한다. 잘린 디코딩·전체 투명 이미지·지원하지 않는 형식은 `ProviderBadResponseException`으로 실패한다. 원본 업로드는 호출자가 12 MiB를 지정하며 생성 응답·PNG 결과는 32 MiB 상한을 적용한다.
 
 `NormalizeSpriteAsync`는 EXIF 방향을 적용한 뒤 전달된 `SpriteCanvas`·`SpriteTransform`으로 배치한다. 프레임별 콘텐츠 경계를 자르거나 중심을 다시 계산하지 않는다. 투명 요구는 패딩·다이아몬드 마스크를 적용하기 전 실제 원본 알파로 확인한다. 출력은 알파를 유지한 PNG이며 다이아몬드 셀 밖은 투명하고 마스크 뒤 전체가 빈 결과는 거부한다. 입력 스트림은 호출자가 소유하고 반환 스트림은 position 0에서 읽고 닫는다. 취소는 `OperationCanceledException`으로 전파한다.
 

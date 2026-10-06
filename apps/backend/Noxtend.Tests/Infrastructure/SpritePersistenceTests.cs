@@ -4,6 +4,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Noxtend.Application.Pipeline;
+using Noxtend.Application.Sprites;
+using Noxtend.Application.Job;
+using Noxtend.Infrastructure.Mesh;
+using Noxtend.Tests.Application;
 using Noxtend.Domain.Job;
 using Noxtend.Domain.Ports;
 using Noxtend.Infrastructure.Persistence.InMemory;
@@ -18,6 +22,92 @@ public sealed class SpritePersistenceTests(SqlServerFixture sql)
 {
     private readonly string connectionString = sql.FreshDatabase(nameof(SpritePersistenceTests));
     private static readonly DateTimeOffset Now = new(2026, 10, 6, 0, 0, 0, TimeSpan.Zero);
+
+    [Fact]
+    public async Task ConcurrentAdmission_PersistsOneReceiptAndInputAndDeletesOnlyLosingCopy()
+    {
+        var fixture = new PipelineFixture();
+        var command = await SpriteAnalysisTests.Prepare(fixture);
+        await using var setup = Context();
+        await setup.Database.MigrateAsync();
+        setup.StoredImages.Add((await fixture.Images.GetAsync(command.UploadId!.Value, default))!);
+        await setup.SaveChangesAsync();
+        var blobs = new AdmissionBarrierBlob(fixture.Blobs);
+        async Task<Noxtend.Domain.Common.Result<SpriteReceipt>> Submit()
+        {
+            await using var db = Context();
+            var jobs = new EfJobRepository(db);
+            var handler = new StartSpriteJobHandler(jobs, new EfStoredImageRepository(db), blobs,
+                fixture.Providers, fixture.Catalog, fixture.Prompts, new SkiaImageTranscoder(),
+                new JobOrchestrator(fixture.Queue, jobs, fixture.Clock), fixture.Clock);
+            return await handler.HandleAsync(command, default);
+        }
+        var receipts = await Task.WhenAll(Submit(), Submit()).WaitAsync(TimeSpan.FromSeconds(45));
+        Assert.All(receipts, receipt => Assert.True(receipt.IsSuccess, receipt.ErrorMessage));
+        Assert.Equal(receipts[0].Value!.JobId, receipts[1].Value!.JobId);
+        setup.ChangeTracker.Clear();
+        Assert.Equal(1, await setup.Jobs.CountAsync());
+        Assert.Equal(1, await setup.Jobs.SelectMany(job => job.Sprites!.Requests).CountAsync());
+        Assert.Equal(2, await setup.StoredImages.CountAsync());
+        Assert.Equal(2, fixture.Blobs.Count);
+        Assert.Single(blobs.Deleted);
+        var winner = (await new EfJobRepository(setup).GetAsync(receipts[0].Value!.JobId, default))!;
+        Assert.Single(winner.Tasks);
+        Assert.Equal(command.RequestId, winner.Tasks[0].RequestId);
+        var copy = await setup.StoredImages.SingleAsync(image => image.Id == winner.SourceImageId);
+        Assert.DoesNotContain(copy.BlobKey, blobs.Deleted);
+        await using var copyStream = await fixture.Blobs.OpenReadAsync(copy.BlobKey, default);
+        Assert.Equal(24, (await new SkiaImageTranscoder().InspectSpriteAsync(copyStream, 12 * 1024 * 1024, 16_777_216, default)).Width);
+        await using var original = await fixture.Blobs.OpenReadAsync(
+            (await fixture.Images.GetAsync(command.UploadId.Value, default))!.BlobKey, default);
+        Assert.True(original.Length > 0);
+    }
+
+    [Fact]
+    public async Task SpritePromptMigration_AddsOnlyBackgroundAndPreservesOperatorSlot()
+    {
+        await using var db = Context();
+        var previous = db.Database.GetMigrations().TakeWhile(m => !m.EndsWith("_SeedSpriteAnalyzePrompt")).Last();
+        await db.GetService<IMigrator>().MigrateAsync(previous);
+        var before = await db.PromptVersions.CountAsync();
+        await db.Database.MigrateAsync();
+        var seeded = await db.PromptVersions.SingleAsync(p => p.Kind == Noxtend.Domain.Llm.LlmOperationKind.AnalyzeSprites);
+        Assert.Equal(AssetCategory.Background, seeded.Category);
+        Assert.True(seeded.IsActive);
+        Assert.Equal(before + 1, await db.PromptVersions.CountAsync());
+        await db.GetService<IMigrator>().MigrateAsync(previous);
+        db.ChangeTracker.Clear();
+        var custom = Noxtend.Tuning.Domain.Prompt.PromptVersion.Create(
+            Noxtend.Domain.Llm.LlmOperationKind.AnalyzeSprites, AssetCategory.Background, 1,
+            "operator", "", "{}", null, Now);
+        db.PromptVersions.Add(custom);
+        await db.SaveChangesAsync();
+        await db.Database.MigrateAsync();
+        db.ChangeTracker.Clear();
+        var preserved = await db.PromptVersions.SingleAsync(p => p.Kind == Noxtend.Domain.Llm.LlmOperationKind.AnalyzeSprites);
+        Assert.Equal(custom.Id, preserved.Id);
+        Assert.Equal("operator", preserved.System);
+    }
+
+    private sealed class AdmissionBarrierBlob(IBlobStorage inner) : IBlobStorage
+    {
+        private readonly TaskCompletionSource ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int saved;
+        public System.Collections.Concurrent.ConcurrentBag<string> Deleted { get; } = [];
+        public async Task<string> SaveAsync(Stream content, string contentType, CancellationToken ct)
+        {
+            var key = await inner.SaveAsync(content, contentType, ct);
+            if (Interlocked.Increment(ref saved) == 2) ready.SetResult();
+            await ready.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
+            return key;
+        }
+        public Task<Stream> OpenReadAsync(string key, CancellationToken ct) => inner.OpenReadAsync(key, ct);
+        public Task DeleteAsync(string key, CancellationToken ct)
+        {
+            Deleted.Add(key);
+            return inner.DeleteAsync(key, ct);
+        }
+    }
 
     [Fact]
     public async Task SpriteState_RoundTripsAllSnapshotsAndHistory()
@@ -56,7 +146,7 @@ public sealed class SpritePersistenceTests(SqlServerFixture sql)
     public async Task LegacyJobWithoutMesh_MigratesToThreeD()
     {
         await using var db = Context();
-        var previous = db.Database.GetMigrations().Last(m => !m.EndsWith("_AddSpriteProduction"));
+        var previous = db.Database.GetMigrations().TakeWhile(m => !m.EndsWith("_AddSpriteProduction")).Last();
         await db.GetService<IMigrator>().MigrateAsync(previous);
         var id = Guid.NewGuid();
         var source = Guid.NewGuid();

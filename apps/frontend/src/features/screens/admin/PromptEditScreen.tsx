@@ -41,8 +41,7 @@ export function PromptEditScreen() {
   const stage = (kind ?? 'analyze') as PromptKind
 
   const [params] = useSearchParams()
-  // 허용 밖 카테고리(생략 포함)는 첫 허용 슬롯으로 — 유사도 평가에서 기본(빈) 탭이
-  // 기본 선택되면 "프롬프트가 없다" 로 읽힌다 (실측 피드백)
+  // 배경 전용 분석·평가 슬롯의 기본 카테고리 선택
   const allowedCategories = promptKindCategories(stage)
   const requested = parseCategory(params.get('category'))
   const category = allowedCategories.includes(requested) ? requested : allowedCategories[0]!

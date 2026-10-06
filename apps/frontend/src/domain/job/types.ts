@@ -48,6 +48,7 @@ export type TaskKind =
    * `generate` 와 분리된 이유는 합성 생성이 실제 이미지 재생성을 막지 않기 위해서다.
    */
   | 'synthesize'
+  | 'analyzeSprites'
 
 /** 제작 대상 카테고리 — 서버 wire 값과 동일. */
 export type AssetCategory = 'character' | 'object' | 'background'
@@ -100,6 +101,7 @@ const TASK_KIND_LABELS: Record<TaskKind, string> = {
   generate: '파츠 생성',
   reconstruct: '3D 제작',
   synthesize: '대칭 이미지 생성',
+  analyzeSprites: '2D 배경 분석',
 }
 
 /** 작업 상태의 화면 표기. 부분 성공은 성공과 다른 낱말이어야 한다 (C-3). */

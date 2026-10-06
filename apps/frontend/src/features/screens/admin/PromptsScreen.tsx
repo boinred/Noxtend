@@ -31,6 +31,7 @@ const STAGES: PromptKind[] = [
   'rewriteDescriptions',
   'generate',
   'similarityEvaluate',
+  'analyzeSprites',
 ]
 
 /** 열: 기본(null) → 캐릭터 → 소품 → 배경 */

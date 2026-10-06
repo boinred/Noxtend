@@ -84,6 +84,7 @@ public enum TaskKind
     /// 이후 그 방향의 진짜 이미지를 영구히 생성할 수 없게 된다.
     /// </summary>
     Synthesize,
+    AnalyzeSprites = 7,
 }
 
 /// <summary>공정의 상태.</summary>

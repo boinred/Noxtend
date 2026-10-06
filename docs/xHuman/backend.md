@@ -43,7 +43,13 @@ LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계�
 
 `Noxtend.Application/Sprites/SpritePackageWriter.cs`는 승인 snapshot의 실제 PNG 크기를 고정 캔버스와 비교하고 서버가 만든 상대 경로만 `ZipArchive`에 순차 기록한다. `manifest.json`, `layers|tiles/asset-{assetId}.png`, `frames/asset-{assetId}/frame-000.png`, `sheets/asset-{assetId}-000.png`가 포함된다. ZIP 중앙 디렉터리까지 256 MiB 상한을 검사하며 초과·취소·이미지 오류에서 manifest 성공을 반환하지 않는다. 출력은 호출자가 소유하는 서버 임시 FileStream이며 ZIP 전체 메모리 버퍼를 만들지 않는다. manifest는 schemaVersion 1, TwoD, topLeft·pixels, 포함·제외 대상 ID를 명시하고 Blob 키·절대 경로를 담지 않는다. `SpriteSheetLayoutTests`와 `SpritePackageTests`가 배치·extrusion 픽셀·정적 프레임 수·ZIP 파일과 좌표·저장 JSON 호환·상한·취소를 검증한다. 실제 패키지 Worker 연결은 후속 범위다.
 
-관련 도메인 검증은 `Noxtend.Tests/Domain/SpriteRulesTests.cs`, `SpriteLifecycleTests.cs`다. HTTP·Worker 연결은 후속 범위이며 실제 리스 시도 소유권은 실행기의 최신 공정 재조회와 시도 비교로 연결해야 한다.
+`StartSpriteJobHandler`는 uploadId 또는 sourceJobId·sourceGeneratedImageId 쌍을 받아 기존 업로드와 두 제작 모드의 소유 결과를 확인한다. 기존 결과는 `GeneratedImages`와 `Sprites.Images`에서 해당 작업 소속을 조회한다. 분석 모델·활성 프롬프트와 이미지 모델의 확인된 투명·생성 크기 지원을 검증하고 원본을 12 MiB·16,777,216픽셀 안에서 디코딩한다. 실제 MIME·EXIF 방향 크기로 새 StoredImage와 독립 Blob을 만들고 합법적 GenerationCanvas·Transform을 접수 시 고정한다. 업로드 입력도 복사하므로 최초 upload는 별도 원본으로 남으며, 미참조 업로드의 만료·정리 정책은 현재 구현에 없다.
+
+`SpriteRequests`를 원본 조회·복사 전에 전역 조회하므로 원본 삭제 후 같은 정규화 요청은 기존 receipt를 반환한다. 다른 fingerprint는 충돌이며 접수 경쟁은 SQL 유니크 제약으로 판정한다. 새 StoredImage·job·AnalyzeSprites task·receipt는 같은 SaveChanges에 저장하고 경쟁에서 진 요청의 독립 Blob만 제거한다. 공급자 모델명은 Trim 후 SHA-256 fingerprint에 포함한다.
+
+`RunSpriteAnalysisTaskHandler`는 기존 TaskExecution·JobOptions 리스·rate limit·LLM 호출 기록 경로를 사용한다. `SpritePlanParser`는 선택 시점·유형, 정확한 응답 필드, 1~12개 대상, ROI·순서·투명·루프 제약을 검사하고 대상 ID를 서버에서 부여한다. 분석 성공은 PlanReview·PendingReview에서 멈추며 이미지 생성 공정을 만들지 않는다. TaskKind.AnalyzeSprites=7만 worker로 추가하고 GenerateSprite·PackSprites handler는 후속 범위다.
+
+관련 검증은 `Noxtend.Tests/Application/SpriteAnalysisTests.cs`, `Infrastructure/SpritePersistenceTests.cs`, `Domain/SpriteRulesTests.cs`, `SpriteLifecycleTests.cs`다. HTTP 연결과 실행기 리스 시도 소유권의 최종 최신 재조회 보강은 후속 범위다.
 
 `SpritePipelineConfiguration`은 Jobs의 nullable owned state와 `SpriteAssets`·`SpriteImages`·`SpriteExports`·`SpriteRequests`를 매핑한다. `SpriteFrames`는 asset 소유이며 `(AssetId, Index)`가 PK다. `SpriteAsset.Id`는 생성 시 `Plan.Id`로 고정하고, 계획의 프레임 수가 바뀌면 기존 슬롯 객체를 초기화하고 초과 슬롯만 제거한다. 프레임 조회는 `Index`순이다. 이미지·export의 과거 ID는 교차 FK 없이 보존하며 대상 삭제가 이력을 삭제하지 않는다. 작업 삭제는 소유 트리 전체를 cascade로 지운다. PNG·ZIP 키는 기존 `DeletedJobBlobs.Images`에 중복 없이 수집해 `IBlobStorage` 정리 경로로 전달한다.
 

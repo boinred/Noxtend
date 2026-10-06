@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { promptKindCategories, promptKindLabel } from '../tuning/types'
+import type { PromptKind } from '../tuning/types'
 
 /**
  * G-3 (사이클 #7 Design §8.2) — 프론트 유니온이 백엔드 열거형과 일치하는가.
@@ -31,7 +33,7 @@ function backendEnumValues(source: string, name: string): string[] {
       .split('\n')
       .map((line) => line.trim())
       // 값 줄만 남긴다: 식별자 뒤에 쉼표가 오는 줄
-      .map((line) => /^([A-Z][A-Za-z0-9]*),$/.exec(line)?.[1])
+      .map((line) => /^([A-Z][A-Za-z0-9]*)(?:\s*=\s*\d+)?,$/.exec(line)?.[1])
       .filter((value): value is string => value !== undefined)
   )
 }
@@ -86,6 +88,23 @@ describe('백엔드 열거형과 프론트 유니온이 일치한다', () => {
     expect(frontendUnion(jobFrontend, 'TaskKind').sort()).toEqual(
       backendEnumValues(jobBackend, 'TaskKind').map(toWire).sort(),
     )
+  })
+
+  it('LLM operation은 모든 프롬프트 라벨과 카테고리를 갖는다', () => {
+    const operations = backendEnumValues(
+      backendFile('Llm/LlmOperationKind.cs'),
+      'LlmOperationKind',
+    ).map(toWire)
+    expect(operations.sort()).toEqual(
+      [
+        ...backendEnumValues(jobBackend, 'TaskKind')
+          .map(toWire)
+          .filter((kind) => !['reconstruct', 'synthesize'].includes(kind)),
+        'similarityEvaluate',
+      ].sort(),
+    )
+    for (const kind of operations) expect(promptKindLabel(kind as PromptKind)).toBeTruthy()
+    expect(promptKindCategories('analyzeSprites')).toEqual(['background'])
   })
 
   it('ViewDirection — 방향이 바뀌면 파츠 이미지 타일이 비게 된다', () => {
