@@ -84,10 +84,10 @@ API 이미지를 빌드하고 SQL Server·Redis·Azurite·API를 기동합니다
 deploy/local-up.sh
 ```
 
-스크립트는 `/health`를 확인한 뒤 임시 포트 포워딩을 종료합니다. 별도 터미널에서 포트 포워딩을 유지합니다.
+스크립트는 `/health`를 확인한 뒤 임시 포트 포워딩을 종료합니다. `--forward`를 붙이면 `Ctrl+C`까지 `localhost:18080` 포트 포워딩을 유지합니다. API가 재시작되면 포트 포워딩도 끊기므로 다시 실행합니다.
 
 ```bash
-kubectl -n noxtend port-forward svc/api 18080:8080
+deploy/local-up.sh --forward
 ```
 
 ### Frontend 실행
@@ -139,5 +139,5 @@ dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName!~TripoSmokeTe
 - [제품 방향](PRODUCT.md) · [디자인 시스템](DESIGN.md)
 - [저장소 작업·에이전트 지침](AGENTS.md)
 - [Backend 개발 지침](apps/backend/AGENTS.md) · [Frontend 개발 지침](apps/frontend/AGENTS.md)
-- [LLM·공급자 에이전트 안내](docs/xHuman/README.md)
+- [에이전트 개발 문서 색인](docs/xHuman/README.md)
 - [인프라 개요](docs/infrastructure.md) · [Kubernetes 로컬 실행 안내](deploy/k8s/README.md)

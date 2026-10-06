@@ -28,12 +28,16 @@
 | HTTP DTO·route·직렬화·상태 코드 변경 영향 리뷰 | [api-breaking-change-detector](.agents/skills/api-breaking-change-detector/SKILL.md) |
 | 프롬프트 회귀·AI 출력 품질 비교 | [agentic-eval](.agents/skills/agentic-eval/SKILL.md); 일반 단위 테스트와 실 모델 평가 구분 |
 | Backend | [apps/backend/AGENTS.md](apps/backend/AGENTS.md), [noxtend-workflow](.agents/skills/noxtend-workflow/SKILL.md)의 Backend·검증 자료 |
-| LLM·AI 공급자·프롬프트·호출 내역 | 변경 전 [docs/xHuman/README.md](docs/xHuman/README.md)에서 작업별 Backend 자료 선택 |
 | Frontend·UI·모션 | [apps/frontend/AGENTS.md](apps/frontend/AGENTS.md), [DESIGN.md](DESIGN.md), 위 스킬의 Frontend·검증 자료 |
 | 인프라·Azure·Kubernetes·루트 CI | [deploy/AGENTS.md](deploy/AGENTS.md), 위 스킬의 배포·검증 자료 |
 | 일반 문서·AGENTS·스타일 설정 | 위 스킬의 검증 자료; 새 TDD 테스트 불필요 |
 
 Plan·Design만 요청하면 애플리케이션 소스를 수정하지 않는다. 실행 요청은 승인된 가역적 범위를 검증까지 진행한다.
+
+## 코드 탐색과 문서 동기화
+
+- 코드를 탐색하기 전에 [docs/xHuman/README.md](docs/xHuman/README.md)를 읽고 요청에 맞는 도메인 문서로 필요한 파일만 찾는다.
+- 커밋 전에 이번 변경이 `docs/xHuman/` 문서와 맞는지 확인한다. 파일·심볼·API·테이블·규칙을 추가·이동·삭제·변경했으면 해당 도메인 문서를 먼저 고치고 코드 변경과 같은 커밋에 넣는다. 기준은 README의 "문서 유지 규칙"이다.
 
 ## 코딩 스타일과 주석
 

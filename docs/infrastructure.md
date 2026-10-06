@@ -211,12 +211,11 @@ kubectl -n noxtend logs deploy/api --tail=100
 2. `deploy/k8s/secrets.yaml` 준비
 3. `deploy/local-up.sh` 실행
 4. 모든 Deployment가 Available 상태가 될 때까지 대기
-5. 별도 터미널에서 API 포트 포워딩 유지
-6. `pnpm dev`로 프론트엔드 실행
+5. API 포트 포워딩 유지(`--forward` 또는 별도 터미널)
+6. 다른 터미널에서 `pnpm dev`로 프론트엔드 실행
 
 ```bash
-deploy/local-up.sh
-kubectl -n noxtend port-forward svc/api 18080:8080
+deploy/local-up.sh --forward
 pnpm dev
 ```
 
@@ -225,8 +224,8 @@ pnpm dev
 1. `noxtend-api:local` 이미지 빌드
 2. Docker Desktop Kubernetes의 containerd로 이미지 반입
 3. namespace·Secret·4개 워크로드 적용
-4. API Deployment 재시작과 준비 대기
-5. 임시 포트 포워딩을 통한 `/health` 확인
+4. API Deployment 재시작과 새 파드 rollout 대기
+5. 임시 포트 포워딩을 통한 `/health` 확인(`--forward`이면 `Ctrl+C`까지 유지)
 
 매니페스트만 변경했고 API 이미지를 다시 만들 필요가 없다면 다음 명령을 사용할 수
 있습니다.

@@ -8,7 +8,9 @@
 # built by `docker build` is invisible to the kubelet (ErrImageNeverPull). This script
 # is the missing step made repeatable rather than a line in a README nobody re-reads.
 #
-# Usage:  deploy/local-up.sh [--skip-build]
+# Usage:  deploy/local-up.sh [--skip-build] [--forward]
+#   --skip-build  reuse the existing image
+#   --forward     keep the API port-forward on localhost:18080 until Ctrl-C
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -16,6 +18,16 @@ K8S_DIR="$REPO_ROOT/deploy/k8s"
 NAMESPACE=noxtend
 IMAGE=noxtend-api:local
 NODE_CONTAINER=desktop-control-plane
+
+SKIP_BUILD=false
+FORWARD=false
+for arg in "$@"; do
+  case "$arg" in
+    --skip-build) SKIP_BUILD=true ;;
+    --forward)    FORWARD=true ;;
+    *) printf 'unknown option: %s\nusage: deploy/local-up.sh [--skip-build] [--forward]\n' "$arg" >&2; exit 2 ;;
+  esac
+done
 
 log() { printf '\n\033[1m▸ %s\033[0m\n' "$1"; }
 die() { printf '\033[31m✗ %s\033[0m\n' "$1" >&2; exit 1; }
@@ -30,7 +42,7 @@ command -v docker  >/dev/null || die "docker not found"
 
 # --- 1. image ------------------------------------------------------------------
 
-if [ "${1:-}" != "--skip-build" ]; then
+if [ "$SKIP_BUILD" = false ]; then
   log "Building $IMAGE"
   docker build -t "$IMAGE" "$REPO_ROOT/apps/backend"
 
@@ -63,6 +75,8 @@ kubectl -n "$NAMESPACE" rollout restart deployment/api >/dev/null
 log "Waiting for dependencies (mssql needs 30s-2m on first boot)"
 kubectl -n "$NAMESPACE" wait --for=condition=available --timeout=300s \
   deployment/mssql deployment/redis deployment/azurite deployment/api
+# Available can still point at the old pod mid-rollout; forward only after the new one
+kubectl -n "$NAMESPACE" rollout status deployment/api --timeout=300s
 
 # --- 4. verify -------------------------------------------------------------------
 
@@ -83,8 +97,14 @@ echo "  $HEALTH"
 case "$HEALTH" in
   *'"db":"ok"'*'"redis":"ok"'*'"blob":"ok"'*)
     printf '\n\033[32m✓ stack is up — http://localhost:18080\033[0m\n'
-    printf '  port-forward stops when this script exits; re-run:\n'
-    printf '    kubectl -n %s port-forward svc/api 18080:8080\n\n' "$NAMESPACE"
+    if [ "$FORWARD" = true ]; then
+      # Forward is pinned to the current pod; an API restart ends it
+      printf '  keeping port-forward on localhost:18080 — Ctrl-C to stop\n\n'
+      wait "$FORWARD_PID" || die "port-forward ended (port 18080 busy or API pod restarted); re-run with --forward"
+    else
+      printf '  port-forward stops when this script exits; keep it with --forward or re-run:\n'
+      printf '    kubectl -n %s port-forward svc/api 18080:8080\n\n' "$NAMESPACE"
+    fi
     ;;
   *)
     die "/health did not report every dependency as ok"
