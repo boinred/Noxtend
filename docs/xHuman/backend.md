@@ -27,6 +27,16 @@ API와 Worker는 같은 ASP.NET Core 호스트에서 실행된다. 프로젝트 
 
 LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계산을 함께 바꿀 때는 [공급자와 프롬프트](providers-and-prompts.md)를 읽는다.
 
+## 2D 배경 도메인 기반
+
+`Noxtend.Domain/Job/ProductionMode.cs`와 `PipelineJob.Sprites.cs`가 제작 모드를 구분한다. 기존 `PipelineJob.Create`는 메시 공급자가 없어도 `ThreeD`이며, `CreateSprites`는 `Background`·`TwoD` 작업과 `Analyzing` 상태를 만든다. 이 도메인 생성 단계에서는 공정을 계획하지 않는다.
+
+`Noxtend.Domain/Sprites/SpriteTypes.cs`, `SpriteRules.cs`, `SpritePipelineState.cs`가 설정·계획 검증과 고정 캔버스 변환을 담당한다. 현재 도메인 상한은 원본 16,777,216픽셀, 대상 1~12개, 승인 묶음 64프레임이다. 정적 대상은 기준 이미지 1장, 루프는 기준 이미지를 포함해 4·8프레임이며 FPS는 1~30, 동작 설명은 최대 500자다.
+
+레이어는 원본 비율을 유지하고 긴 변 1024px까지 축소하며 확대하지 않는다. 타일 너비는 64·128·256px이고 아이소메트릭은 2:1 다이아몬드다. 모든 프레임은 동일한 contain 변환을 사용한다. ROI는 유한한 정규화 좌표로 원본 내부에 있어야 하며, 기존 3D `Bounds.IsWithinFrame`의 오차 여유를 바꾸지 않는다. 대상 ID와 순서는 고유해야 하고 이름은 비어 있지 않아야 한다. 순서는 오름차순으로 뒤에서 앞으로이며, 맨 뒤 이외 레이어와 모든 다이아몬드 타일은 투명이 필수다.
+
+관련 검증은 `Noxtend.Tests/Domain/SpriteRulesTests.cs`다. 이 기반은 아직 HTTP·Worker·SQL 저장 경로에 연결되지 않았다. `PipelineJobConfiguration`은 전용 매핑·migration이 연결되기 전까지 `Sprites`와 `ProductionMode`를 명시적으로 제외해 기존 EF 모델을 유지한다.
+
 ## 서버 불변 조건
 
 - SQL Server의 작업·공정 상태가 정본이고 Redis Streams는 디스패치 수단이다. 메시지나 Worker 메모리만으로 완료·재시도를 확정하지 않는다.

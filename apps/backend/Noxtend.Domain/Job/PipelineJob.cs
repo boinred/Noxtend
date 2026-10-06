@@ -10,7 +10,7 @@ namespace Noxtend.Domain.Job;
 /// 사용자가 세는 단위이며, 홈의 "실행 중" / "최근 작업" 이 이것이다.
 /// 하나의 작업이 여러 공정(<see cref="PipelineTask"/>)을 갖는다.
 /// </summary>
-public sealed class PipelineJob
+public sealed partial class PipelineJob
 {
     // Meshy 멀티 이미지 입력 순서와 결과 화면의 고정 방향 순서
     private static readonly ViewDirection[] GenerationViews =

@@ -14,6 +14,10 @@ public sealed class PipelineJobConfiguration : IEntityTypeConfiguration<Pipeline
         builder.ToTable("Jobs");
         builder.HasKey(j => j.Id);
 
+        // Sprite mappings arrive with their migration
+        builder.Ignore(j => j.Sprites);
+        builder.Ignore(j => j.ProductionMode);
+
         // Identity comes from the domain, never from the database.
         //
         // Without ValueGeneratedNever, EF's convention marks a Guid key as generated-on-add

@@ -54,6 +54,9 @@ public static class ErrorCode
     public const string ProviderKindInvalid = "PROVIDER_KIND_INVALID";
     public const string JobCategoryInvalid = "JOB_CATEGORY_INVALID";
 
+    public const string SpriteSettingsInvalid = "SPRITE_SETTINGS_INVALID";
+    public const string SpritePlanInvalid = "SPRITE_PLAN_INVALID";
+
     // character-studio §5.2 — 캐릭터 고유 입력 검증
     public const string JobGenderRequired = "JOB_GENDER_REQUIRED";
     public const string JobGenderInvalid = "JOB_GENDER_INVALID";
