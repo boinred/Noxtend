@@ -11,8 +11,8 @@
 | 공급자 설정 API와 모델·기능 목록 | 위 두 문서 | `Noxtend.Api/Controllers`, `Noxtend.Application/Providers`, `Noxtend.Domain/Provider` |
 | 유사도 AI 평가 | 위 두 문서 | `Noxtend.Application/Similarity/EvaluateSimilarityHandler.cs`, 관련 Application 테스트 |
 | 프롬프트 변경의 회귀·AI 출력 품질 비교 | [prompt-evaluation.md](prompt-evaluation.md), [$agentic-eval](../../.agents/skills/agentic-eval/SKILL.md) | 기존 골든 샘플·프롬프트 버전·단계 테스트·호출 기록·사람 판정 |
-| Frontend 화면·쿼리·API 연동 | [Frontend 개발 지침](../../apps/frontend/AGENTS.md), [Frontend 작업 절차](../../.agents/skills/noxtend-workflow/references/frontend.md) | `apps/frontend/src` |
-| HTTP 계약 변경 | [backend.md](backend.md), Frontend 작업 절차 | `Noxtend.Api/Controllers`·`Contracts`, `apps/frontend/src/infra/api`, `apps/frontend/src/domain` |
+| Frontend 화면·쿼리·API 연동 | [frontend.md](frontend.md) | `apps/frontend/src/features`, `src/app/queries`, `src/infra/api`, `src/domain` |
+| HTTP 계약 변경 | [backend.md](backend.md), [frontend.md](frontend.md) | `Noxtend.Api/Controllers`·`Contracts`, `apps/frontend/src/infra/api`, `apps/frontend/src/domain` |
 | 로컬 실행·인프라·배포 | [인프라 구성도](../infrastructure.md), [로컬 기동 절차](../../deploy/k8s/README.md), [배포 지침](../../deploy/AGENTS.md) | `deploy/local-up.sh`, `deploy/k8s/`, `deploy/azure/` |
 
 ## 에이전트 작업 규칙
