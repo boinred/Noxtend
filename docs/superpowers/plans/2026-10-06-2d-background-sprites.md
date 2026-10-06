@@ -417,7 +417,7 @@ Assert.Equal(0, packImageCallCount);
 
 **Interfaces:** spec의 신규 sprite 경로와 기존 상세/목록 확장을 구현한다. mutation은 Task 7/9 command로 변환하고 accepted `{id,status,revision,taskIds}`를 기존 JSON 봉투로 반환한다. 상세에는 `productionMode: threeD|twoD`와 nullable `sprite`, 목록에는 mode와 phase/count 요약을 추가한다. productionMode query는 선택 사항이며 잘못된 값은 400이다. items와 total은 같은 조건을 사용한다.
 
-- [ ] `SpriteApiTests`로 POST 접수→GET→plan/base/asset 승인→export와 각 mutation의 409·잘못된 mode·다른 job의 ID·없는 대상을 검증한다.
+- [x] `SpriteApiTests`로 POST 접수→GET→plan/base/asset 승인→export와 각 mutation의 409·잘못된 mode·다른 job의 ID·없는 대상을 검증한다.
 
 ```csharp
 [Fact] public Task WrongModeEndpoint_RejectsWithoutPlanningTasks();
@@ -435,10 +435,10 @@ Assert.Equal(HttpStatusCode.Conflict, conflictResponse.StatusCode);
 Assert.DoesNotContain(blobKey, responseJson);
 ```
 
-- [ ] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpriteApiTests`로 실패를 확인한다.
-- [ ] request DTO를 파싱한 뒤 Domain 검증을 적용한다. status/error의 HTTP 매핑은 기존 방식을 따른다. 파일 조회는 주소 job의 소유 결과만 읽고 서버가 저장한 key로 연다.
-- [ ] 2D 작업에서 3D mesh/views/기존 review API 호출도 거부한다. 기존 scene-layout 생성·복원과 similarity 접수는 공통 Application 진입점에서 2D를 거부해 3D 상태 저장·평가 dispatch를 막는다. 기존 POST /api/jobs와 다운로드 계약은 유지한다.
-- [ ] 같은 테스트와 `JobResponseTests`를 통과시킨다. API 계약을 다음 Task의 TS와 대조하고 문서와 `feat(api): expose sprite production and artifact contracts`로 커밋한다.
+- [x] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpriteApiTests`로 실패를 확인한다.
+- [x] request DTO를 파싱한 뒤 Domain 검증을 적용한다. status/error의 HTTP 매핑은 기존 방식을 따른다. 파일 조회는 주소 job의 소유 결과만 읽고 서버가 저장한 key로 연다.
+- [x] 2D 작업에서 3D mesh/views/기존 review API 호출도 거부한다. 기존 scene-layout 생성·복원과 similarity 접수는 공통 Application 진입점에서 2D를 거부해 3D 상태 저장·평가 dispatch를 막는다. 기존 POST /api/jobs와 다운로드 계약은 유지한다.
+- [x] 같은 테스트와 `JobResponseTests`를 통과시킨다. API 계약을 다음 Task의 TS와 대조하고 문서와 `feat(api): expose sprite production and artifact contracts`로 커밋한다.
 
 ## Task 11: TypeScript 계약·API·query cache
 
@@ -536,7 +536,7 @@ test('detail url activates its parent group and restores menu focus')
 
 ## Task 15: 양쪽 스택 회귀·품질 경계·완료 기록
 
-**Files:** Modify 본 계획의 checkbox/실행 기록, `docs/xHuman/{backend.md,frontend.md,providers-and-prompts.md}`, 필요한 경우 이번 Task의 실패 테스트. 관련 없는 실패 수정·일괄 포맷을 묶지 않는다.
+**Files:** Create `docs/superpowers/plans/2026-10-06-2d-background-sprites-execution.md`의 검증·판단 기록. Modify 본 계획의 checkbox/실행 기록과 기록 링크, `README.md`의 실제 2D 제공 범위, `docs/xHuman/{backend.md,frontend.md,providers-and-prompts.md}`, 필요한 경우 이번 Task의 실패 테스트. 관련 없는 실패 수정·일괄 포맷을 묶지 않는다.
 
 **Interfaces:** 구현·자동 검증·수동 UI·실 AI 품질을 구분해 보고한다. 실 AI 미실행이면 반복 경계·시점 재구성·loop 자연스러움은 미확인으로 기록한다.
 
