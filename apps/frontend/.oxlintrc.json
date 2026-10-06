@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "jsPlugins": ["oxlint-tailwindcss"],
+  "jsPlugins": ["oxlint-tailwindcss", "@shadcn/lint"],
   "settings": {
     "tailwindcss": {
       "entryPoint": "src/index.css",
