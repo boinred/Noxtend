@@ -248,11 +248,11 @@ await Assert.ThrowsAsync<DbUpdateException>(() => saveDuplicateRequest);
 
 ## Task 5: sprite sheet와 스트리밍 ZIP
 
-**Files:** Create `B/Noxtend.Application/Sprites/SpritePackageWriter.cs`, `B/Noxtend.Tests/{Domain/SpriteSheetLayoutTests.cs,Infrastructure/SpritePackageTests.cs}`. Modify `SpriteRules.cs`, `SpriteManifest.cs`, `IImageTranscoder.cs`, `SkiaImageTranscoder.Sprites.cs`, Port stubs, `docs/xHuman/backend.md`.
+**Files:** Create `B/Noxtend.Application/Sprites/SpritePackageWriter.cs`, `B/Noxtend.Tests/{Domain/SpriteSheetLayoutTests.cs,Infrastructure/SpritePackageTests.cs}`. Modify `SpriteRules.cs`, `SpriteManifest.cs`, `IImageTranscoder.cs`, `SkiaImageTranscoder.Sprites.cs`, Port stubs, `B/Noxtend.Application/Noxtend.Application.csproj`의 테스트 assembly 가시성, `docs/xHuman/backend.md`.
 
 **Interfaces:** `SpriteRules.SheetPages(SpriteCanvas frame,IReadOnlyList<Guid> imageIds) -> IReadOnlyList<SpriteSheetLayout>`. Port에 `WriteSpriteSheetAsync(SpriteSheetLayout layout, Func<Guid,CancellationToken,Task<Stream>> openFrame, Stream output, CancellationToken ct) -> Task`를 추가한다. `SpritePackageWriter.WriteAsync(Guid jobId,SpriteExportInput input,Func<Guid,CancellationToken,Task<Stream>> openFrame,Stream output,CancellationToken ct) -> Task<SpriteManifest>`는 실제 이미지를 읽고 정해진 상대 경로만 생성한다.
 
-- [ ] 시트 배치 단위 테스트와 작은 PNG/ZIP 픽셀 fixture를 작성한다.
+- [x] 시트 배치 단위 테스트와 작은 PNG/ZIP 픽셀 fixture를 작성한다.
 
 ```csharp
 [Fact] public void Frame1024_UsesThreeColumnsAndSecondPageAfterNineFrames();
@@ -272,10 +272,10 @@ Assert.Equal("pixels", manifest.CoordinateUnits);
 Assert.DoesNotContain(entries, x => x.Contains("../") || Path.IsPathRooted(x));
 ```
 
-- [ ] `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName~SpriteSheetLayoutTests|FullyQualifiedName~SpritePackageTests'`로 실패를 확인한다.
-- [ ] 페이지를 최대 4096px에 맞추고 Skia에서 한 페이지 canvas와 한 프레임 decode만 유지한다. 회전·trim 없이 2px extrusion을 셀 안에 배치하고 rect에서 padding을 제외한다.
-- [ ] `ZipArchive`와 바이트 상한을 검사하는 write stream을 사용한다. worker가 전달하는 서버 임시 FileStream에 순차 기록하며 ZIP 전체를 MemoryStream에 올리지 않는다. 256MiB 경계는 상한 stream에 chunk를 쓰는 작은 테스트로 확인한다.
-- [ ] `manifest.json`, `layers|tiles/asset-{assetId}.png`, `frames/asset-{assetId}/frame-000.png`, `sheets/asset-{assetId}-000.png`를 생성해 같은 테스트를 통과시킨다. export 계약을 동기화하고 `feat(export): build sprite sheets and bounded zip packages`로 커밋한다.
+- [x] `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName~SpriteSheetLayoutTests|FullyQualifiedName~SpritePackageTests'`로 실패를 확인한다.
+- [x] 페이지를 최대 4096px에 맞추고 Skia에서 한 페이지 canvas와 한 프레임 decode만 유지한다. 회전·trim 없이 2px extrusion을 셀 안에 배치하고 rect에서 padding을 제외한다.
+- [x] `ZipArchive`와 바이트 상한을 검사하는 write stream을 사용한다. worker가 전달하는 서버 임시 FileStream에 순차 기록하며 ZIP 전체를 MemoryStream에 올리지 않는다. 256MiB 경계는 상한 stream에 chunk를 쓰는 작은 테스트로 확인한다.
+- [x] `manifest.json`, `layers|tiles/asset-{assetId}.png`, `frames/asset-{assetId}/frame-000.png`, `sheets/asset-{assetId}-000.png`를 생성해 같은 테스트를 통과시킨다. export 계약을 동기화하고 `feat(export): build sprite sheets and bounded zip packages`로 커밋한다.
 
 ## Task 6: 모델별 크기·투명 요청·호출 기록
 
