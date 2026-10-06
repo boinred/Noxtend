@@ -215,11 +215,11 @@ Assert.True(info.HasVisiblePixels);
 
 ## Task 4: SQL 저장·고유 제약·이전 작업 호환
 
-**Files:** Create `B/Noxtend.Infrastructure/Persistence/Configurations/SpritePipelineConfiguration.cs`, `B/Noxtend.Infrastructure/Persistence/SpriteJsonSerializer.cs`, `B/Noxtend.Tests/Infrastructure/SpritePersistenceTests.cs`. Modify `B/Noxtend.Domain/Ports/IJobRepository.cs`, `B/Noxtend.Infrastructure/Persistence/{Configurations/PipelineJobConfiguration.cs,Repositories/EfJobRepository.cs,InMemory/InMemoryJobRepository.cs}`, `B/Noxtend.Application/Pipeline/ListJobsHandler.cs`, `B/Noxtend.Tests/Domain/SpriteLifecycleTests.cs`의 임시 Ignore assertion과 실제 IJobRepository 테스트 구현, `docs/xHuman/backend.md`. EF 생성 파일: `Migrations/<timestamp>_AddSpriteProduction.cs`, Designer, snapshot.
+**Files:** Create `B/Noxtend.Infrastructure/Persistence/Configurations/SpritePipelineConfiguration.cs`, `B/Noxtend.Infrastructure/Persistence/SpriteJsonSerializer.cs`, `B/Noxtend.Tests/Infrastructure/SpritePersistenceTests.cs`. Modify `B/Noxtend.Domain/Ports/IJobRepository.cs`, `B/Noxtend.Domain/Sprites/SpritePipelineState.cs`의 영속 ID·동일 슬롯 갱신, `B/Noxtend.Infrastructure/Persistence/{Configurations/PipelineJobConfiguration.cs,Repositories/EfJobRepository.cs,InMemory/InMemoryJobRepository.cs}`, `B/Noxtend.Application/Pipeline/ListJobsHandler.cs`, `B/Noxtend.Tests/Domain/SpriteLifecycleTests.cs`의 임시 Ignore assertion과 실제 IJobRepository 테스트 구현, `docs/xHuman/backend.md`. EF 생성 파일: `Migrations/<timestamp>_AddSpriteProduction.cs`, Designer, snapshot.
 
 **Interfaces:** `IJobRepository.GetSpriteRequestAsync(Guid requestId, CancellationToken ct) -> Task<SpriteAcceptedRequest?>`를 추가한다. CountAsync/ListAsync와 ListJobsHandler의 기존 인수 끝에 `ProductionMode? productionMode = null`을 추가해 기존 호출을 유지한다. request는 job이 소유하고 `AcceptSpriteRequest(SpriteAcceptedRequest request)`로 기록한다. 기존 `SaveChangesAsync`가 상태·task·request를 함께 저장한다.
 
-- [ ] 기존 `SqlServerFixture.FreshDatabase`와 `[Collection(SqlServerCollection.Name)]`로 round-trip·이전 migration 갱신·slot 중복·request 중복·삭제를 검증한다.
+- [x] 기존 `SqlServerFixture.FreshDatabase`와 `[Collection(SqlServerCollection.Name)]`로 round-trip·이전 migration 갱신·slot 중복·request 중복·삭제를 검증한다.
 
 ```csharp
 [Fact] public Task LegacyJobWithoutMesh_MigratesToThreeD();
@@ -239,12 +239,12 @@ await Assert.ThrowsAsync<DbUpdateException>(() => saveDuplicateSlot);
 await Assert.ThrowsAsync<DbUpdateException>(() => saveDuplicateRequest);
 ```
 
-- [ ] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpritePersistenceTests`로 실패를 확인한다. Docker가 없으면 환경 제약으로 기록하고 통과로 계산하지 않는다.
-- [ ] Task 1의 Sprites/ProductionMode와 Task 2의 SpriteInput/SpriteExportInput/RequestId 임시 Ignore가 있으면 모두 제거한다. Jobs에 nullable owned state, SpriteAssets/Frames/Images/Exports/Requests 테이블을 매핑한다. ApprovedBaseImageId와 CompletedExportId도 저장·round-trip한다. Jobs/Tasks rowversion을 유지하고 소유 관계·FK·cascade 경로를 SQL로 검증한다. JSON의 image ID·Blob key를 검증 없이 사용하지 않는다.
-- [ ] owned request 조회는 Jobs에서 projection으로 수행한다. 이미지·export 이력은 job이 소유하며 제작 대상 제거가 과거 snapshot의 결과를 삭제하지 않게 한다.
-- [ ] `dotnet ef --version`을 확인한다. 도구가 없거나 버전이 다르면 실행 환경의 임시 tool-path에 EF 패키지와 같은 `10.0.10`을 설치해 사용한다. 기존 전역 도구나 저장소 의존성을 바꾸지 않는다.
-- [ ] `dotnet ef migrations add AddSpriteProduction --project apps/backend/Noxtend.Infrastructure --startup-project apps/backend/Noxtend.Api`를 실행하고 생성 SQL을 리뷰한다. DesignTimeDbContextFactory를 사용하며 개발 DB에 update를 실행하지 않는다.
-- [ ] 같은 테스트를 통과시키고 `ReviewConcurrencyTests / JobListFilterTests / MigrationRegistrationTests`를 실행한다. 스키마 문서와 함께 `feat(storage): persist sprite state and request receipts`로 커밋한다.
+- [x] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpritePersistenceTests`로 실패를 확인한다. Docker가 없으면 환경 제약으로 기록하고 통과로 계산하지 않는다.
+- [x] Task 1의 Sprites/ProductionMode와 Task 2의 SpriteInput/SpriteExportInput/RequestId 임시 Ignore가 있으면 모두 제거한다. Jobs에 nullable owned state, SpriteAssets/Frames/Images/Exports/Requests 테이블을 매핑한다. ApprovedBaseImageId와 CompletedExportId도 저장·round-trip한다. Jobs/Tasks rowversion을 유지하고 소유 관계·FK·cascade 경로를 SQL로 검증한다. JSON의 image ID·Blob key를 검증 없이 사용하지 않는다.
+- [x] owned request 조회는 Jobs에서 projection으로 수행한다. 이미지·export 이력은 job이 소유하며 제작 대상 제거가 과거 snapshot의 결과를 삭제하지 않게 한다.
+- [x] `dotnet ef --version`을 확인한다. 도구가 없거나 버전이 다르면 실행 환경의 임시 tool-path에 EF 패키지와 같은 `10.0.10`을 설치해 사용한다. 기존 전역 도구나 저장소 의존성을 바꾸지 않는다.
+- [x] `dotnet ef migrations add AddSpriteProduction --project apps/backend/Noxtend.Infrastructure --startup-project apps/backend/Noxtend.Infrastructure`를 실행하고 생성 SQL을 리뷰한다. DesignTimeDbContextFactory를 사용하며 개발 DB에 update를 실행하지 않는다.
+- [x] 같은 테스트를 통과시키고 `ReviewConcurrencyTests / JobListFilterTests / MigrationRegistrationTests`를 실행한다. 스키마 문서와 함께 `feat(storage): persist sprite state and request receipts`로 커밋한다.
 
 ## Task 5: sprite sheet와 스트리밍 ZIP
 
