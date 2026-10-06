@@ -17,9 +17,11 @@ public sealed class SpritePackageTests
     {
         var ids = new[] { Guid.NewGuid(), Guid.NewGuid() };
         var layout = SpriteRules.SheetPages(new(2, 2), ids).Single();
+        var inputs = ids.ToDictionary(id => id, id => Image(2, 2, id == ids[0] ? SKColors.Red : SKColors.Blue));
         await using var output = TemporaryFile();
         await new SkiaImageTranscoder().WriteSpriteSheetAsync(layout,
-            (id, _) => Task.FromResult<Stream>(Image(2, 2, id == ids[0] ? SKColors.Red : SKColors.Blue)), output, default);
+            (id, _) => Task.FromResult<Stream>(inputs[id]), output, default);
+        Assert.All(inputs.Values, input => Assert.False(input.CanRead));
         Assert.True(output.CanWrite);
         output.Position = 0;
         using var managed = new SKManagedStream(output, false);
@@ -89,9 +91,17 @@ public sealed class SpritePackageTests
     {
         var input = Input(kind);
         var jobId = Guid.NewGuid();
+        var inputs = new List<MemoryStream>();
         await using var output = TemporaryFile();
         var manifest = await new SpritePackageWriter(new SkiaImageTranscoder()).WriteAsync(jobId, input,
-            (_, _) => Task.FromResult<Stream>(Image(2, 2, SKColors.Red)), output, default);
+            (_, _) =>
+            {
+                var source = Image(2, 2, SKColors.Red);
+                inputs.Add(source);
+                return Task.FromResult<Stream>(source);
+            }, output, default);
+        Assert.NotEmpty(inputs);
+        Assert.All(inputs, source => Assert.False(source.CanRead));
         Assert.Equal(1, manifest.SchemaVersion);
         Assert.Equal(ProductionMode.TwoD, manifest.ProductionMode);
         Assert.Equal("topLeft", manifest.CoordinateOrigin);

@@ -107,6 +107,7 @@ LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계�
 
 ## 탐색과 검증
 
+- 2D의 최종 계약 대조·회귀·픽셀/ZIP 자원 경계와 결정 이력은 [실행 기록](../superpowers/plans/2026-10-06-2d-background-sprites-execution.md)을 따른다. API/controller·Fake·격리 SQL 테스트는 실제 호스트 관통이나 유료 공급자 품질 검증과 구분한다. `SpritePackageTests`는 시트와 ZIP callback 입력 스트림의 종료를 직접 확인하고 `SpriteApiTests`는 유효한 settings의 unknown storage 필드도 MVC formatter에서 거부하는지 확인한다.
 - `Noxtend.slnx`, 영향을 받는 `.csproj`, 관련 테스트와 DI 등록을 확인한다.
 - API 계약이 바뀌면 Frontend의 API 파서·타입·화면 사용처도 확인하고 양쪽 스택을 검증한다.
 - Backend 명령·Docker 요구·유료 smoke 조건은 [검증 절차](../../.agents/skills/noxtend-workflow/references/verification.md)를 따른다. 유료 smoke가 조건 미충족으로 건너뛴 경우 실 공급자 성공으로 보고하지 않는다.

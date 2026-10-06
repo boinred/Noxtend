@@ -277,7 +277,17 @@ public sealed class SpriteApiTests
     public async Task JsonBinding_RejectsNullSettingsNumbersAndStorageAddresses(string json)
     {
         var f = new PipelineFixture();
+        var unknownAddress = json.Contains("blobKey") || json.Contains("sourceUrl");
+        if (unknownAddress)
+        {
+            var valid = JsonSerializer.Serialize(new StartSpriteJobRequest(Guid.NewGuid(), Guid.NewGuid(), null, null,
+                Guid.NewGuid(), "model", Guid.NewGuid(), "image", new("sideView", "layers")),
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            json = valid[..^1] + "," + json[1..];
+            Assert.False((await Bind<StartSpriteJobRequest>(valid)).HasError);
+        }
         var binding = await Bind<StartSpriteJobRequest>(json);
+        if (unknownAddress) Assert.True(binding.HasError);
         if (!binding.HasError) Status(await Sprites(f).StartAsync((StartSpriteJobRequest)binding.Model!, default), 400);
         Assert.Empty(f.Queue.Enqueued);
         Assert.Equal(0, f.Blobs.Count);

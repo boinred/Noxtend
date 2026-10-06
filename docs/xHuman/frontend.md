@@ -64,6 +64,7 @@ React 19·Vite·React Router·TanStack Query·Tailwind·shadcn/ui(Radix) 구성�
 
 ## 탐색과 검증
 
+- 2D 최신 build의 1440×900/390px·light/dark·키보드·focus·reduced-motion·HTTP 오류·PNG/ZIP 관찰은 [실행 기록](../superpowers/plans/2026-10-06-2d-background-sprites-execution.md)에 남긴다. 브라우저의 Fake 응답·시각 확인이며 실 API end-to-end, 실제 모바일 터치 기기, 실 AI 품질 검증을 대신하지 않는다. `MobileStudioMenu` 요청은 desktop에서는 없고 모바일 rail 진입 시 로드된다. 메뉴를 처음 열 때까지 로드를 미룬다고 추정하지 않는다.
 - E2E는 `tests/e2e/fakeApi.ts`의 가짜 API로 동작한다. 새 API를 화면에서 쓰면 가짜 응답도 함께 추가한다.
 - `pnpm test`는 `src/**/*.test.ts`만 수집하며 `.test.tsx`는 수집하지 않는다. 명령과 수집 범위는 [검증 절차](../../.agents/skills/noxtend-workflow/references/verification.md)를 따른다.
 - API 계약이 바뀌면 [backend.md](backend.md)의 Controller·DTO도 확인하고 양쪽 스택을 검증한다.

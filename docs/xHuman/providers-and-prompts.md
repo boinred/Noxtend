@@ -85,6 +85,7 @@
 
 ## 프롬프트 변경·테스트
 
+- 2D view×kind별 입력·시점 재구성·반복 경계·고정 anchor/canvas·루프 검수 기준과 호출 수는 [실행 기록](../superpowers/plans/2026-10-06-2d-background-sprites-execution.md)에 모은다. 정적 대상당 1장, 루프 대상당 기준 포함 4·8장, 묶음 최대 64프레임은 계획한 이미지 슬롯 수다. 공급자 재시도·명시적 재생성은 추가 호출/비용을 만들 수 있으며 64를 최종 과금 호출 상한으로 설명하지 않는다. metadata 편집과 패키징은 AI를 호출하지 않는다. 현재 실 AI 품질은 미확인이며 유료 생성·smoke는 별도 사용자 요청 범위에서만 실행한다.
 - 프롬프트 버전·모델·출력 품질을 비교할 때는 [평가 절차](prompt-evaluation.md)를 따른다. 오프라인 계약 회귀와 실제 모델 품질 평가를 구분하고 기존 골든 샘플·호출 내역·사람 판정을 재사용한다.
 - 기본 프롬프트는 `apps/backend/Noxtend.Infrastructure/Llm/SeedPrompts.cs`에서 확인한다. 이미 적용된 DB 프롬프트는 seed 코드가 항상 덮어쓴다고 가정하지 말고 관련 migration과 시드 테스트를 함께 본다.
 - 프롬프트 변수·스키마·응답 의미가 바뀌면 `PromptTemplate`, `IStage` 구현과 관련 `PromptVariableInjectionTests`, `PromptCompositionTests`, 단계 테스트를 확인한다.
