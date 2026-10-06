@@ -1,6 +1,7 @@
 using Noxtend.Application.Job;
 using Noxtend.Domain.Job;
 using Noxtend.Domain.Ports;
+using Noxtend.Domain.Sprites;
 using TaskStatus = Noxtend.Domain.Job.TaskStatus;
 
 namespace Noxtend.Tests.Application;
@@ -169,14 +170,15 @@ public sealed class JobOrchestratorTests
         public Task<PipelineJob?> GetByTaskAsync(Guid taskId, CancellationToken ct)
             => Task.FromResult<PipelineJob?>(latest);
 
-        public Task<int> CountAsync(JobListFilter filter, AssetCategory? category, CancellationToken ct)
+        public Task<int> CountAsync(JobListFilter filter, AssetCategory? category, CancellationToken ct, ProductionMode? productionMode = null)
             => Task.FromResult(0);
 
         public Task<IReadOnlyList<PipelineJob>> ListAsync(
             JobListFilter filter,
             AssetCategory? category,
             int limit,
-            CancellationToken ct)
+            CancellationToken ct,
+            ProductionMode? productionMode = null)
             => Task.FromResult<IReadOnlyList<PipelineJob>>([latest]);
 
         public Task<IReadOnlyList<PipelineJob>> ListBySourceImageAsync(
@@ -197,6 +199,9 @@ public sealed class JobOrchestratorTests
 
         public Task<DeletedJobBlobs?> DeleteIfTerminalAsync(Guid jobId, CancellationToken ct)
             => Task.FromResult<DeletedJobBlobs?>(null);
+
+        public Task<SpriteAcceptedRequest?> GetSpriteRequestAsync(Guid requestId, CancellationToken ct)
+            => Task.FromResult<SpriteAcceptedRequest?>(null);
 
         public Task SaveChangesAsync(CancellationToken ct) => Task.CompletedTask;
     }

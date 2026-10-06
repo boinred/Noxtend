@@ -39,7 +39,15 @@ LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계�
 
 `SpriteInputs.cs`의 `SpriteFrameInput.Plan`은 접수 시점의 계획이며 비동기 결과는 `IsCurrentTask`와 `TryAttachSpriteImage`가 대상·슬롯·입력 revision·기준 이미지를 확인해 반영한다. `SpriteManifest.cs`는 파일 좌표 계약이다. 내보내기는 승인된 이미지 snapshot을 고정하며 포함 대상 변경만 패키지 자격을 무효화한다. 대상 추가·삭제는 포함·제외 목록도 변경하므로 모든 기존 패키지 자격을 무효화한다. 정적 대상의 기준 승인만으로 성공하지 않으며 패키지 완료 후 전체 대상이면 성공, 명시적 일부 대상이면 부분 성공이다. 개별 승인 후에도 다른 현재 공정이 실행 중이면 Running과 해당 생성 단계를 유지한다. 패키지 완료 자격은 표시용 Phase 대신 가장 최근 접수된 패키지 공정의 current 자격과 승인 snapshot으로 판정하므로 제외 대상의 편집·승인이 완료를 막지 않는다. `SpritePipelineState.CompletedExportId`는 작업을 종료한 마지막 패키지 ID이며, 명시적으로 다시 연 작업을 같은 이전 패키지가 재종료시키지 않도록 유지한다. 새 ExportId 완료는 정상 반영하고 이전 패키지의 current·다운로드 이력 자격은 보존한다. 생성 일부 실패에 쓸 이미지가 있으면 검수 대기, 없으면 실패이며 취소는 재개방하지 않는다.
 
-관련 검증은 `Noxtend.Tests/Domain/SpriteRulesTests.cs`, `SpriteLifecycleTests.cs`다. 이 기반은 아직 HTTP·Worker·SQL 저장 경로에 연결되지 않았다. 실제 리스 시도 소유권은 실행기의 최신 공정 재조회와 시도 비교로 연결해야 하며 이미지 생성 시각만으로 보장하지 않는다. `PipelineJobConfiguration`은 전용 매핑·migration이 연결되기 전까지 `Sprites`·`ProductionMode`와 공정의 `SpriteInput`·`SpriteExportInput`·`RequestId`를 명시적으로 제외해 기존 EF 모델을 유지한다.
+관련 도메인 검증은 `Noxtend.Tests/Domain/SpriteRulesTests.cs`, `SpriteLifecycleTests.cs`다. HTTP·Worker 연결은 후속 범위이며 실제 리스 시도 소유권은 실행기의 최신 공정 재조회와 시도 비교로 연결해야 한다.
+
+`SpritePipelineConfiguration`은 Jobs의 nullable owned state와 `SpriteAssets`·`SpriteImages`·`SpriteExports`·`SpriteRequests`를 매핑한다. `SpriteFrames`는 asset 소유이며 `(AssetId, Index)`가 PK다. `SpriteAsset.Id`는 생성 시 `Plan.Id`로 고정하고, 계획의 프레임 수가 바뀌면 기존 슬롯 객체를 초기화하고 초과 슬롯만 제거한다. 프레임 조회는 `Index`순이다. 이미지·export의 과거 ID는 교차 FK 없이 보존하며 대상 삭제가 이력을 삭제하지 않는다. 작업 삭제는 소유 트리 전체를 cascade로 지운다. PNG·ZIP 키는 기존 `DeletedJobBlobs.Images`에 중복 없이 수집해 `IBlobStorage` 정리 경로로 전달한다.
+
+`SpriteJsonSerializer`는 sprite 값과 공정 고정 입력을 `{ schemaVersion: 1, value: ... }`로 저장하며 미지원 버전·잘못된 JSON·null payload·잘못된 snapshot ID/형식·상대경로가 아닌 Blob 참조를 명시적으로 거부한다. 기존 `SceneJsonSerializer`·`MeshInputSetJsonSerializer`의 3D 호환 규칙은 유지한다. `ApprovedBaseImageId`와 `CompletedExportId`도 SQL에 저장해 재조회 후 검수·완료 소비 상태를 보존한다. Jobs와 Tasks의 rowversion을 유지하고 같은 Jobs 행을 쓰는 sprite state도 rowversion을 공유한다.
+
+`IJobRepository.GetSpriteRequestAsync`는 Jobs에서 owned requests를 projection하고 추적 없이 전역 RequestId를 조회한다. RequestId는 단일 PK이며 상태·공정·receipt는 같은 SaveChanges 트랜잭션으로 저장한다. Count/List와 `ListJobsHandler`의 마지막 선택 인수 `productionMode`는 동일 predicate를 적용하고 `PendingReview`도 active에 포함한다. Repository에서는 현재 enum 값 검증을 추가하지 않으며 HTTP 입력 검증은 API 책임이다.
+
+저장 검증은 격리 `SqlServerFixture`의 `SpritePersistenceTests`가 round-trip·이전 migration 갱신·중복 키·rowversion·삭제·JSON 오류를 확인한다. `AddSpriteProduction`은 기존 작업에 `ThreeD` 기본값을 추가하고 sprite state 열은 nullable로 둔다. 이 migration의 생성·SQL 확인은 기존 `DesignTimeDbContextFactory`가 있는 Infrastructure를 `--project apps/backend/Noxtend.Infrastructure --startup-project apps/backend/Noxtend.Infrastructure`로 사용한다. 생성 SQL 확인과 실제 DB 적용은 별개이며 개발 DB에 `database update`를 실행하지 않는다.
 
 ## 서버 불변 조건
 

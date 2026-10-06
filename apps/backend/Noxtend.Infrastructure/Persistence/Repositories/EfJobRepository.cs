@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Noxtend.Domain.Common;
 using Noxtend.Domain.Job;
 using Noxtend.Domain.Ports;
+using Noxtend.Domain.Sprites;
 using TaskStatus = Noxtend.Domain.Job.TaskStatus;
 
 namespace Noxtend.Infrastructure.Persistence.Repositories;
@@ -66,6 +67,10 @@ public sealed class EfJobRepository(NoxtendDbContext db) : IJobRepository
             .SelectMany(j => j.GeneratedMeshes)
             .FirstOrDefaultAsync(mesh => mesh.Id == meshId, ct);
 
+    public Task<SpriteAcceptedRequest?> GetSpriteRequestAsync(Guid requestId, CancellationToken ct)
+        => db.Jobs.AsNoTracking().Where(j => j.Sprites != null)
+            .SelectMany(j => j.Sprites!.Requests).FirstOrDefaultAsync(r => r.RequestId == requestId, ct);
+
     public Task<PipelineJob?> GetByTaskAsync(Guid taskId, CancellationToken ct)
         => db.Jobs.AsSplitQuery().FirstOrDefaultAsync(j => j.Tasks.Any(t => t.Id == taskId), ct);
 
@@ -75,11 +80,14 @@ public sealed class EfJobRepository(NoxtendDbContext db) : IJobRepository
     public async Task<int> CountAsync(
         JobListFilter filter,
         AssetCategory? category,
-        CancellationToken ct)
+        CancellationToken ct,
+        ProductionMode? productionMode = null)
     {
         var query = filter == JobListFilter.Terminal
             ? db.Jobs.Where(j => TerminalStatuses.Contains(j.Status))
             : db.Jobs.Where(j => !TerminalStatuses.Contains(j.Status));
+
+        if (productionMode is { } mode) query = query.Where(j => j.ProductionMode == mode);
 
         if (category is { } wanted)
         {
@@ -93,11 +101,14 @@ public sealed class EfJobRepository(NoxtendDbContext db) : IJobRepository
         JobListFilter filter,
         AssetCategory? category,
         int limit,
-        CancellationToken ct)
+        CancellationToken ct,
+        ProductionMode? productionMode = null)
     {
         var query = filter == JobListFilter.Terminal
             ? db.Jobs.Where(j => TerminalStatuses.Contains(j.Status))
             : db.Jobs.Where(j => !TerminalStatuses.Contains(j.Status));
+
+        if (productionMode is { } mode) query = query.Where(j => j.ProductionMode == mode);
 
         if (category is { } wanted)
         {
@@ -170,6 +181,19 @@ public sealed class EfJobRepository(NoxtendDbContext db) : IJobRepository
             .Select(image => image.BlobKey)
             .ToListAsync(ct);
 
+        var spriteImageKeys = await db.Jobs
+            .Where(job => job.Id == jobId && job.Sprites != null)
+            .SelectMany(job => job.Sprites!.Images)
+            .Select(image => image.BlobKey)
+            .ToListAsync(ct);
+        var spriteExportKeys = await db.Jobs
+            .Where(job => job.Id == jobId && job.Sprites != null)
+            .SelectMany(job => job.Sprites!.Exports)
+            .Select(export => export.BlobKey)
+            .ToListAsync(ct);
+        imageKeys.AddRange(spriteImageKeys);
+        imageKeys.AddRange(spriteExportKeys);
+
         var meshKeys = await db.Jobs
             .Where(job => job.Id == jobId)
             .SelectMany(job => job.GeneratedMeshes)
@@ -241,7 +265,7 @@ public sealed class EfJobRepository(NoxtendDbContext db) : IJobRepository
 
         await transaction.CommitAsync(ct);
 
-        return new DeletedJobBlobs(imageKeys, meshKeys);
+        return new DeletedJobBlobs(imageKeys.Distinct().ToArray(), meshKeys);
     }
 
     /// <summary>

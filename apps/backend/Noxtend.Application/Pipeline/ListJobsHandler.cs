@@ -28,10 +28,11 @@ public sealed class ListJobsHandler(IJobRepository jobs)
         JobListFilter filter,
         AssetCategory? category,
         int limit,
-        CancellationToken ct)
+        CancellationToken ct,
+        ProductionMode? productionMode = null)
     {
-        var items = await jobs.ListAsync(filter, category, Math.Clamp(limit, 1, MaxLimit), ct);
-        var total = await jobs.CountAsync(filter, category, ct);
+        var items = await jobs.ListAsync(filter, category, Math.Clamp(limit, 1, MaxLimit), ct, productionMode);
+        var total = await jobs.CountAsync(filter, category, ct, productionMode);
 
         return new JobListPage(items, total);
     }

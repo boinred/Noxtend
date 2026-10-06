@@ -63,15 +63,17 @@ public sealed class SpriteAsset
     private SpriteAsset() { }
     internal SpriteAsset(SpriteAssetPlan plan, SpriteAnchor anchor)
     {
+        Id = plan.Id;
         Plan = plan;
         Anchor = anchor;
         PlanRevision = 1;
         ResetFrames();
     }
+    public Guid Id { get; private set; }
     public SpriteAssetPlan Plan { get; private set; } = null!;
     public int PlanRevision { get; private set; }
     public SpriteAnchor Anchor { get; private set; } = null!;
-    public IReadOnlyList<SpriteFrame> Frames => _frames.AsReadOnly();
+    public IReadOnlyList<SpriteFrame> Frames => _frames.OrderBy(frame => frame.Index).ToArray();
     public Guid? ApprovedBaseImageId { get; private set; }
     public SpriteAssetApproval? Approval { get; private set; }
 
@@ -88,8 +90,11 @@ public sealed class SpriteAsset
     }
     private void ResetFrames()
     {
-        _frames.Clear();
-        for (var index = 0; index < (Plan.Loop ? Plan.FrameCount : 1); index++)
+        var count = Plan.Loop ? Plan.FrameCount : 1;
+        // 동일 슬롯의 EF 추적 키 보존
+        _frames.RemoveAll(frame => frame.Index >= count);
+        foreach (var frame in _frames) frame.Clear();
+        for (var index = _frames.Count; index < count; index++)
             _frames.Add(new SpriteFrame(index));
     }
     internal void InvalidateFrame(int index)
@@ -100,7 +105,7 @@ public sealed class SpriteAsset
             ApprovedBaseImageId = null;
             foreach (var frame in _frames) frame.Clear();
         }
-        else _frames[index].Clear();
+        else _frames.Single(frame => frame.Index == index).Clear();
     }
     internal void ApproveBase(Guid imageId) => ApprovedBaseImageId = imageId;
     internal void Approve(SpriteAssetApproval approval) => Approval = approval;

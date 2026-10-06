@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Noxtend.Domain.Job;
 using Noxtend.Domain.Mesh;
+using Noxtend.Domain.Sprites;
 using Noxtend.Infrastructure.Persistence.Serialization;
 
 namespace Noxtend.Infrastructure.Persistence.Configurations;
@@ -14,9 +15,8 @@ public sealed class PipelineJobConfiguration : IEntityTypeConfiguration<Pipeline
         builder.ToTable("Jobs");
         builder.HasKey(j => j.Id);
 
-        // Sprite mappings arrive with their migration
-        builder.Ignore(j => j.Sprites);
-        builder.Ignore(j => j.ProductionMode);
+        builder.Property(j => j.ProductionMode).HasConversion<string>().HasMaxLength(16)
+            .HasDefaultValue(ProductionMode.ThreeD);
 
         // Identity comes from the domain, never from the database.
         //
@@ -99,10 +99,13 @@ public sealed class PipelineJobConfiguration : IEntityTypeConfiguration<Pipeline
     {
         builder.OwnsMany(j => j.Tasks, task =>
         {
-            // Sprite 전용 매핑 연결 전 기존 모델 유지
-            task.Ignore(t => t.SpriteInput);
-            task.Ignore(t => t.SpriteExportInput);
-            task.Ignore(t => t.RequestId);
+            task.Property(t => t.SpriteInput).HasColumnName("SpriteInputJson")
+                .HasConversion(value => value == null ? null : SpriteJsonSerializer.Serialize(value),
+                    json => json == null ? null : SpriteJsonSerializer.Deserialize<SpriteFrameInput>(json));
+            task.Property(t => t.SpriteExportInput).HasColumnName("SpriteExportInputJson")
+                .HasConversion(value => value == null ? null : SpriteJsonSerializer.Serialize(value),
+                    json => json == null ? null : SpriteJsonSerializer.Deserialize<SpriteExportInput>(json));
+            task.Property(t => t.RequestId);
             task.ToTable("Tasks");
             task.WithOwner().HasForeignKey(t => t.JobId);
             task.HasKey(t => t.Id);

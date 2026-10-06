@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Noxtend.Domain.Job;
 using Noxtend.Domain.Ports;
+using Noxtend.Domain.Sprites;
 
 namespace Noxtend.Infrastructure.Persistence.InMemory;
 
@@ -46,6 +47,10 @@ public sealed class InMemoryJobRepository(
             .SelectMany(j => j.GeneratedMeshes)
             .FirstOrDefault(mesh => mesh.Id == meshId));
 
+    public Task<SpriteAcceptedRequest?> GetSpriteRequestAsync(Guid requestId, CancellationToken ct)
+        => Task.FromResult(_jobs.Values.Where(j => j.Sprites != null)
+            .SelectMany(j => j.Sprites!.Requests).FirstOrDefault(r => r.RequestId == requestId));
+
     public Task<PipelineJob?> GetByTaskAsync(Guid taskId, CancellationToken ct)
         => Task.FromResult(_jobs.Values.FirstOrDefault(j => j.Tasks.Any(t => t.Id == taskId)));
 
@@ -53,9 +58,12 @@ public sealed class InMemoryJobRepository(
         JobListFilter filter,
         AssetCategory? category,
         int limit,
-        CancellationToken ct)
+        CancellationToken ct,
+        ProductionMode? productionMode = null)
     {
         var query = _jobs.Values.Where(j => filter == JobListFilter.Terminal ? j.IsTerminal : !j.IsTerminal);
+
+        if (productionMode is { } mode) query = query.Where(j => j.ProductionMode == mode);
 
         if (category is { } wanted)
         {
@@ -70,9 +78,11 @@ public sealed class InMemoryJobRepository(
         return Task.FromResult(result);
     }
 
-    public Task<int> CountAsync(JobListFilter filter, AssetCategory? category, CancellationToken ct)
+    public Task<int> CountAsync(JobListFilter filter, AssetCategory? category, CancellationToken ct, ProductionMode? productionMode = null)
     {
         var query = _jobs.Values.Where(j => filter == JobListFilter.Terminal ? j.IsTerminal : !j.IsTerminal);
+
+        if (productionMode is { } mode) query = query.Where(j => j.ProductionMode == mode);
 
         if (category is { } wanted)
         {
@@ -121,6 +131,11 @@ public sealed class InMemoryJobRepository(
 
         // 키를 먼저 모은다 — 지운 뒤에는 어느 파일이 이 작업 것인지 알 수 없다
         var imageKeys = job.GeneratedImages.Select(image => image.BlobKey).ToList();
+        if (job.Sprites is { } sprites)
+        {
+            imageKeys.AddRange(sprites.Images.Select(image => image.BlobKey));
+            imageKeys.AddRange(sprites.Exports.Select(export => export.BlobKey));
+        }
         var meshKeys = job.GeneratedMeshes
             .SelectMany(mesh => mesh.Artifacts)
             .Select(artifact => artifact.BlobKey)
@@ -141,7 +156,7 @@ public sealed class InMemoryJobRepository(
             imageKeys.Add(sourceKey);
         }
 
-        return Task.FromResult<DeletedJobBlobs?>(new DeletedJobBlobs(imageKeys, meshKeys));
+        return Task.FromResult<DeletedJobBlobs?>(new DeletedJobBlobs(imageKeys.Distinct().ToArray(), meshKeys));
     }
 
 

@@ -234,7 +234,9 @@ public sealed class SpriteLifecycleTests
         var type = db.Model.FindEntityType(typeof(PipelineTask))!;
         Assert.Null(type.FindNavigation(nameof(PipelineTask.SpriteInput)));
         Assert.Null(type.FindNavigation(nameof(PipelineTask.SpriteExportInput)));
-        Assert.Null(type.FindProperty(nameof(PipelineTask.RequestId)));
+        Assert.NotNull(type.FindProperty(nameof(PipelineTask.RequestId)));
+        Assert.NotNull(type.FindProperty(nameof(PipelineTask.SpriteInput)));
+        Assert.NotNull(type.FindProperty(nameof(PipelineTask.SpriteExportInput)));
         Assert.NotNull(type.FindProperty(nameof(PipelineTask.MeshInputs)));
     }
 
