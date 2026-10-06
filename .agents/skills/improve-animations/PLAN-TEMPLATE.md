@@ -39,7 +39,7 @@ configs, media queries. Never "use a nicer easing":
 How this codebase already does it, with one exemplar the executor should
 imitate (token names, file placement, prop patterns):
 
-- Easing tokens live in `src/styles/tokens.css`; add new curves there, e.g. `--ease-out: cubic-bezier(0.23, 1, 0.32, 1);`
+- <verified token file and existing easing/duration names; Noxtend starts at `src/index.css` and related `*Styles.ts`>
 - <exemplar file:line that already does this correctly>
 
 ## Steps
@@ -68,6 +68,6 @@ imitate (token names, file placement, prop patterns):
 ## Notes for the plan author
 
 - One plan per finding. If two findings share every file and the same fix pattern (e.g. the same easing token swap across components), they may merge into one plan.
-- Pull every value from [AUDIT.md](AUDIT.md) — never approximate from memory.
+- Select values from verified product tokens or the shared references linked by [AUDIT.md](AUDIT.md). State the reason and verification for exceptions to a default.
 - The feel check is not optional. Motion can be mechanically correct and still feel wrong; give the executor (or the human reviewing the executor's diff) concrete things to watch for in slow motion.
 - After writing plans, create or update `plans/README.md` with: a table of plans (number, title, severity, status), the recommended execution order, and any dependencies between plans.

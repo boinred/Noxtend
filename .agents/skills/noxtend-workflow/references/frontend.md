@@ -10,7 +10,7 @@
 
 ## UI 스킬 선택
 
-저장소 루트의 `.agents/skills/`에서 작업에 해당하는 스킬만 선택한다.
+저장소 루트의 `.agents/skills/`에서 요청 범위를 가장 잘 다루는 스킬부터 선택한다. API·캐시·타입만 변경하면 UI·모션 스킬을 추가로 읽을 필요가 없다.
 
 | 요청 범위 | 스킬과 경계 |
 |---|---|
@@ -22,7 +22,8 @@
 | 명시적으로 요청한 모션 코드·diff 리뷰 | `$review-animations` — 모션 문제만 검토 |
 | 명시적으로 요청한 목록 내 프런트엔드 라이브러리 선택 | `$pick-ui-library` |
 
-- 범위가 겹치면 단일 모션 diff 리뷰는 `$review-animations`, 전체 감사는 `$improve-animations`, 모션 부재 탐색은 `$find-animation-opportunities`로 구분한다.
+- 범위가 겹치면 단일 모션 diff 리뷰는 `$review-animations`, 전체 감사는 `$improve-animations`, 모션 부재 탐색은 `$find-animation-opportunities`로 구분한다. 첫 스킬로 해결되지 않는 판단이 있을 때만 다른 스킬을 추가한다.
+- `$emil-design-eng`는 짧은 진입 문서와 컴포넌트·모션·성능/접근성 참조로 나뉜다. 해당 작업의 참조만 읽는다. 다른 모션 스킬도 같은 판단 자료를 참조하며 수치 표를 복제하지 않는다.
 - 기존 shadcn/ui·Radix 프리미티브는 승인된 `design-system` 예외다. `$pick-ui-library`의 신규 선택 권고만으로 Base UI로 교체하지 않는다.
 
 ## API·캐시·폴링 변경

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Noxtend API Contract Review"
+  short_description: "C# HTTP 계약과 TypeScript 클라이언트의 변경 영향 리뷰"
+  default_prompt: "Use $api-breaking-change-detector to review this Noxtend HTTP contract change against its TypeScript consumers."

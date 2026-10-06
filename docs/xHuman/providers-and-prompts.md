@@ -47,6 +47,7 @@
 
 ## 프롬프트 변경·테스트
 
+- 프롬프트 버전·모델·출력 품질을 비교할 때는 [평가 절차](prompt-evaluation.md)를 따른다. 오프라인 계약 회귀와 실제 모델 품질 평가를 구분하고 기존 골든 샘플·호출 내역·사람 판정을 재사용한다.
 - 기본 프롬프트는 `apps/backend/Noxtend.Infrastructure/Llm/SeedPrompts.cs`에서 확인한다. 이미 적용된 DB 프롬프트는 seed 코드가 항상 덮어쓴다고 가정하지 말고 관련 migration과 시드 테스트를 함께 본다.
 - 프롬프트 변수·스키마·응답 의미가 바뀌면 `PromptTemplate`, `IStage` 구현과 관련 `PromptVariableInjectionTests`, `PromptCompositionTests`, 단계 테스트를 확인한다.
 - `OpenAiProviderTests.cs`, `GoogleProviderTests.cs`, `ImageProviderUsageTests.cs`의 가짜 HTTP handler 패턴을 따른다. 변경한 어댑터에 기존 격리 테스트가 없으면 해당 프로토콜을 가짜 응답으로 검증한다. 프롬프트 저장·기록은 Fake·테스트 저장소로 검증하며, 일반 회귀에서 유료 실 API를 호출하지 않는다.

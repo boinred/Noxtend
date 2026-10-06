@@ -1,115 +1,41 @@
-# Animation Audit Playbook
+# 모션 감사 관점
 
-The eight audit categories, what to look for in each, and the exact target values to cite in findings and plans. Distilled from Emil Kowalski's design engineering philosophy ([emilkowal.ski](https://emilkowal.ski/)). Never approximate a value that appears here — copy it.
+제품 정책·기존 토큰을 먼저 확인하고 아래 관점 중 요청 범위에 필요한 항목을 선택한다. 수치와 예외는 [모션 기본 권고](../emil-design-eng/references/motion.md), 성능·입력·접근성은 [성능과 접근성](../emil-design-eng/references/performance-accessibility.md)이 정본이다. 참조를 전부 읽거나 같은 값을 복제하지 않는다.
 
-## 1. Purpose & frequency
+## 1. 목적과 빈도
 
-Every animation must answer "why does this animate?" — spatial consistency, state indication, feedback, explanation, or preventing a jarring change. "It looks cool" on a frequently-seen element is not a purpose.
+어떤 상태·공간 관계·조작 결과를 설명하는지 확인한다. 반복 조작을 지연시키는 장식은 제거하거나 줄인다. 키보드 입력이나 임의의 하루 이용 횟수만으로 결함을 선언하지 않는다.
 
-| Frequency | Decision |
-| --- | --- |
-| 100+ times/day (keyboard shortcuts, command palette toggle) | No animation. Ever. |
-| Tens of times/day (hover effects, list navigation) | Remove or drastically reduce |
-| Occasional (modals, drawers, toasts) | Standard animation |
-| Rare / first-time (onboarding, feedback, celebrations) | Can add delight |
+## 2. Easing과 duration
 
-Hunt for: animations on keyboard-initiated actions, command palettes with open/close transitions (Raycast has none — correct), decorative motion on list items or hover states hit constantly. The strongest fix is often **delete the animation**.
+초기 반응·전체 대기 시간·기존 토큰과의 일관성을 확인한다. 300ms를 넘거나 built-in easing을 사용한다는 사실만으로 결함을 선언하지 않는다. 목적과 실제 반응성을 함께 본다.
 
-## 2. Easing & duration
+## 3. Origin과 scale
 
-Decision order for easing:
+트리거에 연결된 표면의 origin을 확인하고 중앙 modal을 구분한다. fade·scale 표현은 실제 결과와 제품 의도로 판단한다.
 
-- Entering or exiting → **`ease-out`** (starts fast, feels responsive)
-- Moving / morphing on screen → **`ease-in-out`**
-- Hover / color change → **`ease`**
-- Constant motion (marquee, progress) → **`linear`**
-- Default → **`ease-out`**
+## 4. 중단과 재입력
 
-**`ease-in` on UI is always a finding** — it starts slow, delaying the exact moment the user is watching. Built-in CSS easings are too weak for deliberate motion; plans should introduce strong custom curves (as tokens, matching repo conventions):
+빠른 toggle·toast 추가·닫힘 중 재열기·제스처 방향 변경에서 상태가 이어지는지 확인한다. 모션 완료를 기다리느라 입력을 버리거나 표시 위치가 튀는 재현을 찾는다.
 
-```css
---ease-out: cubic-bezier(0.23, 1, 0.32, 1);        /* strong ease-out for UI */
---ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);    /* strong ease-in-out for on-screen movement */
---ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);     /* iOS-like drawer curve */
-```
+## 5. 성능
 
-Duration budgets — **UI animations stay under 300ms**:
+layout·paint·상속 변수·레이어 비용을 확인한다. 특정 CSS 속성이나 라이브러리 API만으로 프레임 저하를 단정하지 않는다. 실제 측정과 코드 기반 위험 추정을 구분한다.
 
-| Element | Duration |
-| --- | --- |
-| Button press feedback | 100–160ms |
-| Tooltips, small popovers | 125–200ms |
-| Dropdowns, selects | 150–250ms |
-| Modals, drawers | 200–500ms |
-| Marketing / explanatory | Can be longer |
+## 6. 접근성
 
-Hunt for: `ease-in` anywhere, bare `ease`/`linear` on entrances, durations > 300ms on UI elements, tooltip delay + animation on every tooltip in a toolbar (after the first, they should be instant).
+reduced motion·hover·키보드·포커스·상태 전달을 확인한다. 공간 이동을 줄이면서 의미 있는 피드백을 유지하거나 정적인 대안을 제공한다.
 
-## 3. Physicality & origin
+## 7. 일관성과 토큰
 
-- **Never `scale(0)`** — nothing in the real world appears from nothing. Target: `scale(0.9–0.97)` + `opacity: 0`.
-- **Popovers/dropdowns/tooltips scale from their trigger**, not center:
-  ```css
-  .popover { transform-origin: var(--transform-origin); } /* Base UI */
-  ```
-  **Modals are exempt** — they appear centered; `transform-origin: center` is correct there. Do not report it.
-- **Press feedback**: `transform: scale(0.97)` on `:active` with `transition: transform 160ms ease-out`. Keep it subtle (0.95–0.98).
+기존 제품의 duration·easing·컴포넌트 성격과 비교한다. 새 효과보다 기존 토큰 재사용·중복 감소로 해결 가능한지 확인한다. blur·stagger·비대칭 timing은 필요한 경우에만 제안한다.
 
-Hunt for: `scale(0)`, pure-fade entrances with no initial transform, `transform-origin: center` (or none) on trigger-anchored elements, pressable elements with no press feedback.
+## 8. 놓친 기회
 
-## 4. Interruptibility
+설명 없이 바뀌는 상태나 연결이 불명확한 표면 등 실제로 관찰한 지점을 제안한다. 현재 정적 표현이 충분하면 추가하지 않는다. 후보가 없거나 적어도 개수를 채우지 않는다.
 
-CSS **transitions** retarget from the current state mid-animation; **keyframes** restart from zero. Anything triggered rapidly or reversible mid-motion (toasts stacking, toggles, drags, expand/collapse) must use transitions or springs.
+## Finding과 계획
 
-- Entry without JS: `@starting-style` (legacy fallback: a `data-mounted` attribute set in `useEffect`).
-- Gesture-driven motion should use springs — they carry velocity when interrupted.
-- Spring configs, Apple-style (recommended): `{ type: "spring", duration: 0.5, bounce: 0.2 }`. Keep bounce subtle (0.1–0.3); reserve visible bounce for drag-to-dismiss and playful moments.
-- **Asymmetric timing**: deliberate phases (press, hold, destructive confirm) animate slower; the system's response snaps. Symmetric timing on press-and-release is a finding.
-
-Hunt for: `@keyframes` on toasts/toggles/rapidly-triggered UI, gesture handlers that tween with fixed-duration keyframes, drags without velocity-based dismissal (dismiss on `Math.abs(distance)/elapsedMs > ~0.11`, not distance thresholds alone), hard stops at drag boundaries instead of rising friction.
-
-## 5. Performance
-
-- **Animate `transform` and `opacity` only.** `width`/`height`/`margin`/`padding`/`top`/`left` trigger layout + paint + composite.
-- **`transition: all`** animates unintended properties off-GPU — always a finding.
-- **Framer Motion `x`/`y`/`scale` shorthands are not hardware-accelerated** — they run on the main thread and drop frames under load. Target: the full transform string, `animate={{ transform: "translateX(100px)" }}`.
-- **Don't drive child transforms via a CSS variable on the parent** — it recalcs styles for all children. Set `transform` directly on the element.
-- CSS (and WAAPI) beat rAF-based JS under load — use CSS for predetermined motion, JS/springs for dynamic and gesture-driven motion.
-- Keep transition-time `filter: blur()` under 20px — heavy blur is expensive, especially in Safari.
-
-Hunt for: `transition: all`, animated layout properties, Framer Motion shorthand props on busy pages, `setProperty('--x', …)` driving child transforms, rAF loops doing what CSS could.
-
-## 6. Accessibility
-
-```css
-@media (prefers-reduced-motion: reduce) {
-  .element { animation: fade 0.2s ease; } /* keep opacity/color, drop movement */
-}
-@media (hover: hover) and (pointer: fine) {
-  .element:hover { transform: scale(1.05); } /* touch fires false hovers on tap */
-}
-```
-
-Reduced motion means fewer and gentler animations, **not zero** — keep transitions that aid comprehension, remove position changes. In JS: `useReducedMotion()` and branch transform values.
-
-Hunt for: movement with no `prefers-reduced-motion` handling, ungated `:hover` motion, reduced-motion implementations that nuke all feedback.
-
-## 7. Cohesion & tokens
-
-- Motion should match the product's personality — playful can be bouncier, a dashboard stays crisp. Mismatched personality across components is a finding.
-- Curves and durations should live as shared tokens. Five hand-typed cubic-beziers that almost match is a consolidation finding.
-- Everything-at-once group entrances where a **30–80ms stagger** belongs. Stagger is decorative — it must never block interaction.
-- A jarring crossfade that shows two overlapping states can be masked with subtle `filter: blur(2px)` during the transition.
-
-Hunt for: duplicated near-identical easings/durations, one bouncy component in a crisp app, list/grid entrances with no stagger, crossfades that visibly double-expose.
-
-## 8. Missed opportunities
-
-The additive category — places that don't animate but should:
-
-- State changes that teleport (content swaps, layout jumps) where a brief transition would prevent a jarring change.
-- Spatially-connected UI (a panel that appears from a trigger) with no motion explaining where it came from.
-- Rare, high-emotion moments (first-run, success, celebration) rendered with none of the delight budget they're allowed.
-- `translate` percentages (`translateY(100%)` = element's own height) and `clip-path: inset()` reveals as tools for these — no hardcoded pixel offsets.
-
-Report at most a handful, grounded in actual UX seams you observed — not a wishlist.
+- 위치·현재 코드·재현 조건·사용자 영향·최소 수정안을 확인한다. 실행하지 않은 느낌과 성능은 미확인으로 표시한다.
+- **HIGH**는 확인된 조작 장애·큰 접근성 회귀, **MEDIUM**은 관찰된 혼란·불일치, **LOW**는 선택적 polish로 사용한다. 코드 패턴 자체가 severity를 결정하지 않는다.
+- 계획에는 기존 제품 토큰 또는 공통 자료에서 선택한 값을 명시하고 예외 이유·정상 속도·재입력·reduced motion 확인 방법을 포함한다.

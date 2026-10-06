@@ -1,0 +1,4 @@
+interface:
+  display_name: "Noxtend Context Map"
+  short_description: "여러 계층 변경의 실제 파일·호출 관계·관련 테스트 탐색"
+  default_prompt: "Use $context-map to trace the Noxtend files, callers, contracts, and tests needed for this task."

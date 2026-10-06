@@ -24,6 +24,9 @@
 | --- | --- |
 | 코드 작성·수정·디버깅·테스트·리뷰 | [karpathy-guidelines](.agents/skills/karpathy-guidelines/SKILL.md) |
 | 기능·버그 수정·리팩터링·테스트 구현 | [tdd-cycle](.agents/skills/tdd-cycle/SKILL.md): 계획 → 설계 → 구현 → 검증 |
+| 여러 계층 변경·불명확한 의존 관계 탐색 | [context-map](.agents/skills/context-map/SKILL.md); 알려진 범위의 일반 편집은 생략 |
+| HTTP DTO·route·직렬화·상태 코드 변경 영향 리뷰 | [api-breaking-change-detector](.agents/skills/api-breaking-change-detector/SKILL.md) |
+| 프롬프트 회귀·AI 출력 품질 비교 | [agentic-eval](.agents/skills/agentic-eval/SKILL.md); 일반 단위 테스트와 실 모델 평가 구분 |
 | Backend | [apps/backend/AGENTS.md](apps/backend/AGENTS.md), [noxtend-workflow](.agents/skills/noxtend-workflow/SKILL.md)의 Backend·검증 자료 |
 | LLM·AI 공급자·프롬프트·호출 내역 | 변경 전 [docs/xHuman/README.md](docs/xHuman/README.md)에서 작업별 Backend 자료 선택 |
 | Frontend·UI·모션 | [apps/frontend/AGENTS.md](apps/frontend/AGENTS.md), [DESIGN.md](DESIGN.md), 위 스킬의 Frontend·검증 자료 |

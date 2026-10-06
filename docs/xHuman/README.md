@@ -10,6 +10,7 @@
 | 텍스트·이미지 공급자, 프롬프트 버전, 호출 기록·비용 | [providers-and-prompts.md](providers-and-prompts.md) | `Noxtend.Domain/Ports`, `Noxtend.Infrastructure/Llm`, `Noxtend.Infrastructure/Image`, `Noxtend.Tuning.*` |
 | 공급자 설정 API와 모델·기능 목록 | 두 문서 | `Noxtend.Api/Controllers`, `Noxtend.Application/Providers`, `Noxtend.Domain/Provider` |
 | 유사도 AI 평가 | 두 문서 | `Noxtend.Application/Similarity/EvaluateSimilarityHandler.cs`, 관련 Application 테스트 |
+| 프롬프트 변경의 회귀·AI 출력 품질 비교 | [prompt-evaluation.md](prompt-evaluation.md), [$agentic-eval](../../.agents/skills/agentic-eval/SKILL.md) | 기존 골든 샘플·프롬프트 버전·단계 테스트·호출 기록·사람 판정 |
 
 ## 에이전트 작업 규칙
 

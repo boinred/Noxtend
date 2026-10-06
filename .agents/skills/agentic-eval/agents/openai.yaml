@@ -1,0 +1,4 @@
+interface:
+  display_name: "Noxtend Prompt Evaluation"
+  short_description: "프롬프트 버전별 출력 계약·환각·품질·비용의 근거 비교"
+  default_prompt: "Use $agentic-eval to evaluate this Noxtend prompt or AI output change using existing samples and explicit quality criteria."
