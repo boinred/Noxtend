@@ -40,3 +40,11 @@ export function prefetchForNav(key: string): (() => void) | undefined {
   if (key === 'character') return prefetchCharacterStudio
   return undefined
 }
+
+export function importSpriteStudio() {
+  return import('@/features/screens/sprites/SpriteStudioScreen')
+}
+
+export function prefetchSpriteStudio(): void {
+  void importSpriteStudio().catch(() => {})
+}

@@ -10,6 +10,8 @@ export const ROUTES = {
   character: '/character',
   object: '/object',
   background: '/background',
+  spriteBackground: '/2d/background',
+  spriteBackgroundJob: '/2d/background/:jobId',
   /**
    * Design Ref: §5.2 · FR-13 — **URL 이 작업의 주소가 된다.**
    *
@@ -256,3 +258,30 @@ export type RouteKey = keyof typeof ROUTES
 export type RoutePath = (typeof ROUTES)[RouteKey]
 
 export const ROUTE_PATHS: readonly string[] = Object.values(ROUTES)
+
+export function spriteBackgroundJobPath(jobId: string): string {
+  return `${ROUTES.spriteBackground}/${encodeURIComponent(jobId)}`
+}
+
+export function spriteBackgroundWithSourcePath(
+  sourceJobId: string,
+  sourceGeneratedImageId: string,
+): string {
+  return `${ROUTES.spriteBackground}?${new URLSearchParams({ sourceJobId, sourceGeneratedImageId })}`
+}
+
+export function readSpriteSource(
+  params: URLSearchParams,
+): { sourceJobId: string; sourceGeneratedImageId: string } | null {
+  const sourceJobId = params.get('sourceJobId')
+  const sourceGeneratedImageId = params.get('sourceGeneratedImageId')
+  const guid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  return sourceJobId &&
+    sourceGeneratedImageId &&
+    guid.test(sourceJobId) &&
+    guid.test(sourceGeneratedImageId) &&
+    sourceJobId !== '00000000-0000-0000-0000-000000000000' &&
+    sourceGeneratedImageId !== '00000000-0000-0000-0000-000000000000'
+    ? { sourceJobId, sourceGeneratedImageId }
+    : null
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { productionModeOf } from './rules'
+import { productionModeOf, tileOffsets } from './rules'
 import { readSpriteJob, readSpriteSummary } from './types'
 import { queryKeys } from '@/app/queries/keys'
 
@@ -167,5 +167,23 @@ describe('sprite wire boundary', () => {
     expect(() =>
       readSpriteSummary({ productionMode: 'twoD', sprite: { ...summary, ...change } }),
     ).toThrow()
+  })
+})
+
+describe('static tile offsets', () => {
+  it.each(['x', 'y', 'both'] as const)('square %s uses pixel axes', (repeat) => {
+    const offsets = tileOffsets(128, 128, repeat, 'square')
+    expect(offsets).toHaveLength(repeat === 'both' ? 9 : 3)
+    expect(offsets).toContainEqual({ x: 0, y: 0 })
+    if (repeat !== 'y') expect(offsets).toContainEqual({ x: 128, y: 0 })
+    if (repeat !== 'x') expect(offsets).toContainEqual({ x: 0, y: 128 })
+  })
+  it.each(['x', 'y', 'both'] as const)('diamond %s uses cell-grid axes', (repeat) => {
+    const offsets = tileOffsets(128, 64, repeat, 'diamond')
+    expect(offsets).toHaveLength(repeat === 'both' ? 9 : 3)
+    expect(offsets).toContainEqual({ x: 0, y: 0 })
+    if (repeat !== 'y') expect(offsets).toContainEqual({ x: 64, y: 32 })
+    if (repeat !== 'x') expect(offsets).toContainEqual({ x: -64, y: 32 })
+    if (repeat === 'both') expect(offsets).toContainEqual({ x: 0, y: 64 })
   })
 })

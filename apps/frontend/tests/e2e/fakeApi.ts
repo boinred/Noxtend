@@ -11,9 +11,11 @@
  * 대신 계약은 백엔드와 같은 봉투(§4.0)와 같은 응답 모양(§4.2)을 쓴다.
  * 실제 서버와의 일치는 curl 관통과 L1-B 가 담당한다.
  */
+import { installSpriteFakeApi, type SpriteFakeOptions } from './spriteFakeApi'
 import { expect, type Locator, type Page, type Route } from '@playwright/test'
 
 export interface FakeApiOptions {
+  sprites?: SpriteFakeOptions
   /** 등록된 공급자. 빈 배열이면 스튜디오가 `/admin` 안내를 띄운다 (L2 #6) */
   providers?: FakeProvider[]
   /** 작업이 끝나는 상태. 실패 주입에 쓴다 (L2 #10) */
@@ -2261,6 +2263,7 @@ export async function installFakeApi(page: Page, options: FakeApiOptions = {}) {
   await page.route('**/api/uploads/*/content', (route) =>
     route.fulfill({ status: 200, contentType: 'image/png', body: PNG_1X1 }),
   )
+  if (options.sprites) await installSpriteFakeApi(page, options.sprites)
 }
 
 /** 유효한 1×1 PNG. 렌더되는 바이트여야 한다 — 임의 버퍼는 그려지지 않는다. */

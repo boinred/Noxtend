@@ -32,7 +32,11 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '@/features/shell/layout/AppLayout'
 import { ComingSoonScreen } from '@/features/screens/coming-soon/ComingSoonScreen'
 import { HomeScreen } from '@/features/screens/home/HomeScreen'
-import { importBackgroundStudio, importCharacterStudio } from '@/routes/prefetch'
+import {
+  importBackgroundStudio,
+  importCharacterStudio,
+  importSpriteStudio,
+} from '@/routes/prefetch'
 
 // 스튜디오 — Radix Select 를 포함해 초기 예산을 넘기므로 여는 사람만 내려받는다.
 // 지정자는 `prefetch.ts` 가 들고 있다 — 프리페치와 같은 청크를 가리켜야 한다
@@ -43,6 +47,10 @@ const BackgroundStudioScreen = lazy(() =>
 // 캐릭터 스튜디오 — 배경과 같은 이유로 지연 로드. 프리페치와 같은 지정자를 가리킨다
 const CharacterStudioScreen = lazy(() =>
   importCharacterStudio().then((m) => ({ default: m.CharacterStudioScreen })),
+)
+
+const SpriteStudioScreen = lazy(() =>
+  importSpriteStudio().then((m) => ({ default: m.SpriteStudioScreen })),
 )
 
 // 관리자 묶음 — 사이드바를 눌러야 열린다. 첫 페인트에 실을 이유가 없다
@@ -117,6 +125,23 @@ export function AppRoutes() {
           element={
             <Deferred>
               <CharacterStudioScreen />
+            </Deferred>
+          }
+        />
+
+        <Route
+          path={ROUTES.spriteBackground}
+          element={
+            <Deferred>
+              <SpriteStudioScreen />
+            </Deferred>
+          }
+        />
+        <Route
+          path={ROUTES.spriteBackgroundJob}
+          element={
+            <Deferred>
+              <SpriteStudioScreen />
             </Deferred>
           }
         />

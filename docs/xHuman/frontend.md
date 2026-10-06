@@ -24,6 +24,7 @@ React 19·Vite·React Router·TanStack Query·Tailwind·shadcn/ui(Radix) 구성�
 | --- | --- | --- |
 | 홈·진행 중 작업 | `/` | `features/screens/home/` |
 | 배경 스튜디오 | `/background`, `/background/:jobId` | `features/screens/background/BackgroundStudioScreen.tsx` |
+| 2D 배경 스튜디오 | `/2d/background`, `/2d/background/:jobId` | `features/screens/sprites/SpriteStudioScreen.tsx` |
 | 캐릭터 스튜디오 | `/character`, `/character/:jobId` | `features/screens/character/CharacterStudioScreen.tsx` |
 | 오브젝트(준비 중) | `/object` | `features/screens/coming-soon/`, `navItems.ts`의 `comingSoon` |
 | 관리자 | `/admin/*`(공급자·프롬프트·골든·단가·호출 내역) | `features/screens/admin/` |
@@ -35,7 +36,7 @@ React 19·Vite·React Router·TanStack Query·Tailwind·shadcn/ui(Radix) 구성�
 | 변경 대상 | 코드 흐름 | 관련 테스트 시작점 |
 | --- | --- | --- |
 | 작업 생성·조회·폴링 | 화면 → `useJob`·`useStartJob`·`useJobList` → `jobApi.ts` → `client.ts` | `src/infra/api/jobApi.test.ts`, `src/domain/job/progress.test.ts`, `tests/e2e/home-active-job.spec.ts` |
-| 2D 계약·접수·검수·내보내기 | `domain/sprites/types.ts`의 wire 타입·reader, `rules.ts`의 `productionModeOf` → `useSprites.ts` → `spriteApi.ts`; 상세는 기존 `useJob` 공유 | `src/domain/sprites/rules.test.ts`, `src/infra/api/spriteApi.test.ts`, `src/app/queries/useSprites.test.ts` |
+| 2D 계약·접수·검수·내보내기 | `domain/sprites/types.ts`의 wire 타입·reader, `rules.ts`의 `productionModeOf`·정적 square/diamond `tileOffsets` → `useSprites.ts` → `spriteApi.ts`; 상세는 기존 `useJob` 공유 | `src/domain/sprites/rules.test.ts`, `src/infra/api/spriteApi.test.ts`, `src/app/queries/useSprites.test.ts`, `tests/e2e/sprites-static.spec.ts` |
 | 이미지 업로드 | 스튜디오 화면의 `ImageDropzone` → 화면의 `useUpload` → `uploadApi.ts`, 검증은 `domain/job/rules.ts` | `src/domain/job/rules.test.ts` |
 | 검수 게이트·설명 확인 | `ReviewGate`·`DescriptionsReview` → `useReview.ts` → `reviewApi.ts` | `tests/e2e/review-gate.spec.ts`, `features/screens/background/descriptionReview.test.ts` |
 | 파츠 이미지 생성·재시도 | 스튜디오 화면·`PartGallery` → `useJob.ts`의 mutation(`useRetryTask`·`useGenerateSelectedViews` 등) → `jobApi.ts` | `tests/e2e/part-generation-*.spec.ts`, `src/domain/job/generation.test.ts` |
@@ -49,7 +50,7 @@ React 19·Vite·React Router·TanStack Query·Tailwind·shadcn/ui(Radix) 구성�
 - `Job`·`JobSummary`의 선택 필드 `productionMode`·nullable `sprite`는 구형 응답 호환용이다. `getJob`·`listJobs`에서 `readSpriteJob`·`readSpriteSummary`로 신규 enum·필수 필드·배열·수치 형태를 검사하고, 구형 신규 필드 누락만 `threeD`·`null`로 읽는다. 메시 선택 여부로 모드를 추측하지 않는다.
 - 작업·공정 상태 문자열은 `src/domain/job/types.ts`에 있고, 종료 판정(`isTerminal`)과 폴링 간격(`nextPollDelayMs`)도 이곳에서 정한다. `useJob`은 검수 대기와 실행 중 공정의 폴링을 유지하고 취소 또는 실행 공정 없는 종료 상태에서 멈춘다.
 - `JobStatus`·`TaskKind`·제작 모드·sprite enum은 Backend 열거형과 `src/domain/job/backendParity.test.ts`로 대조한다. Backend 상태·공정이 바뀌면 이 테스트와 타입을 함께 고친다.
-- 오류 메시지·코드 해석은 `src/app/queries/errors.ts`, 공정 실패 문구는 `features/screens/background/failureMessages.ts`에서 확인한다.
+- 오류 메시지·코드·HTTP status 해석(`apiErrorMessage`·`apiErrorCode`·`apiErrorStatus`)은 `src/app/queries/errors.ts`, 공정 실패 문구는 `features/screens/background/failureMessages.ts`에서 확인한다.
 - 이미지·메시·sprite PNG/ZIP 파일 URL은 `jobApi.ts`·`uploadApi.ts`·`spriteApi.ts`의 `*Url` 함수로 만들고 `app/queries/media.ts`에서 화면에 내보낸다.
 - `queryKeys.jobList(filter, limit=10, productionMode?)`는 실제 조회 조건별 캐시를 구분한다. 상세는 모드와 무관하게 기존 `queryKeys.job(jobId)`를 공유한다.
 - `useJob`·`useJobList`·`useProviders`는 `error`·`isError`·`refetch`를 노출한다. 목록·공급자 HTTP 실패를 빈 성공으로 바꾸지 않고 `useJob.isNotFound`는 실제 HTTP 404만 가리킨다. 배열 기본값은 표시용이며 호출자는 오류 상태를 먼저 확인해야 한다.
@@ -62,3 +63,14 @@ React 19·Vite·React Router·TanStack Query·Tailwind·shadcn/ui(Radix) 구성�
 - `pnpm test`는 `src/**/*.test.ts`만 수집하며 `.test.tsx`는 수집하지 않는다. 명령과 수집 범위는 [검증 절차](../../.agents/skills/noxtend-workflow/references/verification.md)를 따른다.
 - API 계약이 바뀌면 [backend.md](backend.md)의 Controller·DTO도 확인하고 양쪽 스택을 검증한다.
 - 로컬 API 주소는 `apps/frontend/.env.development.local`의 `VITE_API_BASE_URL`이다. 로컬 기동은 [로컬 기동 절차](../../deploy/k8s/README.md)를 따른다.
+
+## 정적 2D 배경 스튜디오
+
+- `SpriteInput.tsx`는 기존 `ImageDropzone`·`ProviderSelect`·`ModelSelect`·`useUpload`를 재사용한다. 시점과 결과 유형은 필수 선택이며, 이미지 모델의 확인된 `sprite.supportsTransparency`와 모든 양수 `sprite.sizes`가 필요하다. 최종 타일 너비로 모델 요청 크기를 필터링하지 않는다.
+- 기존 결과 진입은 `routes/paths.ts`의 `spriteBackgroundWithSourcePath(sourceJobId, sourceGeneratedImageId)`와 `readSpriteSource(params)`로 GUID 쌍을 전달한다. 쿼리 이름은 `sourceJobId`·`sourceGeneratedImageId`이며 외부 URL·Blob 키는 원본 정체로 받지 않는다. 작업 주소는 `spriteBackgroundJobPath(jobId)`다.
+- `SpritePlanReview.tsx`는 원본 ROI·이름·깊이 순서·투명 배경·대상 추가/삭제를 편집한다. 1..12개·최대 64프레임·원본 내부의 유한한 양수 ROI·중복 없는 순서를 확인하고 모델/생성 수/미확인 비용을 승인 전에 표시한다. draft의 baseline revision을 보존하고 외부 revision 변화 중 미저장 편집은 유지한다. 최신 계획은 명시적으로 다시 불러오며 receipt revision을 draft에 복사하지 않는다.
+- `SpriteFrameReview.tsx`는 checkerboard PNG와 기준 선택 승인·대상별 기준 재생성을 제공한다. 정적 대상은 기준 승인으로 최종 승인되며 `exportReady`에는 별도 승인/재생성 버튼을 반복하지 않는다. 실패 공정 재시도와 취소는 기존 `useJob` mutation을 사용한다.
+- `SpritePreview.tsx`의 props는 `{ sprite, timeMs, playing }`다. 정적 기준 프레임만 합성/반복하고 재생 props는 후속 애니메이션 구현 경계로 남긴다. 레이어는 Order 오름차순으로 같은 캔버스에 합성하며 개별 표시를 끌 수 있다. 타일은 `tileOffsets`로 square X/Y/Both 또는 diamond cell-grid 두 축을 배치한다. PNG URL의 jobId는 현재 라우트에서 읽는다.
+- `SpriteExport.tsx`는 승인 asset ID 목록을 받아 사용자가 포함 대상을 선택하고 모든 제외 대상을 표시한다. `exports`에 실제 저장된 항목만 현재/이전 ZIP 링크로 표시하며 실패 pack의 `completedExportId`를 다운로드 완료로 추측하지 않는다. 일반 anchor는 서버의 Content-Disposition 파일명을 따른다.
+- `SpriteStudioScreen.tsx`는 `useJob`의 서버 phase/job status를 표시하고 실제 404·조회 실패·로딩·부분 성공·취소·실패 pack을 구분한다. 새 동작은 새 UUID, 통신 재전송은 mutation의 같은 variables를 사용한다. 409는 조회 후 충돌을 표시하고 사용자 재조정 없이 새 revision으로 자동 재제출하지 않는다.
+- `tests/e2e/fakeApi.ts`의 선택 `sprites` 옵션만 새 `spriteFakeApi.ts`에 연결된다. dedicated Fake는 GUID·출력 크기/실제 알파가 맞는 디코딩 PNG·프레임/시트/manifest가 일치하는 ZIP과 요청 기록을 제공한다. 기존 3D fixture는 유지한다.

@@ -21,7 +21,8 @@ import { CATEGORY_META_LIST } from '@/features/screens/categoryLabels'
  *   흐름을 섞으면 둘 다 흐려진다. `/admin` 진입점 하나만 사이드바에 있으면 된다.
  */
 const NAVIGABLE_PATHS = ROUTE_PATHS.filter(
-  (path) => !path.includes(':') && !path.startsWith('/admin/'),
+  // Task 14 메뉴 연결 전 정적 2D 직접 진입 경로
+  (path) => !path.includes(':') && !path.startsWith('/admin/') && path !== ROUTES.spriteBackground,
 )
 
 describe('#8 항목 구성', () => {
