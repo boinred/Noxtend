@@ -14,6 +14,16 @@ public static class ApiResults
 {
     private static readonly Dictionary<string, int> StatusByCode = new()
     {
+        [ErrorCode.SpriteWrongMode] = StatusCodes.Status409Conflict,
+        [ErrorCode.SpriteRequestConflict] = StatusCodes.Status409Conflict,
+        [ErrorCode.SpriteRevisionConflict] = StatusCodes.Status409Conflict,
+        [ErrorCode.SpriteBusy] = StatusCodes.Status409Conflict,
+        [ErrorCode.SpriteNotReady] = StatusCodes.Status409Conflict,
+        [ErrorCode.SpriteAssetNotFound] = StatusCodes.Status404NotFound,
+        [ErrorCode.SpriteSettingsInvalid] = StatusCodes.Status400BadRequest,
+        [ErrorCode.SpritePlanInvalid] = StatusCodes.Status400BadRequest,
+        [ErrorCode.SpriteFrameInvalid] = StatusCodes.Status400BadRequest,
+
         [ErrorCode.UploadEmpty] = StatusCodes.Status400BadRequest,
         [ErrorCode.UploadUnsupportedType] = StatusCodes.Status400BadRequest,
         [ErrorCode.UploadTooLarge] = StatusCodes.Status400BadRequest,

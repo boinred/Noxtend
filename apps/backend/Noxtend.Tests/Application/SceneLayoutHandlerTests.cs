@@ -266,6 +266,34 @@ public sealed class SceneLayoutHandlerTests
         Assert.Equal(ErrorCode.SceneIncomplete, result.ErrorCode);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TwoDLayoutAndRestore_RejectBeforePersistence(bool restore)
+    {
+        var (handler, jobs, layouts) = BuildWithLayouts();
+        var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "image",
+            new(Noxtend.Domain.Sprites.SpriteView.SideView, Noxtend.Domain.Sprites.SpriteOutputKind.Layers),
+            new(24, 16), new(1536, 1024), Now).Value!;
+        await jobs.AddAsync(job, default);
+        if (!restore)
+        {
+            var get = await handler.HandleAsync(job.Id, default);
+            Assert.Equal(ErrorCode.SpriteWrongMode, get.ErrorCode);
+            Assert.Empty(await layouts.ListByJobAsync(job.Id, default));
+            return;
+        }
+
+        var source = SceneLayout.ComposeActive(job.Id, 1, [], SceneMeshSignature.Compute(job.LayoutSignatureInputs()), 0,
+            SceneStaging.ComposeCamera(null, []), SceneStaging.ComposeLight(null), Now);
+        await layouts.AddAsync(source, default);
+        var restored = await new RestoreSceneRevisionHandler(jobs, layouts, new FixedClock(Now))
+            .HandleAsync(job.Id, source.Id, default);
+        Assert.Equal(ErrorCode.SpriteWrongMode, restored.ErrorCode);
+        Assert.Single(await layouts.ListByJobAsync(job.Id, default));
+        Assert.Equal(SceneLayoutState.Active, source.State);
+    }
+
     // ─── 설정 ───
 
     private static (GetSceneLayoutHandler Handler, InMemoryJobRepository Jobs) Build()

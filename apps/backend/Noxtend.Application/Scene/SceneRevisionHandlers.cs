@@ -1,5 +1,6 @@
 using Noxtend.Application.Common;
 using Noxtend.Domain.Common;
+using Noxtend.Domain.Job;
 using Noxtend.Domain.Ports;
 using Noxtend.Domain.Scene;
 
@@ -45,6 +46,9 @@ public sealed class RestoreSceneRevisionHandler(
         {
             return Result<SceneLayout>.Fail(ErrorCode.JobNotFound, "작업을 찾을 수 없습니다");
         }
+
+        if (job.ProductionMode == ProductionMode.TwoD)
+            return Result<SceneLayout>.Fail(ErrorCode.SpriteWrongMode, "3D 작업이 필요합니다");
 
         var source = await layouts.GetAsync(layoutId, ct);
         if (source is null || source.JobId != jobId)

@@ -59,7 +59,7 @@ LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계�
 
 `SpriteGenerationTests.cs`의 Fake·픽셀 검증과 같은 파일의 SQL 컬렉션 테스트는 기준 승인, 고정 위상·입력, stale 슬롯, 마지막 갱신/최종 조회 뒤 취소, 실제 회수 시도, 병렬 결과 rowversion 재시도, 호출 기록 겹침, 저장 후 응답 유실을 검증한다.
 
-관련 검증은 `Noxtend.Tests/Application/SpriteAnalysisTests.cs`, `Infrastructure/SpritePersistenceTests.cs`, `Domain/SpriteRulesTests.cs`, `SpriteLifecycleTests.cs`다. HTTP 연결은 후속 범위다.
+관련 검증은 `Noxtend.Tests/Application/SpriteAnalysisTests.cs`, `Infrastructure/SpritePersistenceTests.cs`, `Domain/SpriteRulesTests.cs`, `SpriteLifecycleTests.cs`다. HTTP 계약은 아래 sprite API 안내를 따른다.
 
 `SpritePipelineConfiguration`은 Jobs의 nullable owned state와 `SpriteAssets`·`SpriteImages`·`SpriteExports`·`SpriteRequests`를 매핑한다. `SpriteFrames`는 asset 소유이며 `(AssetId, Index)`가 PK다. `SpriteAsset.Id`는 생성 시 `Plan.Id`로 고정하고, 계획의 프레임 수가 바뀌면 기존 슬롯 객체를 초기화하고 초과 슬롯만 제거한다. 프레임 조회는 `Index`순이다. 이미지·export의 과거 ID는 교차 FK 없이 보존하며 대상 삭제가 이력을 삭제하지 않는다. 작업 삭제는 소유 트리 전체를 cascade로 지운다. PNG·ZIP 키는 기존 `DeletedJobBlobs.Images`에 중복 없이 수집해 `IBlobStorage` 정리 경로로 전달한다.
 
@@ -68,6 +68,34 @@ LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계�
 `IJobRepository.GetSpriteRequestAsync`는 Jobs에서 owned requests를 projection하고 추적 없이 전역 RequestId를 조회한다. RequestId는 단일 PK이며 상태·공정·receipt는 같은 SaveChanges 트랜잭션으로 저장한다. Count/List와 `ListJobsHandler`의 마지막 선택 인수 `productionMode`는 동일 predicate를 적용하고 `PendingReview`도 active에 포함한다. Repository에서는 현재 enum 값 검증을 추가하지 않으며 HTTP 입력 검증은 API 책임이다.
 
 저장 검증은 격리 `SqlServerFixture`의 `SpritePersistenceTests`가 round-trip·이전 migration 갱신·중복 키·rowversion·삭제·JSON 오류를 확인한다. `AddSpriteProduction`은 기존 작업에 `ThreeD` 기본값을 추가하고 sprite state 열은 nullable로 둔다. 이 migration의 생성·SQL 확인은 기존 `DesignTimeDbContextFactory`가 있는 Infrastructure를 `--project apps/backend/Noxtend.Infrastructure --startup-project apps/backend/Noxtend.Infrastructure`로 사용한다. 생성 SQL 확인과 실제 DB 적용은 별개이며 개발 DB에 `database update`를 실행하지 않는다.
+
+## 2D 배경 HTTP 계약
+
+`Noxtend.Api/Controllers/SpriteJobsController.cs`는 기존 `StartSpriteJobHandler`·`SpriteCommandsHandler`를 호출한다. `Contracts/SpriteContracts.cs`는 요청과 안전한 응답 DTO이며 엔티티·Blob 키·공급자 주소·fingerprint를 공개하지 않는다. 접수와 모든 검수 mutation은 기존 `{ data, error }` 봉투의 202와 `{ id, status, revision, taskIds }`를 반환한다.
+
+| 경로 | 본문·결과 |
+| --- | --- |
+| `POST /api/jobs/sprites` | `requestId`, `uploadId` 또는 `sourceJobId`·`sourceGeneratedImageId`, 분석·이미지 공급자/모델, `settings` |
+| `PUT /api/jobs/{id}/sprites/plan` | `requestId`, `expectedRevision`, `assets` 계획 배열 |
+| `POST /api/jobs/{id}/sprites/plan/approve` | `requestId`, `expectedRevision` |
+| `POST /api/jobs/{id}/sprites/base/approve` | `requestId`, `expectedRevision`, `assetIds` |
+| `POST /api/jobs/{id}/sprites/assets/{assetId}/frames/{index}/regenerate` | `requestId`, `expectedRevision` |
+| `POST /api/jobs/{id}/sprites/assets/{assetId}/approve` | `requestId`, `expectedRevision` |
+| `POST /api/jobs/{id}/sprites/exports` | `requestId`, `expectedRevision`, 승인 대상 `assetIds` |
+| `GET /api/jobs/{id}/sprites/images/{imageId}` | 저장 PNG, `image/png`, 서버 GUID 파일명 |
+| `GET /api/jobs/{id}/sprites/exports/{exportId}` | 저장 ZIP, `application/zip`, 서버 GUID 파일명 |
+
+`settings`는 `view: sideView|topDown|isometric`, `outputKind: layers|tiles`, 선택 `tileWidth=128`, 선택 `repeat=both`다. 이름 입력의 숫자·조합 문자열을 거부한다. 계획은 대상 ID·이름·순서·`sourceBounds { x,y,w,h }`·투명·루프·프레임 수·FPS·동작 설명을 받는다. sprite 요청의 미등록 필드는 JSON formatter가 거부하므로 Blob 키·URL을 원본 참조로 받지 않는다. DTO 매핑은 명시적 null 목록·항목·중첩 영역과 유한하지 않은 ROI를 fingerprint 직렬화 전에 거부하고 나머지 규칙은 기존 Domain 검증에 맡긴다. JSON 숫자 `1e400`의 무한대 변환도 400이다.
+
+`JobsController`의 기존 상세는 `productionMode: threeD|twoD`와 nullable `sprite`를 추가한다. 기존 3D는 `sprite=null`이다. sprite는 설정·원본/생성/출력 캔버스·변환·phase·reviewRevision·대상 계획/슬롯/승인 snapshot·이미지/패키지 이력을 담는다. `completedExportId`는 실제 저장된 export가 있을 때만 공개하며 내부의 실패 소비 ID는 null로 변환한다. `exports`에는 저장 성공한 ID·공정 ID·검수 revision·current·생성 시각·포함/제외 대상 ID만 담는다.
+
+기존 목록은 선택 `productionMode=threeD|twoD`를 받고 잘못된 값은 400이며 items와 total에 같은 필터를 적용한다. 각 요약은 mode와 nullable `sprite { phase, assetCount, approvedAssetCount, imageCount, exportCount }`를 추가한다. category·status·limit와 기존 필드 의미는 유지한다.
+
+`ApiResults`는 요청/revision/busy/wrong-mode/not-ready 충돌을 409, 작업 소유 대상 누락을 404, 설정·계획·프레임 오류를 400으로 매핑한다. 이미지·ZIP의 다른 작업 ID는 기존 job-not-found 봉투 404이며 실제 Blob 파일 누락은 기존 바이너리 관례의 빈 404다. 접수된 export snapshot은 저장 ZIP이 없으면 409다. 저장 성공한 과거 PNG·ZIP은 current 여부와 무관하게 작업 소유 이력으로 다운로드할 수 있다.
+
+`JobsController`는 mesh·검수 조회/겹침/추가/삭제/이동/승인/서술/팔레트·방향 생성·서술 복귀·mesh 재계획을 2D에서 409로 거부한다. 공통 cancel/retry/delete는 유지한다. `GetSceneLayoutHandler`, `RestoreSceneRevisionHandler`, `StartSimilarityRunHandler`도 공통 Application 입구에서 2D를 차단해 빈 3D layout 저장·복원과 Blob/평가 dispatch를 막는다. 읽기 전용 similarity 상태·이력 경로는 유지한다.
+
+`Noxtend.Tests/Api/SpriteApiTests.cs`는 기존 InMemory/Fake Application 경로와 MVC JSON formatter·FileStreamResult 실행기를 사용해 접수부터 내보내기, 중복/충돌/소유권, JSON null/숫자, 안전한 응답·다운로드 헤더를 확인한다. configured `Program.cs`나 개발 DB를 기동하지 않는다. `SceneLayoutHandlerTests`·`SimilarityStartHandlerTests`는 공통 2D 차단의 저장/Blob/큐 부작용을 검증한다.
 
 ## 서버 불변 조건
 

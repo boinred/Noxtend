@@ -10,6 +10,18 @@ public sealed class JobResponseTests
 {
     private static readonly DateTimeOffset Now = new(2026, 8, 8, 0, 0, 0, TimeSpan.Zero);
 
+    [Fact]
+    public void LegacyJob_ExposesThreeDAndNullSprite()
+    {
+        var job = PipelineJob.Create(AssetCategory.Background, Guid.NewGuid(), Now);
+        var detail = JobResponse.From(new JobDetails(job, []));
+        var summary = JobSummaryResponse.From(job);
+        Assert.Equal("threeD", detail.ProductionMode);
+        Assert.Null(detail.Sprite);
+        Assert.Equal("threeD", summary.ProductionMode);
+        Assert.Null(summary.Sprite);
+    }
+
     /// <summary>
     /// 합성(반전) 이미지가 더 최신이어도 갤러리 응답은 실제 이미지를 보여준다 (spec 20260917).
     ///

@@ -28,7 +28,9 @@ public sealed record JobResponse(
     DateTimeOffset? CompletedAt,
     /// <summary>캐릭터가 아니면 <c>null</c>(character-mesh-ui §FR-08 — "다시 시도" 이어받기 입력).</summary>
     string? Gender,
-    IReadOnlyList<PartHintResponse> PartHints)
+    IReadOnlyList<PartHintResponse> PartHints,
+    string ProductionMode,
+    SpriteResponse? Sprite)
 {
     public static JobResponse From(JobDetails details)
     {
@@ -64,7 +66,9 @@ public sealed record JobResponse(
             job.Gender is { } gender ? Wire(gender) : null,
             PartHintCodec.Deserialize(job.PartHints)
                 .Select(hint => new PartHintResponse(hint.Type, hint.Count, hint.Variant))
-                .ToList());
+                .ToList(),
+            Wire(job.ProductionMode),
+            job.Sprites is { } sprites ? SpriteResponse.From(sprites) : null);
 
     /// <summary>
     /// 열거형은 camelCase 로 나간다. 프론트 타입이 `'pending' | 'running' | …` 이므로 (§3.4)
@@ -340,7 +344,9 @@ public sealed record JobSummaryResponse(
     string Status,
     Guid SourceImageId,
     int PartCount,
-    DateTimeOffset CreatedAt)
+    DateTimeOffset CreatedAt,
+    string ProductionMode,
+    SpriteSummaryResponse? Sprite)
 {
     public static JobSummaryResponse From(PipelineJob job)
         => new(
@@ -349,7 +355,9 @@ public sealed record JobSummaryResponse(
             JobResponse.Wire(job.Status),
             job.SourceImageId,
             job.Parts.Count,
-            job.CreatedAt);
+            job.CreatedAt,
+            JobResponse.Wire(job.ProductionMode),
+            job.Sprites is { } sprites ? SpriteSummaryResponse.From(sprites) : null);
 }
 
 /// <param name="Total">
