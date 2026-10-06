@@ -383,3 +383,53 @@ test('idle generation input edits require renewed plan review and keep unrelated
     page.getByRole('img', { name: '전경 나무 기준 이미지', exact: true }),
   ).toHaveAttribute('src', other!)
 })
+
+test('removing the last loop stops RAF on the same page and restores paused playback', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const stats = { requested: 0, canceled: 0 }
+    window.spriteRaf = stats
+    const request = window.requestAnimationFrame.bind(window)
+    const cancel = window.cancelAnimationFrame.bind(window)
+    window.requestAnimationFrame = (callback) => {
+      stats.requested++
+      return request(callback)
+    }
+    window.cancelAnimationFrame = (id) => {
+      stats.canceled++
+      cancel(id)
+    }
+  })
+  await installFakeApi(page, { sprites: {} })
+  await loopPlan(page)
+  const preview = page.getByRole('region', { name: '배경 미리보기', exact: true })
+  await preview.evaluate((element) => element.setAttribute('data-lifecycle-check', 'same-preview'))
+  await page.getByRole('button', { name: '재생', exact: true }).click()
+  await expect(page.getByRole('button', { name: '일시정지', exact: true })).toBeVisible()
+  await expect.poll(() => page.evaluate(() => window.spriteRaf.requested)).toBeGreaterThan(0)
+  const canceled = await page.evaluate(() => window.spriteRaf.canceled)
+  await page.getByLabel('루프 애니메이션 1', { exact: true }).uncheck()
+  await page.getByRole('button', { name: '계획 저장', exact: true }).click()
+  await expect(
+    page.getByRole('button', { name: '계획 승인 · 기준 이미지 생성', exact: true }),
+  ).toBeEnabled()
+  await expect(preview).toHaveAttribute('data-lifecycle-check', 'same-preview')
+  await expect(page.getByRole('button', { name: '일시정지', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '재생', exact: true })).toHaveCount(0)
+  await expect.poll(() => page.evaluate(() => window.spriteRaf.canceled)).toBeGreaterThan(canceled)
+  const requested = await page.evaluate(() => window.spriteRaf.requested)
+  await page.waitForTimeout(150)
+  expect(await page.evaluate(() => window.spriteRaf.requested)).toBe(requested)
+  await page.getByLabel('루프 애니메이션 1', { exact: true }).check()
+  await page.getByRole('button', { name: '계획 저장', exact: true }).click()
+  await expect(page.getByRole('button', { name: '재생', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '일시정지', exact: true })).toHaveCount(0)
+  await expect(preview).toHaveAttribute('data-lifecycle-check', 'same-preview')
+  await page.waitForTimeout(150)
+  expect(await page.evaluate(() => window.spriteRaf.requested)).toBe(requested)
+  await page.getByRole('button', { name: '재생', exact: true }).click()
+  await expect
+    .poll(() => page.evaluate(() => window.spriteRaf.requested))
+    .toBeGreaterThan(requested)
+})

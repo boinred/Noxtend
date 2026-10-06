@@ -31,12 +31,17 @@ export function SpritePreview({
   const height = sprite.outputCanvas.height
   const tiles = sprite.settings.outputKind === 'tiles'
   const tile = assets.find((a) => a.id === tileId) ?? assets[0]
+  const hasLoop = assets.some((a) => a.plan.loop)
   const [elapsed, setElapsed] = useState(timeMs)
   const position = useRef(timeMs)
   const [isPlaying, setPlaying] = useState(
     () => playing && !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
   )
   useEffect(() => {
+    if (!hasLoop) {
+      setPlaying(false)
+      return
+    }
     if (!isPlaying) return
     const start = performance.now() - position.current
     let request = requestAnimationFrame(tick)
@@ -46,7 +51,7 @@ export function SpritePreview({
       request = requestAnimationFrame(tick)
     }
     return () => cancelAnimationFrame(request)
-  }, [isPlaying])
+  }, [isPlaying, hasLoop])
   return (
     <section className={styles.panel} aria-label="배경 미리보기">
       <h2 className={styles.title}>{tiles ? '타일 반복 미리보기' : '레이어 합성 미리보기'}</h2>
@@ -88,7 +93,7 @@ export function SpritePreview({
           ))}
         </div>
       )}
-      {assets.some((a) => a.plan.loop) ? (
+      {hasLoop ? (
         <div className={styles.stack}>
           <Button variant="outline" onClick={() => setPlaying(!isPlaying)}>
             {isPlaying ? '일시정지' : '재생'}
