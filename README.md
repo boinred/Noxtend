@@ -89,31 +89,29 @@ API 이미지를 빌드하고 SQL Server·Redis·Azurite·API를 기동합니다
 deploy/local-up.sh
 ```
 
-스크립트는 `/health`를 확인한 뒤 임시 포트 포워딩을 종료합니다. `--forward`를 붙이면 `Ctrl+C`까지 `localhost:18080` 포트 포워딩을 유지합니다. API가 재시작되면 포트 포워딩도 끊기므로 다시 실행합니다.
+스크립트는 `/health`를 확인한 뒤 임시 포트 포워딩을 종료합니다. `-d`(또는 `--detach`)를 붙이면 빌드·배포·확인 후 포트 포워딩을 백그라운드에 남기고 터미널로 돌아옵니다. 출력된 PID와 로그 경로로 확인하고 `kill <PID>`로 종료합니다. `--forward`는 터미널에서 `Ctrl+C`까지 유지하는 방식입니다. API가 재시작되면 두 방식 모두 포워딩이 끊기므로 다시 연결해야 합니다.
 
 ```bash
-deploy/local-up.sh --forward
+deploy/local-up.sh -d
 ```
 
 ### Frontend 실행
 
-`apps/frontend/.env.development.local`을 만들고 API 주소를 지정합니다.
-
-```dotenv
-VITE_API_BASE_URL=http://localhost:18080
-```
-
-개발 서버를 실행합니다.
+기본 API 주소는 `apps/frontend/.env.development`의 `http://localhost:18080`입니다.
+PowerShell·Bash·zsh 모두 환경변수를 따로 입력하지 않고 개발 서버를 실행합니다.
 
 ```bash
 pnpm dev
 ```
 
+다른 API 주소를 사용하려면 Git에서 제외된 `apps/frontend/.env.development.local`의
+`VITE_API_BASE_URL`로 덮어씁니다.
+
 `http://localhost:5173`을 엽니다. API와 의존 서비스 상태는 `http://localhost:18080/health`에서 확인할 수 있습니다. 실제 AI 작업을 실행하려면 `/admin/providers`에서 공급자 키를 등록해야 합니다.
 
 ## 변경 검증
 
-저장소 루트의 `pnpm` 명령은 Frontend만 대상으로 합니다.
+저장소 루트의 아래 검증 명령은 Frontend만 대상으로 합니다.
 
 ```bash
 pnpm lint

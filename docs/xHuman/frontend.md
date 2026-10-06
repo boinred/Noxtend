@@ -68,7 +68,7 @@ React 19·Vite·React Router·TanStack Query·Tailwind·shadcn/ui(Radix) 구성�
 - E2E는 `tests/e2e/fakeApi.ts`의 가짜 API로 동작한다. 새 API를 화면에서 쓰면 가짜 응답도 함께 추가한다.
 - `pnpm test`는 `src/**/*.test.ts`만 수집하며 `.test.tsx`는 수집하지 않는다. 명령과 수집 범위는 [검증 절차](../../.agents/skills/noxtend-workflow/references/verification.md)를 따른다.
 - API 계약이 바뀌면 [backend.md](backend.md)의 Controller·DTO도 확인하고 양쪽 스택을 검증한다.
-- 로컬 API 주소는 `apps/frontend/.env.development.local`의 `VITE_API_BASE_URL`이다. 로컬 기동은 [로컬 기동 절차](../../deploy/k8s/README.md)를 따른다.
+- `pnpm dev`는 루트 `package.json`에서 Frontend의 Vite 개발 서버를 실행한다. 기본 API 주소는 `apps/frontend/.env.development`의 `VITE_API_BASE_URL=http://localhost:18080`이다. 개발자별 주소는 Git에서 제외된 `.env.development.local` 또는 실행 환경 변수로 덮어쓴다. 로컬 기동은 [로컬 기동 절차](../../deploy/k8s/README.md)를 따른다.
 
 ## 2D 배경 스튜디오
 

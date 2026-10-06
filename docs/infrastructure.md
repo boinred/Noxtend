@@ -211,11 +211,11 @@ kubectl -n noxtend logs deploy/api --tail=100
 2. `deploy/k8s/secrets.yaml` 준비
 3. `deploy/local-up.sh` 실행
 4. 모든 Deployment가 Available 상태가 될 때까지 대기
-5. API 포트 포워딩 유지(`--forward` 또는 별도 터미널)
-6. 다른 터미널에서 `pnpm dev`로 프론트엔드 실행
+5. API 포트 포워딩 유지(`-d`는 백그라운드, `--forward`는 터미널 유지)
+6. `pnpm dev`로 프론트엔드 실행 후 `http://localhost:5173` 접속
 
 ```bash
-deploy/local-up.sh --forward
+deploy/local-up.sh -d
 pnpm dev
 ```
 
@@ -225,7 +225,7 @@ pnpm dev
 2. Docker Desktop Kubernetes의 containerd로 이미지 반입
 3. namespace·Secret·4개 워크로드 적용
 4. API Deployment 재시작과 새 파드 rollout 대기
-5. 임시 포트 포워딩을 통한 `/health` 확인(`--forward`이면 `Ctrl+C`까지 유지)
+5. 임시 포트 포워딩을 통한 `/health` 확인(`-d`/`--detach`는 백그라운드 유지, `--forward`는 `Ctrl+C`까지 유지)
 
 매니페스트만 변경했고 API 이미지를 다시 만들 필요가 없다면 다음 명령을 사용할 수
 있습니다.
@@ -236,7 +236,8 @@ deploy/local-up.sh --skip-build
 
 ## 종료와 데이터 수명
 
-프론트엔드와 포트 포워딩은 각 터미널에서 `Ctrl+C`로 종료합니다. Deployment만
+프론트엔드와 `--forward` 포트 포워딩은 각 터미널에서 `Ctrl+C`로 종료합니다.
+`-d` 포트 포워딩은 출력된 PID를 `kill <PID>`로 종료합니다. Deployment만
 축소하면 PVC 데이터는 유지됩니다.
 
 ```bash
