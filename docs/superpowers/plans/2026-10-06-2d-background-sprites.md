@@ -309,11 +309,11 @@ Assert.Equal(0, rejectedProviderCallCount);
 
 ## Task 7: 2D 접수·분석 worker·독립 입력 복사
 
-**Files:** Create `B/Noxtend.Application/Sprites/{SpriteCommands.cs,StartSpriteJobHandler.cs,SpritePlanParser.cs,RunSpriteAnalysisTaskHandler.cs}`, `B/Noxtend.Tests/Application/SpriteAnalysisTests.cs`. Modify `B/Noxtend.Domain/Job/TaskKind.cs`, `B/Noxtend.Domain/Llm/LlmOperationKind.cs`, `B/Noxtend.Domain/Prompt/PromptTemplate.cs`, `B/Noxtend.Infrastructure/Llm/{SeedPrompts.cs,FakeLlmProvider.cs}`, `B/Noxtend.Infrastructure/InfrastructureServiceCollectionExtensions.cs`, `B/Noxtend.Api/Workers/TaskWorkerRegistration.cs`, `B/Noxtend.Tests/Application/PipelineFixture.cs`, `B/Noxtend.Tuning.Application/Prompts/PromptHandlers.cs`, `F/src/domain/{tuning/types.ts,job/types.ts,job/backendParity.test.ts}`, `F/src/features/screens/admin/{PromptsScreen.tsx,PromptEditScreen.tsx}`, `F/tests/e2e/fakeApi.ts`, `docs/xHuman/{backend.md,providers-and-prompts.md}`. EF 생성 파일: `SeedSpriteAnalyzePrompt` migration.
+**Files:** Create `B/Noxtend.Application/Sprites/{SpriteCommands.cs,StartSpriteJobHandler.cs,SpritePlanParser.cs,RunSpriteAnalysisTaskHandler.cs}`, `B/Noxtend.Tests/Application/SpriteAnalysisTests.cs`. Modify `B/Noxtend.Domain/Sprites/SpriteTypes.cs`의 실제 decode ContentType, `B/Noxtend.Infrastructure/Mesh/SkiaImageTranscoder.Sprites.cs`, 관련 `B/Noxtend.Tests/Infrastructure/SpritePixelTests.cs` fixture, `B/Noxtend.Domain/Job/TaskKind.cs`, `B/Noxtend.Domain/Llm/LlmOperationKind.cs`, `B/Noxtend.Domain/Prompt/PromptTemplate.cs`, `B/Noxtend.Infrastructure/Llm/{SeedPrompts.cs,FakeLlmProvider.cs}`, `B/Noxtend.Infrastructure/InfrastructureServiceCollectionExtensions.cs`, `B/Noxtend.Api/Workers/TaskWorkerRegistration.cs`, `B/Noxtend.Tests/Application/{PipelineFixture.cs,PromptGridTests.cs}`, `B/Noxtend.Tests/Infrastructure/SpritePersistenceTests.cs`의 접수 경합·복사 원자성 검증, `B/Noxtend.Tests/Infrastructure/PromptCategoryPersistenceTests.cs`, `B/Noxtend.Tuning.Application/Prompts/PromptHandlers.cs`, `F/src/domain/{tuning/types.ts,job/types.ts,job/backendParity.test.ts}`, `F/src/features/screens/admin/{PromptsScreen.tsx,PromptEditScreen.tsx}`, `F/tests/e2e/{fakeApi.ts,prompts-category.spec.ts,decomposition-admin.spec.ts}`, `docs/xHuman/{backend.md,providers-and-prompts.md}`. EF 생성 파일: `SeedSpriteAnalyzePrompt` migration.
 
 **Interfaces:** `StartSpriteJobCommand(Guid RequestId,Guid? UploadId,Guid? SourceJobId,Guid? SourceGeneratedImageId,Guid ProviderConfigId,string Model,Guid ImageProviderConfigId,string ImageModel,SpriteSettings Settings)`. `StartSpriteJobHandler.HandleAsync(command,ct) -> Task<Result<SpriteReceipt>>`. `SpritePlanParser.Parse(string json,SpriteSettings settings,SpriteCanvas source) -> Result<IReadOnlyList<SpriteAssetPlan>>`. worker는 기존 `ITaskHandler.HandleAsync(Guid taskId,CancellationToken ct) -> Task<RunTaskOutcome>`를 구현한다.
 
-- [ ] PipelineFixture의 repositories·Blob·clock·Fake provider를 재사용하고 분석 결과를 테스트용 JSON으로 지정한다.
+- [x] PipelineFixture의 repositories·Blob·clock·Fake provider를 재사용하고 분석 결과를 테스트용 JSON으로 지정한다.
 
 ```csharp
 [Fact] public Task InputSelection_RequiresExactlyOneSource();
@@ -333,12 +333,12 @@ Assert.Equal(SpritePhase.PlanReview, job.Sprites!.Phase);
 Assert.Equal(0, imageCallCount);
 ```
 
-- [ ] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpriteAnalysisTests`로 실패를 확인한다.
-- [ ] `TaskKind.AnalyzeSprites=7`, `LlmOperationKind.AnalyzeSprites=5`와 명시적 mapping을 추가한다. operation switch·PromptTemplate 변수·price/grid/fake 열거를 보완한다. 분석 prompt 변수는 `settings / sourceCanvas`이며 JSON으로 삽입한다. notes의 `{{...}}`는 재확장하지 않는다.
-- [ ] 서버에서 원본 소속·decode·모델·active prompt를 검증한다. 모델의 합법적 GenerationCanvas와 출력 Transform을 작업 접수 때 고정하며 이후 프레임마다 다시 고르지 않는다. 기존 결과는 새 StoredImage·새 Blob으로 복사한다. 중복 request는 복사보다 먼저 반환하고 SQL 접수 경쟁에서 진 요청은 자신이 만든 미참조 복사본만 정리한다.
-- [ ] FakeLlmProvider의 기본 AnalyzeSprites 응답도 동일한 schema로 추가한다. AnalyzeSprites만 worker/DI에 등록하고 기존 JobOptions lease를 사용한다. GenerateSprite/PackSprites의 빈 handler를 미리 만들지 않는다. parser는 schema·대상 상한·name/order/ROI를 검사하며 asset ID는 서버가 부여한다.
-- [ ] `SeedSpriteAnalyzePrompt` migration을 생성해 새 operation의 Background prompt만 등록한다. 기존 prompt 수정·개발 DB 적용은 하지 않는다.
-- [ ] 같은 테스트와 `TaskWorkerRegistrationTests / PromptCategoryWiringTests / SeedPromptVariableTests`를 통과시키고 대응 TS operation 테스트도 실행한다. 문서와 `feat(sprites): accept and analyze image-based background jobs`로 커밋한다.
+- [x] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpriteAnalysisTests`로 실패를 확인한다.
+- [x] `TaskKind.AnalyzeSprites=7`, `LlmOperationKind.AnalyzeSprites=5`와 명시적 mapping을 추가한다. operation switch·PromptTemplate 변수·price/grid/fake 열거를 보완한다. 분석 prompt 변수는 `settings / sourceCanvas`이며 JSON으로 삽입한다. notes의 `{{...}}`는 재확장하지 않는다.
+- [x] 서버에서 원본 소속·decode·모델·active prompt를 검증한다. 모델의 합법적 GenerationCanvas와 출력 Transform을 작업 접수 때 고정하며 이후 프레임마다 다시 고르지 않는다. 업로드는 실제 codec MIME과 저장 MIME의 일치를 검증한 뒤 기존 StoredImage·Blob을 재사용하고 기존 SourceImageId 참조 수에 따른 삭제를 유지한다. MIME 불일치는 명시적으로 거부한다. 기존 생성 결과만 새 StoredImage·새 Blob으로 복사한다. 중복 request는 복사보다 먼저 반환하고 SQL 접수 경쟁에서 진 요청은 자신이 만든 미참조 복사본만 정리하며 공유 업로드를 삭제하지 않는다.
+- [x] FakeLlmProvider의 기본 AnalyzeSprites 응답도 동일한 schema로 추가한다. AnalyzeSprites만 worker/DI에 등록하고 기존 JobOptions lease를 사용한다. GenerateSprite/PackSprites의 빈 handler를 미리 만들지 않는다. parser는 schema·대상 상한·name/order/ROI를 검사하며 asset ID는 서버가 부여한다.
+- [x] `SeedSpriteAnalyzePrompt` migration을 생성해 새 operation의 Background prompt만 등록한다. 기존 prompt 수정·개발 DB 적용은 하지 않는다.
+- [x] 같은 테스트와 `TaskWorkerRegistrationTests / PromptCategoryWiringTests / SeedPromptVariableTests`를 통과시키고 대응 TS operation 테스트도 실행한다. 문서와 `feat(sprites): accept and analyze image-based background jobs`로 커밋한다.
 
 ## Task 8: 기준·후속 프레임 생성과 오래된 결과 차단
 
@@ -369,7 +369,7 @@ Assert.Equal(1, nonRetryableAttemptCount);
 
 - [ ] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpriteGenerationTests`로 실패를 확인한다.
 - [ ] 원본·고정 base·SpriteFrameInput.Plan snapshot·canvas·phase를 별도 변수로 전달한다. 생성 prompt의 허용 변수는 `settings / asset / frame / sourceCanvas / outputCanvas`이며 JSON 데이터로 삽입한다. 3D ViewDirection을 프레임에 쓰지 않는다. SeedSpriteGeneratePrompt를 생성한다.
-- [ ] 공급자는 기존 Factory·Recording·RateLimitGate를 통과한다. raw 응답의 크기가 고정 GenerationCanvas와 일치하는지 확인하고 불일치는 비재시도 오류로 처리한다. Task 3 이미지 검사·PNG 정규화·Blob 저장→SQL 결과 공개 순서를 지킨다. 미공개 새 Blob만 정리하고 기존 이력을 삭제하지 않는다. FakeImageProvider의 기본 성공·지연 응답은 GenerateSprite 요청일 때 요청 size의 디코딩 가능한 RGBA PNG를 만든다. 기존 12-byte PNG 헤더를 2D 성공 fixture로 쓰지 않고, Returning의 명시적 잘못된 응답은 그대로 유지한다.
+- [ ] 공급자는 기존 Factory·Recording·RateLimitGate를 통과한다. raw 응답의 실제 PNG 형식·MIME과 크기가 고정 GenerationCanvas와 일치하는지 확인하고 불일치는 비재시도 오류로 처리한다. Task 3 이미지 검사·PNG 정규화·Blob 저장→SQL 결과 공개 순서를 지킨다. 미공개 새 Blob만 정리하고 기존 이력을 삭제하지 않는다. FakeImageProvider의 기본 성공·지연 응답은 GenerateSprite 요청일 때 요청 size의 디코딩 가능한 RGBA PNG를 만든다. 기존 12-byte PNG 헤더를 2D 성공 fixture로 쓰지 않고, Returning의 명시적 잘못된 응답은 그대로 유지한다.
 - [ ] 공통 TaskExecution의 commit 직전에 최신 aggregate/task를 reload해 `IsCurrentTask`·canceled를 확인한다. sprite 조건은 Domain에 두며 body/commit 계약을 유지한다. 기존 3D와 병렬 asset 결과 반영을 회귀 검증한다.
 - [ ] GenerateSprite에 기존 GenerationOptions lease와 재시도 한도를 적용하고 ReclaimPlan idle도 해당 lease×2로 정한다. generationWorkers 등록을 재사용하면 3D+2D 합계 동시 실행 수가 늘므로 기존 공급자 RateLimitGate 공유를 테스트한다.
 - [ ] 같은 테스트와 `RunGenerationTaskHandlerTests / JobLifecycleTests / ReclaimPlanTests / ImageProviderUsageTests`를 통과시키고 문서와 `feat(sprites): generate reviewed bases and animation frames`로 커밋한다.
