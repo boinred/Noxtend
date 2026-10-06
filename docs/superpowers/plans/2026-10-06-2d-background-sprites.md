@@ -493,7 +493,7 @@ test('static layers require plan and base review before export', async ({ page }
 
 **Interfaces:** `frameAt(timeMs:number,fps:number,frameCount:number):number`는 순수 계산이며 `tileOffsets(width:number,height:number,repeat:SpriteRepeat,layout:SpriteTileLayout):readonly {x:number;y:number}[]`는 Task 12의 rules.ts 함수를 재사용한다. UI는 대상별 loop/frameCount/notes/FPS, current image ID와 승인 snapshot을 사용한다. 재생 중에만 requestAnimationFrame을 쓰고 reduced-motion의 초기 상태는 paused다.
 
-- [ ] 순수 함수 테스트와 UI E2E를 먼저 작성한다.
+- [x] 순수 함수 테스트와 UI E2E를 먼저 작성한다.
 
 ```typescript
 it('wraps eight frames at eight fps without duplicating the end', () => {
@@ -505,11 +505,11 @@ test('regenerating one frame invalidates approval and keeps other assets usable'
 test('fps edit updates metadata without generation requests')
 ```
 
-- [ ] `pnpm --filter @nextend/frontend test src/domain/sprites/playback.test.ts`, build 후 `pnpm --filter @nextend/frontend test:e2e tests/e2e/sprites-animation.spec.ts`로 실패를 확인한다.
-- [ ] 기존 입력에 4/8프레임·loop opt-in·notes≤500·play/pause/scrub/FPS를 추가한다. 각 layer는 자신의 FPS로 재생하고 tile은 diamond 격자 offset으로 반복한다. 수동 scrub은 키보드로 조작 가능하게 한다.
-- [ ] 기준 이미지 승인 전 loop 생성을 막고 누락/failed/재생성 중 프레임을 표시한다. base 재생성은 후속 무효화 안내와 기준 재검수를 제공한다. 실행 중 asset 입력은 readonly, 같은 slot 동작은 disabled다.
-- [ ] FPS/name/order 저장 시 AI 요청 없음, 다른 asset 결과 유지, 재조회 후 후보 일치, reduced-motion의 자동 재생 없음과 수동 재생을 같은 테스트에서 확인한다.
-- [ ] `pnpm lint / pnpm typecheck`도 통과시키고 문서와 `feat(frontend): add sprite loop review and playback`로 커밋한다.
+- [x] `pnpm --filter @nextend/frontend test src/domain/sprites/playback.test.ts`, build 후 `pnpm --filter @nextend/frontend test:e2e tests/e2e/sprites-animation.spec.ts`로 실패를 확인한다.
+- [x] 기존 입력에 4/8프레임·loop opt-in·notes≤500·play/pause/scrub/FPS를 추가한다. 각 layer는 자신의 FPS로 재생하고 tile은 diamond 격자 offset으로 반복한다. 수동 scrub은 키보드로 조작 가능하게 한다.
+- [x] 기준 이미지 승인 전 loop 생성을 막고 누락/failed/재생성 중 프레임을 표시한다. base 재생성은 후속 무효화 안내와 기준 재검수를 제공한다. 실행 중 asset 입력은 readonly, 같은 slot 동작은 disabled다.
+- [x] FPS/name/order 저장 시 AI 요청 없음, 다른 asset 결과 유지, 재조회 후 후보 일치, reduced-motion의 자동 재생 없음과 수동 재생을 같은 테스트에서 확인한다.
+- [x] `pnpm lint / pnpm typecheck`도 통과시키고 문서와 `feat(frontend): add sprite loop review and playback`로 커밋한다.
 
 ## Task 14: 홈·3D·2D 메뉴와 기존 결과 진입
 
