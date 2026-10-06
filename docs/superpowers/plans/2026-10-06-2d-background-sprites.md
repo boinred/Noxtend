@@ -442,11 +442,11 @@ Assert.DoesNotContain(blobKey, responseJson);
 
 ## Task 11: TypeScript 계약·API·query cache
 
-**Files:** Create `F/src/domain/sprites/{types.ts,rules.ts,rules.test.ts}`, `F/src/infra/api/{spriteApi.ts,spriteApi.test.ts}`, `F/src/app/queries/useSprites.ts`. Modify `F/src/domain/{job/types.ts,job/backendParity.test.ts,provider/types.ts}`, `F/src/infra/api/{jobApi.ts,jobApi.test.ts}`, `F/src/app/queries/{keys.ts,useJob.ts,useJobList.ts,media.ts}`, `docs/xHuman/frontend.md`.
+**Files:** Create `F/src/domain/sprites/{types.ts,rules.ts,rules.test.ts}`, `F/src/infra/api/{spriteApi.ts,spriteApi.test.ts}`, `F/src/app/queries/{useSprites.ts,useSprites.test.ts}`. Modify `F/src/domain/{job/types.ts,job/backendParity.test.ts,provider/types.ts}`, `F/src/infra/api/{jobApi.ts,jobApi.test.ts}`, `F/src/app/queries/{keys.ts,useJob.ts,useJobList.ts,useProviders.ts,media.ts}`, `F/src/routes/layerRules.test.ts`의 동일 Domain 타입 공유 허용, `docs/xHuman/frontend.md`.
 
 **Interfaces:** C# records와 camelCase·nullable을 맞춘다. `startSpriteJob(input:StartSpriteJobInput,signal?:AbortSignal):Promise<SpriteAccepted>`와 `updateSpritePlan / approveSpritePlan / approveSpriteBases / regenerateSpriteFrame / approveSpriteAsset / exportSprites`는 Task 10의 요청을 사용한다. StartSpriteJobInput은 upload/source pair의 discriminated union과 공통 settings/model/requestId다. `SpriteMutationContext={jobId:string;requestId:string;expectedRevision:number}`, `SpriteAccepted={id:string;status:JobStatus;revision:number;taskIds:string[]}`.
 
-- [ ] API 요청 본문과 순수 규칙을 Vitest로 검증한다.
+- [x] API 요청 본문과 순수 규칙을 Vitest로 검증한다.
 
 ```typescript
 it('legacy productionMode defaults to threeD without inferring mesh', () => {
@@ -459,11 +459,11 @@ it('job list caches separate modes and limits', () => {
 })
 ```
 
-- [ ] `pnpm --filter @nextend/frontend test src/domain/sprites/rules.test.ts src/infra/api/spriteApi.test.ts`로 실패를 확인한다.
-- [ ] `productionModeOf(job:{productionMode?:ProductionMode}):ProductionMode`를 domain에 둔다. 기존 apiRequest 봉투 처리를 재사용하며 HTTP 실패나 알 수 없는 sprite 값을 빈 상태로 숨기지 않는다. `getJob` 응답 경계에서 신규 필드의 enum·필수 필드·배열을 검사하는 `readSpriteJob(raw: unknown): Job`를 `domain/sprites/types.ts`에 두며, legacy 누락만 ThreeD/null로 읽는다.
-- [ ] `listJobs(filter,limit,signal,productionMode?)`, `useJobList(filter,limit,productionMode?)`, `queryKeys.jobList(filter,limit=10,productionMode?)`를 맞춘다. 기존 키의 limit 누락도 이 호출 변경에서 함께 보완한다. job 상세는 기존 jobId key를 공유하며 mutation 성공/409 재조회는 job과 jobLists를 invalidate한다.
-- [ ] 같은 본문의 통신 재전송은 requestId를 유지하고 사용자 새 동작에만 crypto.randomUUID()를 만든다. 자동 mutation retry를 추가하지 않는다. useJob의 기존 status polling을 확장해 pendingReview와 실행 중 task 결과를 빠뜨리지 않게 한다. useJobList의 실패→빈 성공 fallback을 제거하고 error/isError를 반환한다. useJob의 isNotFound는 실제 HTTP 404만 의미하며 연결·계약 오류는 별도 반환한다.
-- [ ] 같은 테스트와 `backendParity.test.ts / jobApi.test.ts`, `pnpm typecheck`를 통과시키고 문서와 `feat(frontend): add typed sprite api and queries`로 커밋한다.
+- [x] `pnpm --filter @nextend/frontend test src/domain/sprites/rules.test.ts src/infra/api/spriteApi.test.ts`로 실패를 확인한다.
+- [x] `productionModeOf(job:{productionMode?:ProductionMode}):ProductionMode`를 domain에 둔다. 기존 apiRequest 봉투 처리를 재사용하며 HTTP 실패나 알 수 없는 sprite 값을 빈 상태로 숨기지 않는다. `getJob` 응답 경계에서 신규 필드의 enum·필수 필드·배열을 검사하는 `readSpriteJob(raw: unknown): Job`를 `domain/sprites/types.ts`에 두며, legacy 누락만 ThreeD/null로 읽는다.
+- [x] `listJobs(filter,limit,signal,productionMode?)`, `useJobList(filter,limit,productionMode?)`, `queryKeys.jobList(filter,limit=10,productionMode?)`를 맞춘다. 기존 키의 limit 누락도 이 호출 변경에서 함께 보완한다. job 상세는 기존 jobId key를 공유하며 mutation 성공/409 재조회는 job과 jobLists를 invalidate한다.
+- [x] 같은 본문의 통신 재전송은 requestId를 유지하고 사용자 새 동작에만 crypto.randomUUID()를 만든다. 자동 mutation retry를 추가하지 않는다. useJob의 기존 status polling을 확장해 pendingReview와 실행 중 task 결과를 빠뜨리지 않게 한다. useJobList의 실패→빈 성공 fallback을 제거하고 error/isError를 반환한다. useJob의 isNotFound는 실제 HTTP 404만 의미하며 연결·계약 오류는 별도 반환한다. 기존 useProviders의 실패→빈 성공 fallback도 제거하고 error/isError/refetch를 노출해 새 입력과 후속 기존 스튜디오가 정상 빈 공급자와 조회 실패를 구분한다.
+- [x] 같은 테스트와 `backendParity.test.ts / jobApi.test.ts`, `pnpm typecheck`를 통과시키고 문서와 `feat(frontend): add typed sprite api and queries`로 커밋한다.
 
 ## Task 12: 정적 2D 배경 스튜디오
 
