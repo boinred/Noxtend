@@ -27,6 +27,16 @@
 - Factory·어댑터·기록: `apps/backend/Noxtend.Infrastructure/Image/`
 - 호출·응답 검증: `apps/backend/Noxtend.Tests/Application/RunGenerationTaskHandlerTests.cs`, `ImageProviderUsageTests.cs`
 
+### 스프라이트 이미지 검증·정규화
+
+`IImageTranscoder.InspectSpriteAsync`는 MIME 문자열 대신 PNG·JPEG·WebP 디코딩 결과를 검사한다. 입력 바이트는 비seek 스트림에서도 지정 상한+1바이트까지만 읽고, 64비트 픽셀 곱과 최대 16,777,216픽셀을 비트맵 할당 전에 확인한다. 잘린 디코딩·전체 투명 이미지·지원하지 않는 형식은 `ProviderBadResponseException`으로 실패한다. 원본 업로드는 호출자가 12 MiB를 지정하며 생성 응답·PNG 결과는 32 MiB 상한을 적용한다.
+
+`NormalizeSpriteAsync`는 EXIF 방향을 적용한 뒤 전달된 `SpriteCanvas`·`SpriteTransform`으로 배치한다. 프레임별 콘텐츠 경계를 자르거나 중심을 다시 계산하지 않는다. 투명 요구는 패딩·다이아몬드 마스크를 적용하기 전 실제 원본 알파로 확인한다. 출력은 알파를 유지한 PNG이며 다이아몬드 셀 밖은 투명하고 마스크 뒤 전체가 빈 결과는 거부한다. 입력 스트림은 호출자가 소유하고 반환 스트림은 position 0에서 읽고 닫는다. 취소는 `OperationCanceledException`으로 전파한다.
+
+- 계약·값: `apps/backend/Noxtend.Domain/Ports/IImageTranscoder.cs`, `Noxtend.Domain/Sprites/SpriteTypes.cs`의 `SpriteImageInfo`
+- 구현: `apps/backend/Noxtend.Infrastructure/Mesh/SkiaImageTranscoder.Sprites.cs`; EXIF 좌표 변환은 기존 `SkiaImageTranscoder.cs`와 공유
+- 픽셀·자원 상한 회귀: `apps/backend/Noxtend.Tests/Infrastructure/SpritePixelTests.cs`, 기존 `SkiaImageTranscoderTests.cs`
+
 ## 프롬프트·공급자 규칙
 
 - 현재 공급자와 기능 조합은 `apps/backend/Noxtend.Domain/Provider/ProviderCapability.cs`, 텍스트 `LlmProviderFactory`, 이미지 `ImageProviderFactory`, 각 모델 목록에서 확인한다. 공급자 이름만으로 텍스트·이미지·3D 지원 여부를 가정하지 않는다.

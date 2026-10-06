@@ -15,7 +15,7 @@ namespace Noxtend.Infrastructure.Mesh;
 /// **실제 경로에서는 거의 아무 일도 하지 않는다** (§1.4). 지금 생성되는 이미지는 전부
 /// JPEG 이고 Tripo 가 그대로 받는다. 이 클래스가 실제로 도는 것은 크기를 잴 때뿐이다.
 /// </summary>
-public sealed class SkiaImageTranscoder : IImageTranscoder
+public sealed partial class SkiaImageTranscoder : IImageTranscoder
 {
     public bool IsUploadable(string contentType) => contentType.ToLowerInvariant() switch
     {
@@ -148,8 +148,7 @@ public sealed class SkiaImageTranscoder : IImageTranscoder
                 break;
             case SKEncodedOrigin.LeftTop:
                 canvas.RotateDegrees(90);
-                canvas.Scale(1, -1, source.Width / 2f, source.Height / 2f);
-                canvas.Translate(0, -source.Height);
+                canvas.Scale(1, -1);
                 break;
             case SKEncodedOrigin.RightTop:
                 canvas.RotateDegrees(90);

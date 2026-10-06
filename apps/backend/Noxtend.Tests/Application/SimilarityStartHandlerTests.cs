@@ -436,6 +436,15 @@ public sealed class StubSimilarityPromptCatalog(bool hasPrompt) : IPromptCatalog
 /// <summary>정규화 통과 스텁 — 여기서 보는 것은 배선이지 픽셀 처리가 아니다.</summary>
 public sealed class PassThroughTranscoder : Noxtend.Domain.Ports.IImageTranscoder
 {
+    public Task<Noxtend.Domain.Sprites.SpriteImageInfo> InspectSpriteAsync(
+        Stream image, long maxBytes, long maxPixels, CancellationToken ct)
+        => throw new NotSupportedException();
+
+    public Task<Stream> NormalizeSpriteAsync(Stream image, Noxtend.Domain.Sprites.SpriteCanvas canvas,
+        Noxtend.Domain.Sprites.SpriteTransform transform, bool requireTransparency,
+        Noxtend.Domain.Sprites.SpriteTileLayout layout, CancellationToken ct)
+        => throw new NotSupportedException();
+
     public bool IsUploadable(string contentType) => true;
 
     public Task<(int Width, int Height)> MeasureAsync(Stream image, CancellationToken ct)
