@@ -1,3 +1,5 @@
+using Noxtend.Domain.Sprites;
+
 namespace Noxtend.Domain.Job;
 
 /// <summary>
@@ -94,6 +96,19 @@ public sealed class PipelineTask
     /// 존재한다는 증거이므로, 이 공정은 의존 없이도 바로 실행 가능하다 (§4.4).
     /// </summary>
     public MeshInputSet? MeshInputs { get; private set; }
+
+    public SpriteFrameInput? SpriteInput { get; private set; }
+    public SpriteExportInput? SpriteExportInput { get; private set; }
+    public Guid? RequestId { get; private set; }
+
+    internal void BindSpriteInput(SpriteFrameInput input) => SpriteInput = input;
+    public void BindSpriteExport(SpriteExportInput input)
+    {
+        if (Status != TaskStatus.Pending || SpriteInput is not null || SpriteExportInput is not null)
+            throw new InvalidOperationException("대기 중인 미연결 공정만 내보내기에 연결할 수 있습니다");
+        SpriteExportInput = input;
+    }
+    public void BindRequest(Guid requestId) => RequestId = requestId;
 
     public TaskStatus Status { get; private set; }
     public int AttemptCount { get; private set; }

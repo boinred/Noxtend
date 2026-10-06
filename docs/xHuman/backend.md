@@ -35,7 +35,11 @@ LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계�
 
 레이어는 원본 비율을 유지하고 긴 변 1024px까지 축소하며 확대하지 않는다. 타일 너비는 64·128·256px이고 아이소메트릭은 2:1 다이아몬드다. 모든 프레임은 동일한 contain 변환을 사용한다. ROI는 유한한 정규화 좌표로 원본 내부에 있어야 하며, 기존 3D `Bounds.IsWithinFrame`의 오차 여유를 바꾸지 않는다. 대상 ID와 순서는 고유해야 하고 이름은 비어 있지 않아야 한다. 순서는 오름차순으로 뒤에서 앞으로이며, 맨 뒤 이외 레이어와 모든 다이아몬드 타일은 투명이 필수다.
 
-관련 검증은 `Noxtend.Tests/Domain/SpriteRulesTests.cs`다. 이 기반은 아직 HTTP·Worker·SQL 저장 경로에 연결되지 않았다. `PipelineJobConfiguration`은 전용 매핑·migration이 연결되기 전까지 `Sprites`와 `ProductionMode`를 명시적으로 제외해 기존 EF 모델을 유지한다.
+`PipelineJob.Sprites.cs`의 `ReplaceSpritePlan`, `ApproveSpritePlan`, `ApproveSpriteBases`, `RegenerateSpriteFrame`, `ApproveSpriteAsset`, `CaptureSpriteExport`가 검수와 고정 입력을 관리한다. 생성 입력 변경은 해당 대상의 `PlanRevision`과 슬롯을 갱신하고, FPS·이름·순서 변경은 이미지·공정을 유지하며 해당 승인만 무효화한다. `ReviewRevision`은 요청의 낡은 검수를 거부하고 no-op에서는 증가하지 않는다. 기준 교체는 후속 프레임과 승인을 무효화하며 삭제된 대상의 이미지·패키지 이력은 `SpritePipelineState`에 보존한다.
+
+`SpriteInputs.cs`의 `SpriteFrameInput.Plan`은 접수 시점의 계획이며 비동기 결과는 `IsCurrentTask`와 `TryAttachSpriteImage`가 대상·슬롯·입력 revision·기준 이미지를 확인해 반영한다. `SpriteManifest.cs`는 파일 좌표 계약이다. 내보내기는 승인된 이미지 snapshot을 고정하며 포함 대상 변경만 패키지 자격을 무효화한다. 대상 추가·삭제는 포함·제외 목록도 변경하므로 모든 기존 패키지 자격을 무효화한다. 정적 대상의 기준 승인만으로 성공하지 않으며 패키지 완료 후 전체 대상이면 성공, 명시적 일부 대상이면 부분 성공이다. 생성 일부 실패에 쓸 이미지가 있으면 검수 대기, 없으면 실패이며 취소는 재개방하지 않는다.
+
+관련 검증은 `Noxtend.Tests/Domain/SpriteRulesTests.cs`, `SpriteLifecycleTests.cs`다. 이 기반은 아직 HTTP·Worker·SQL 저장 경로에 연결되지 않았다. 실제 리스 시도 소유권은 실행기의 최신 공정 재조회와 시도 비교로 연결해야 하며 이미지 생성 시각만으로 보장하지 않는다. `PipelineJobConfiguration`은 전용 매핑·migration이 연결되기 전까지 `Sprites`·`ProductionMode`와 공정의 `SpriteInput`·`SpriteExportInput`·`RequestId`를 명시적으로 제외해 기존 EF 모델을 유지한다.
 
 ## 서버 불변 조건
 

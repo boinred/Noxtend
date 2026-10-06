@@ -275,6 +275,8 @@ public sealed partial class PipelineJob
             return;
         }
 
+        if (ProductionMode == ProductionMode.TwoD) return;
+
         PlanGenerationFanOut();
         PlanMeshFanIn();
     }
@@ -1000,6 +1002,8 @@ public sealed partial class PipelineJob
     /// </summary>
     public bool IsReadyToRun(PipelineTask task, DateTimeOffset now)
     {
+        if (ProductionMode == ProductionMode.TwoD && (IsTerminal || !IsCurrentTask(task))) return false;
+
         if (task.Status != TaskStatus.Pending)
         {
             return false;
@@ -1533,6 +1537,12 @@ public sealed partial class PipelineJob
     /// </summary>
     public void ReconcileFromTasks(DateTimeOffset now)
     {
+        if (ProductionMode == ProductionMode.TwoD)
+        {
+            ReconcileSpriteTasks(now);
+            return;
+        }
+
         if (IsTerminal || _tasks.Count == 0)
         {
             return;

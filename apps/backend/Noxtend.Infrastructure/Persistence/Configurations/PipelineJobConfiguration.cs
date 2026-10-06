@@ -99,6 +99,10 @@ public sealed class PipelineJobConfiguration : IEntityTypeConfiguration<Pipeline
     {
         builder.OwnsMany(j => j.Tasks, task =>
         {
+            // Sprite 전용 매핑 연결 전 기존 모델 유지
+            task.Ignore(t => t.SpriteInput);
+            task.Ignore(t => t.SpriteExportInput);
+            task.Ignore(t => t.RequestId);
             task.ToTable("Tasks");
             task.WithOwner().HasForeignKey(t => t.JobId);
             task.HasKey(t => t.Id);
