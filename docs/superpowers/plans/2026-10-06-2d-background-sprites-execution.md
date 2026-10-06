@@ -306,3 +306,20 @@ Ruling: 과거 임시 Ignore/nav 예외와 모든 중간 suite 재실행 Decline
 Ruling: text 입력·2D character/object·engine importer·provider 과금 exactly-once Declined 항목은 후속/제외 범위로 유지 — 승인된 이미지 기반2D background 제작만 구현 완료로 보고 — 해당 추가 기능과 retry/regen 포함 실제 과금 상한은 제공하지 않음
 
 Ruling: HEAD 이후R62–R64 실제 완료 Declined 항목은 fix wave·최신 전체 회귀·한 번의 scoped re-review가 끝날 때까지 pending — 제안과 구현 검증을 구분 — 수정 실패나 새 breakage가 남으면 final cap 판정에 명시 필요
+
+## 2026-10-07 분석 오버레이 통일
+
+- 실행 방식: Native 직접 구현·독립 리뷰. 사용자 첨부의 기존 분석 UI를 기준으로 같은 공통 컴포넌트를 연결하는 결합된 수정이므로 구현 분담 없이 진행
+- `SpritePlanReview`의 별도 ROI 박스를 `PartsOverlay`로 교체하고 미저장 이름·좌표를 번호 라벨·대상별 색상 박스·앵커에 반영. 숫자 ROI 편집·저장·승인 계약 유지
+- 모바일 캡처에서 기존 퍼센트 간격의 라벨 겹침 확인. 공통 칩을 720px 이하에서 이미지 아래 줄바꿈 목록으로 배치하고 이미지 좌표·편집 프레임 유지
+- RED: 공통 오버레이 누락 및 모바일 긴 이름 겹침을 새 E2E로 각각 재현. GREEN: 새 2D·기존 3D·검수 E2E 12개 통과, 데스크톱·390px 캡처 확인
+- 독립 리뷰의 모바일 겹침 지적 수정 후 재리뷰 완료. 추가 수정 필요 사항 없음
+- 검증: `pnpm test` 422개, `pnpm lint`, `pnpm typecheck`, `pnpm build`, 전체 `pnpm test:e2e` 297개(6.0분) 통과. `pnpm docs:check`·`git diff --check` 통과, 기존 500행 초과 계획 문서 경고 유지
+- 범위: Fake API·Chromium 검증. 실 AI 호출·Backend 변경·배포·Git 작업 미실행
+
+### main PR 통합 전 검증
+
+- Backend build·유료 smoke 제외 전체 회귀 1,556개 통과(실패0·건너뜀0, 6분29초). Backend 소스는 기존 검수 완료 HEAD와 동일
+- Frontend 422개·E2E297개·lint·typecheck·build 통과 결과 유지. 이후 앱 소스 변경 없음
+- 로컬 기동 mock 5개·Bash 문법·커밋 훅 2개·문서/공백 검사 통과. 로컬 실행 개선·개발 API 설정을 포함한 새 변경 독립 검토 완료
+- `origin/main`은 기능 브랜치의 조상이며 대상은 사용자 요청의 `main`. 실제 AI·배포 실행 없이 PR 통합 준비

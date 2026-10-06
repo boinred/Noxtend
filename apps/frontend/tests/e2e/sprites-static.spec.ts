@@ -81,6 +81,65 @@ function storedZip(bytes: Buffer) {
   return files
 }
 
+test('sprite plan uses the shared analysis overlay and reflects draft edits', async ({
+  page,
+}, testInfo) => {
+  await installFakeApi(page, { sprites: {} })
+  await start(page)
+  const overlay = page.getByRole('region', { name: '제작 계획 검수' }).getByTestId('parts-overlay')
+  await expect(overlay).toBeVisible()
+  await expect(overlay.getByTestId('overlay-chip')).toHaveText(['1. 후경 지면', '2. 전경 나무'])
+  await expect(overlay.getByTestId('overlay-anchor')).toHaveCount(2)
+  await expect(overlay.locator('[data-testid="overlay-box"][data-shown="true"]')).toHaveCount(2)
+  const colors = await overlay
+    .getByTestId('overlay-box')
+    .evaluateAll((nodes) => nodes.map((node) => getComputedStyle(node).borderColor))
+  expect(new Set(colors).size).toBe(2)
+
+  await page.getByLabel('대상 이름 1', { exact: true }).fill('고대 석조 교량')
+  await page.getByLabel('ROI w 1', { exact: true }).fill('0.6')
+  await page.getByLabel('ROI x 1', { exact: true }).fill('0.1')
+  const chip = overlay.getByRole('button', { name: '1. 고대 석조 교량', exact: true })
+  await expect(chip).toBeVisible()
+  const image = (await overlay.getByTestId('overlay-image').boundingBox())!
+  const box = (await overlay
+    .locator('[data-testid="overlay-box"][data-part="고대 석조 교량"]')
+    .boundingBox())!
+  expect(box.width / image.width).toBeCloseTo(0.6, 2)
+  expect((box.x - image.x) / image.width).toBeCloseTo(0.1, 2)
+  await chip.focus()
+  await expect(overlay.getByTestId('overlay-chip').nth(1)).toHaveAttribute('data-dimmed', 'true')
+  await page.keyboard.press('Enter')
+  await expect(chip).toHaveAttribute('data-stuck', 'true')
+  await page.keyboard.press('Enter')
+  await expect(chip).toHaveAttribute('data-stuck', 'false')
+  await chip.blur()
+  await overlay.screenshot({ path: testInfo.outputPath('sprite-overlay-desktop.png') })
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' })
+  const longName = '절벽 가장자리의 고대 석조 기둥과 오벨리스크'
+  await page.getByLabel('대상 이름 1', { exact: true }).fill(longName)
+  const mobileChip = overlay.getByRole('button', { name: `1. ${longName}`, exact: true })
+  await expect(mobileChip).toBeVisible()
+  const mobileImage = (await overlay.getByTestId('overlay-image').boundingBox())!
+  const mobileLabel = (await mobileChip.boundingBox())!
+  expect(mobileLabel.x + mobileLabel.width).toBeLessThanOrEqual(
+    mobileImage.x + mobileImage.width + 1,
+  )
+  const otherLabel = (await overlay
+    .getByRole('button', { name: '2. 전경 나무', exact: true })
+    .boundingBox())!
+  const overlapping =
+    mobileLabel.x < otherLabel.x + otherLabel.width &&
+    mobileLabel.x + mobileLabel.width > otherLabel.x &&
+    mobileLabel.y < otherLabel.y + otherLabel.height &&
+    mobileLabel.y + mobileLabel.height > otherLabel.y
+  expect(overlapping).toBe(false)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+  await overlay.screenshot({ path: testInfo.outputPath('sprite-overlay-mobile.png') })
+})
+
 for (const view of ['sideView', 'topDown', 'isometric'])
   for (const kind of ['layers', 'tiles']) {
     test(`static ${view} ${kind} requires plan and base review before export`, async ({

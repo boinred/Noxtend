@@ -9,7 +9,7 @@ import {
 import type { JobTask } from '@/domain/job/types'
 import { Button } from '@/components/ui/button'
 import { backgroundStyles } from '../background/backgroundStyles'
-import { sourceImageUrl } from '@/app/queries/media'
+import { PartsOverlay } from '../background/PartsOverlay'
 import { useUpdateSpritePlan, useApproveSpritePlan } from '@/app/queries/useSprites'
 import { useModelPrices } from '@/app/queries/useTuning'
 import { apiErrorMessage, apiErrorStatus } from '@/app/queries/errors'
@@ -106,26 +106,16 @@ export function SpritePlanReview({
         이름·순서·FPS 저장은 이미지를 생성하지 않습니다. 생성 입력 변경은 해당 결과와 승인을
         무효화하고 계획 재검수가 필요합니다.
       </p>
-      <div
-        className={styles.preview}
-        style={{ aspectRatio: `${sprite.sourceCanvas.width}/${sprite.sourceCanvas.height}` }}
-      >
-        <img src={sourceImageUrl(sourceImageId)} alt="원본 영역 검수" className="block w-full" />
-        {plans.map((p) => (
-          <span
-            key={p.id}
-            className={styles.roi}
-            style={{
-              left: `${p.sourceBounds.x * 100}%`,
-              top: `${p.sourceBounds.y * 100}%`,
-              width: `${p.sourceBounds.w * 100}%`,
-              height: `${p.sourceBounds.h * 100}%`,
-            }}
-          >
-            {p.name}
-          </span>
-        ))}
-      </div>
+      <PartsOverlay
+        sourceImageId={sourceImageId}
+        parts={plans.map((plan, index) => ({
+          id: plan.id,
+          name: plan.name,
+          label: `${index + 1}. ${plan.name}`,
+          placements: [plan.sourceBounds],
+        }))}
+        alwaysShowBoxes
+      />
       <div className={styles.stack}>
         {plans.map((p, index) => {
           const active = sprite.assets

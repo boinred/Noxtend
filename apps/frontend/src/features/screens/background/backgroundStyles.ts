@@ -120,10 +120,13 @@ export const backgroundStyles = {
     "absolute z-[1] size-[9px] -translate-x-1/2 -translate-y-1/2 rounded-full shadow-[0_0_0_2px_rgba(255,255,255,0.9),0_1px_3px_rgba(0,0,0,0.4)] transition-opacity duration-[var(--dur-hover)] ease-[var(--ease-out)] data-[dimmed='true']:opacity-30",
   // 겹침을 피해 밀린 칩을 앵커로 되묶는다
   tether:
-    "absolute z-[1] w-[1.5px] -translate-x-1/2 rounded-full opacity-70 transition-opacity duration-[var(--dur-hover)] ease-[var(--ease-out)] data-[dimmed='true']:opacity-[0.16]",
-  chipGroup: 'absolute z-[2] mt-1.5 flex items-center gap-[5px]',
+    "absolute z-[1] w-[1.5px] -translate-x-1/2 rounded-full opacity-70 transition-opacity duration-[var(--dur-hover)] ease-[var(--ease-out)] data-[dimmed='true']:opacity-[0.16] max-[720px]:hidden",
+  chipLayer:
+    'pointer-events-none absolute inset-0 overflow-hidden rounded-xl max-[720px]:static max-[720px]:mt-3 max-[720px]:flex max-[720px]:flex-wrap max-[720px]:gap-2 max-[720px]:overflow-visible',
+  chipGroup:
+    'pointer-events-auto absolute z-[2] mt-1.5 flex max-w-full items-center gap-[5px] max-[720px]:static! max-[720px]:m-0! max-[720px]:transform-none! max-[720px]:flex-row!',
   // 사진 위에 뜨므로 그림자로 경계를 만든다 — 테두리로 그으면 파츠 색과 싸운다
-  chip: "cursor-pointer whitespace-nowrap rounded-[10px] px-[9px] py-1.5 text-[0.71875rem] font-bold leading-none text-white shadow-[0_1px_2px_rgba(0,0,0,0.28),0_4px_10px_rgba(0,0,0,0.22)] transition-[transform,box-shadow,opacity] duration-[var(--dur-hover)] ease-[var(--ease-out)] active:scale-[0.97] data-[dimmed='true']:opacity-[0.34] data-[stuck='true']:outline data-[stuck='true']:outline-2 data-[stuck='true']:outline-offset-1 data-[stuck='true']:outline-white hover:shadow-[0_2px_5px_rgba(0,0,0,0.32),0_10px_24px_rgba(0,0,0,0.3)]",
+  chip: "min-w-0 cursor-pointer whitespace-nowrap rounded-[10px] px-[9px] py-1.5 text-[0.71875rem] font-bold leading-none text-white shadow-[0_1px_2px_rgba(0,0,0,0.28),0_4px_10px_rgba(0,0,0,0.22)] transition-[transform,box-shadow,opacity] duration-[var(--dur-hover)] ease-[var(--ease-out)] active:scale-[0.97] data-[dimmed='true']:opacity-[0.34] data-[stuck='true']:outline data-[stuck='true']:outline-2 data-[stuck='true']:outline-offset-1 data-[stuck='true']:outline-white hover:shadow-[0_2px_5px_rgba(0,0,0,0.32),0_10px_24px_rgba(0,0,0,0.3)] max-[720px]:max-w-full! max-[720px]:whitespace-normal! max-[720px]:break-words",
   // 파츠 색과 구분돼야 다른 동작임이 읽힌다
   chipJump:
     'cursor-pointer whitespace-nowrap rounded-[10px] bg-black/70 px-2 py-1.5 text-[0.6875rem] font-bold leading-none text-white shadow-[0_1px_2px_rgba(0,0,0,0.28),0_4px_10px_rgba(0,0,0,0.22)] transition-transform duration-[var(--dur-hover)] ease-[var(--ease-out)] active:scale-[0.97]',

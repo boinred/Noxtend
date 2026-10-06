@@ -199,216 +199,232 @@ export function PartsOverlay({
 
   return (
     <div className={styles.overlay} data-testid="parts-overlay">
-      <div ref={frameRef} className={styles.overlayFrame} {...frameProps}>
-        {/*
+      <div className="relative">
+        <div ref={frameRef} className={styles.overlayFrame} {...frameProps}>
+          {/*
           브라우저 기본 이미지 드래그를 끈다. 켜져 있으면 사각형을 그리려고 끄는 순간
           네이티브 드래그가 시작돼 mouseup 이 문서까지 오지 않는다 — 검수 화면에서
           그린 상자는 남는데 겹침 조회가 영영 안 나갔다
         */}
-        <img
-          className={styles.overlayImage}
-          src={sourceImageUrl(sourceImageId)}
-          alt=""
-          draggable={false}
-          data-testid="overlay-image"
-        />
+          <img
+            className={styles.overlayImage}
+            src={sourceImageUrl(sourceImageId)}
+            alt=""
+            draggable={false}
+            data-testid="overlay-image"
+          />
 
-        {/* 수평선 — 지면에 물체를 놓는 기준이다. 좌표가 맞는지 볼 때 가장 먼저 보는 선 */}
-        {scene ? (
-          <div
-            className={styles.horizon}
-            style={{ top: `${scene.camera.horizonY * 100}%` }}
-            data-testid="overlay-horizon"
-          >
-            <span>수평선 {scene.camera.horizonY.toFixed(2)}</span>
-          </div>
-        ) : null}
+          {/* 수평선 — 지면에 물체를 놓는 기준이다. 좌표가 맞는지 볼 때 가장 먼저 보는 선 */}
+          {scene ? (
+            <div
+              className={styles.horizon}
+              style={{ top: `${scene.camera.horizonY * 100}%` }}
+              data-testid="overlay-horizon"
+            >
+              <span>수평선 {scene.camera.horizonY.toFixed(2)}</span>
+            </div>
+          ) : null}
 
-        {placed.map(({ part, color, anchor, top }) => {
-          const isShown = shown === part.id
-          const isDimmed = shown !== null && !isShown
-          const flip = anchor.x > FLIP_AT
+          {placed.map(({ part, color }) => {
+            const isShown = shown === part.id
+            const isDimmed = shown !== null && !isShown
 
-          return (
-            <div key={part.id}>
-              {/* 배치마다 상자 하나. 지목했을 때만 보인다 — 평소에 다 그리면 원래 문제로 돌아간다 */}
-              {part.placements.map((raw, index) => {
-                // 끄는 중인 배치는 서버 좌표 대신 미리보기로 그린다
-                const box =
-                  editing?.preview &&
-                  editing.preview.partId === part.id &&
-                  editing.preview.ordinal === index
-                    ? editing.preview.bounds
-                    : raw
+            return (
+              <div key={part.id}>
+                {/* 배치마다 상자 하나. 지목했을 때만 보인다 — 평소에 다 그리면 원래 문제로 돌아간다 */}
+                {part.placements.map((raw, index) => {
+                  // 끄는 중인 배치는 서버 좌표 대신 미리보기로 그린다
+                  const box =
+                    editing?.preview &&
+                    editing.preview.partId === part.id &&
+                    editing.preview.ordinal === index
+                      ? editing.preview.bounds
+                      : raw
 
-                return (
-                  <div
-                    key={index}
-                    className={styles.box}
-                    data-shown={isShown || alwaysShowBoxes}
-                    data-testid="overlay-box"
-                    data-part={part.name}
-                    style={{
-                      left: `${box.x * 100}%`,
-                      top: `${box.y * 100}%`,
-                      width: `${box.w * 100}%`,
-                      height: `${box.h * 100}%`,
-                      borderColor: color,
-                      // 지목한 것만 제 색으로. 스물다섯 개가 전부 진하면 어느 것을 보고
-                      // 있는지 알 수 없다 — 나머지는 옅게 깔아 위치만 남긴다
-                      opacity: alwaysShowBoxes && !isShown ? 0.32 : 1,
-                    }}
-                  />
-                )
-              })}
+                  return (
+                    <div
+                      key={index}
+                      className={styles.box}
+                      data-shown={isShown || alwaysShowBoxes}
+                      data-testid="overlay-box"
+                      data-part={part.name}
+                      style={{
+                        left: `${box.x * 100}%`,
+                        top: `${box.y * 100}%`,
+                        width: `${box.w * 100}%`,
+                        height: `${box.h * 100}%`,
+                        borderColor: color,
+                        // 지목한 것만 제 색으로. 스물다섯 개가 전부 진하면 어느 것을 보고
+                        // 있는지 알 수 없다 — 나머지는 옅게 깔아 위치만 남긴다
+                        opacity: alwaysShowBoxes && !isShown ? 0.32 : 1,
+                      }}
+                    />
+                  )
+                })}
 
-              {/*
+                {/*
                 손잡이는 **지목한 파츠에만** 붙인다. 스물다섯 개 상자에 전부 달면 화면이
                 점으로 덮이고, 어느 상자를 고치는 중인지도 알 수 없다.
               */}
-              {editing && isShown
-                ? part.placements.map((raw, index) => {
-                    const box =
-                      editing.preview &&
-                      editing.preview.partId === part.id &&
-                      editing.preview.ordinal === index
-                        ? editing.preview.bounds
-                        : raw
-                    const down = (handle: OverlayHandle) => (event: ReactMouseEvent) => {
-                      // 프레임의 "새 사각형 그리기" 가 같은 mousedown 을 먹으면 안 된다
-                      event.stopPropagation()
-                      event.preventDefault()
-                      editing.onHandleDown(part.id, index, box, handle, event)
-                    }
+                {editing && isShown
+                  ? part.placements.map((raw, index) => {
+                      const box =
+                        editing.preview &&
+                        editing.preview.partId === part.id &&
+                        editing.preview.ordinal === index
+                          ? editing.preview.bounds
+                          : raw
+                      const down = (handle: OverlayHandle) => (event: ReactMouseEvent) => {
+                        // 프레임의 "새 사각형 그리기" 가 같은 mousedown 을 먹으면 안 된다
+                        event.stopPropagation()
+                        event.preventDefault()
+                        editing.onHandleDown(part.id, index, box, handle, event)
+                      }
 
-                    return (
-                      <div key={index}>
-                        {/* 안쪽을 잡으면 통째로 이동 */}
-                        <div
-                          className={styles.handleBody}
-                          data-testid="overlay-handle-body"
-                          style={{
-                            left: `${box.x * 100}%`,
-                            top: `${box.y * 100}%`,
-                            width: `${box.w * 100}%`,
-                            height: `${box.h * 100}%`,
-                          }}
-                          onMouseDown={down('body')}
-                        />
-                        {HANDLES.map((handle) => (
+                      return (
+                        <div key={index}>
+                          {/* 안쪽을 잡으면 통째로 이동 */}
                           <div
-                            key={handle.id}
-                            className={styles.handle}
-                            data-testid="overlay-handle"
-                            data-handle={handle.id}
+                            className={styles.handleBody}
+                            data-testid="overlay-handle-body"
                             style={{
-                              left: `${(box.x + box.w * handle.x) * 100}%`,
-                              top: `${(box.y + box.h * handle.y) * 100}%`,
-                              cursor: handle.cursor,
+                              left: `${box.x * 100}%`,
+                              top: `${box.y * 100}%`,
+                              width: `${box.w * 100}%`,
+                              height: `${box.h * 100}%`,
                             }}
-                            onMouseDown={down(handle.id)}
+                            onMouseDown={down('body')}
                           />
-                        ))}
-                      </div>
-                    )
-                  })
-                : null}
+                          {HANDLES.map((handle) => (
+                            <div
+                              key={handle.id}
+                              className={styles.handle}
+                              data-testid="overlay-handle"
+                              data-handle={handle.id}
+                              style={{
+                                left: `${(box.x + box.w * handle.x) * 100}%`,
+                                top: `${(box.y + box.h * handle.y) * 100}%`,
+                                cursor: handle.cursor,
+                              }}
+                              onMouseDown={down(handle.id)}
+                            />
+                          ))}
+                        </div>
+                      )
+                    })
+                  : null}
 
-              {/* 앵커 점 — 점의 개수가 곧 "몇 개 있는가" 라는 정보다 */}
-              {part.placements.map((box, index) => (
-                <div
-                  key={index}
-                  className={styles.anchor}
-                  data-dimmed={isDimmed}
-                  data-testid="overlay-anchor"
-                  style={{
-                    left: `${(box.x + box.w / 2) * 100}%`,
-                    top: `${(box.y + box.h / 2) * 100}%`,
-                    background: color,
-                    // 표시용 점이다. 이벤트를 받으면 상자 한가운데를 덮어 클릭을 가로채고,
-                    // 검수 화면에서는 그 자리에서 새 사각형을 그리기 시작할 수도 없다
-                    pointerEvents: 'none',
-                  }}
-                />
-              ))}
+                {/* 앵커 점 — 점의 개수가 곧 "몇 개 있는가" 라는 정보다 */}
+                {part.placements.map((box, index) => (
+                  <div
+                    key={index}
+                    className={styles.anchor}
+                    data-dimmed={isDimmed}
+                    data-testid="overlay-anchor"
+                    style={{
+                      left: `${(box.x + box.w / 2) * 100}%`,
+                      top: `${(box.y + box.h / 2) * 100}%`,
+                      background: color,
+                      // 표시용 점이다. 이벤트를 받으면 상자 한가운데를 덮어 클릭을 가로채고,
+                      // 검수 화면에서는 그 자리에서 새 사각형을 그리기 시작할 수도 없다
+                      pointerEvents: 'none',
+                    }}
+                  />
+                ))}
+              </div>
+            )
+          })}
 
-              {/* 밀려난 만큼만 선을 긋는다 — 안 밀렸으면 없는 편이 조용하다 */}
-              {Math.abs(top - anchor.y) > 0.3 ? (
-                <div
-                  className={styles.tether}
-                  data-dimmed={isDimmed}
-                  data-testid="overlay-tether"
-                  style={{
-                    left: `${Math.min(96, Math.max(4, anchor.x))}%`,
-                    top: `${Math.min(anchor.y, top)}%`,
-                    // 칩 위까지 확실히 닿게 몇 px 더 그린다. 남는 부분은 칩 뒤로 들어간다 —
-                    // %로만 계산하면 반올림·여백 때문에 선과 칩 사이가 벌어져 보인다
-                    height: `calc(${Math.abs(top - anchor.y)}% + 10px)`,
-                    background: color,
-                  }}
-                />
-              ) : null}
+          {children}
+        </div>
 
-              {/*
+        <div className={styles.chipLayer}>
+          {placed.map(({ part, color, anchor, top }) => {
+            const isDimmed = shown !== null && shown !== part.id
+            const flip = anchor.x > FLIP_AT
+
+            return (
+              <div key={part.id} className="min-w-0 max-w-full">
+                {/* 밀려난 만큼만 선을 긋는다 — 안 밀렸으면 없는 편이 조용하다 */}
+                {Math.abs(top - anchor.y) > 0.3 ? (
+                  <div
+                    className={styles.tether}
+                    data-dimmed={isDimmed}
+                    data-testid="overlay-tether"
+                    style={{
+                      left: `${Math.min(96, Math.max(4, anchor.x))}%`,
+                      top: `${Math.min(anchor.y, top)}%`,
+                      // 칩 위까지 확실히 닿게 몇 px 더 그린다. 남는 부분은 칩 뒤로 들어간다 —
+                      // %로만 계산하면 반올림·여백 때문에 선과 칩 사이가 벌어져 보인다
+                      height: `calc(${Math.abs(top - anchor.y)}% + 10px)`,
+                      background: color,
+                    }}
+                  />
+                ) : null}
+
+                {/*
                 칩과 "이동" 을 한 자리에 묶는다 — `<button>` 안에 `<button>` 을 넣을 수 없다.
                 오른쪽 끝 파츠는 그룹째 뒤집혀 화면 밖으로 나가지 않는다
               */}
-              <div
-                className={styles.chipGroup}
-                style={{
-                  // 프레임 밖으로 나가지 않게 가둔다. 겹침 회피가 세로로만 밀기 때문에
-                  // 파츠가 많으면 아래쪽 칩이 프레임을 넘어가 영영 안 보인다
-                  left: `${Math.min(96, Math.max(4, anchor.x))}%`,
-                  top: `${top}%`,
-                  transform: flip ? 'translate(-100%, 0)' : undefined,
-                  // 선이 끝난 자리에서 칩이 바로 시작하게 한다 — 여백이 남으면 선과 칩이
-                  // 따로 떠 있는 것으로 보인다
-                  marginTop: 0,
-                  marginLeft: flip ? -2 : 2,
-                  flexDirection: flip ? 'row-reverse' : 'row',
-                }}
-              >
-                <button
-                  type="button"
-                  className={styles.chip}
-                  data-dimmed={isDimmed}
-                  data-stuck={stuck === part.id}
-                  data-testid="overlay-chip"
+                <div
+                  className={styles.chipGroup}
                   style={{
-                    background: color,
-                    // 검수 화면은 칩에 가림 관계까지 실어 여러 줄이 된다. 배경 결과
-                    // 화면은 한 줄짜리라 기존대로 둔다
-                    ...(alwaysShowBoxes
-                      ? { whiteSpace: 'normal' as const, maxWidth: 260, textAlign: 'left' as const }
-                      : {}),
+                    // 프레임 밖으로 나가지 않게 가둔다. 겹침 회피가 세로로만 밀기 때문에
+                    // 파츠가 많으면 아래쪽 칩이 프레임을 넘어가 영영 안 보인다
+                    left: `${Math.min(96, Math.max(4, anchor.x))}%`,
+                    top: `${top}%`,
+                    transform: flip ? 'translate(-100%, 0)' : undefined,
+                    // 선이 끝난 자리에서 칩이 바로 시작하게 한다 — 여백이 남으면 선과 칩이
+                    // 따로 떠 있는 것으로 보인다
+                    marginTop: 0,
+                    marginLeft: flip ? -2 : 2,
+                    flexDirection: flip ? 'row-reverse' : 'row',
                   }}
-                  onMouseEnter={() => setHovered(part.id)}
-                  onMouseLeave={() => setHovered(null)}
-                  onFocus={() => setHovered(part.id)}
-                  onBlur={() => setHovered(null)}
-                  onClick={() => setStuck(stuck === part.id ? null : part.id)}
                 >
-                  {part.label ?? part.name}
-                </button>
-
-                {/* 고정했을 때만 나타난다 — 평소에 붙어 있으면 칩이 두 배로 넓어진다 */}
-                {stuck === part.id && action ? (
                   <button
                     type="button"
-                    className={styles.chipJump}
-                    data-testid="overlay-jump"
-                    aria-label={`${part.label ?? part.name} ${action.label}`}
-                    onClick={() => action.onClick(part.id)}
+                    className={styles.chip}
+                    data-dimmed={isDimmed}
+                    data-stuck={stuck === part.id}
+                    data-testid="overlay-chip"
+                    style={{
+                      background: color,
+                      // 검수 화면은 칩에 가림 관계까지 실어 여러 줄이 된다. 배경 결과
+                      // 화면은 한 줄짜리라 기존대로 둔다
+                      ...(alwaysShowBoxes
+                        ? {
+                            whiteSpace: 'normal' as const,
+                            maxWidth: 260,
+                            textAlign: 'left' as const,
+                          }
+                        : {}),
+                    }}
+                    onMouseEnter={() => setHovered(part.id)}
+                    onMouseLeave={() => setHovered(null)}
+                    onFocus={() => setHovered(part.id)}
+                    onBlur={() => setHovered(null)}
+                    onClick={() => setStuck(stuck === part.id ? null : part.id)}
                   >
-                    {action.label}
+                    {part.label ?? part.name}
                   </button>
-                ) : null}
-              </div>
-            </div>
-          )
-        })}
 
-        {children}
+                  {/* 고정했을 때만 나타난다 — 평소에 붙어 있으면 칩이 두 배로 넓어진다 */}
+                  {stuck === part.id && action ? (
+                    <button
+                      type="button"
+                      className={styles.chipJump}
+                      data-testid="overlay-jump"
+                      aria-label={`${part.label ?? part.name} ${action.label}`}
+                      onClick={() => action.onClick(part.id)}
+                    >
+                      {action.label}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       {placed.length === 0 ? (

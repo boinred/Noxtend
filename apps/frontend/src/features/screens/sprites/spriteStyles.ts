@@ -8,7 +8,6 @@ export const spriteStyles = {
   grid: 'grid min-w-0 grid-cols-2 gap-5 max-[720px]:grid-cols-1',
   field: 'flex min-w-0 flex-col gap-1.5 text-sm text-muted-foreground',
   preview: 'relative w-full overflow-hidden rounded-lg border border-border',
-  roi: 'absolute border-2 border-primary bg-primary/10 text-xs text-foreground',
   asset: 'flex min-w-0 flex-col gap-3 rounded-lg border border-border p-4',
   image: 'h-48 w-full object-contain',
   link: 'text-sm font-semibold text-primary underline underline-offset-4 break-all',
