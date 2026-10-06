@@ -34,6 +34,8 @@ public sealed partial class PipelineJob
         var guard = CheckSpriteMutation(expectedRevision);
         if (!guard.IsSuccess) return guard;
         var state = Sprites!;
+        if (_tasks.Any(t => t.Kind == TaskKind.AnalyzeSprites && !t.IsTerminal && IsCurrentTask(t)))
+            return Result<bool>.Fail(ErrorCode.SpriteBusy, "분석 중에는 계획을 편집할 수 없습니다");
         var validation = SpriteRules.Validate(state.Settings, state.SourceCanvas, plans);
         if (!validation.IsSuccess) return validation;
         var affected = state.Assets.Where(a =>
@@ -141,11 +143,12 @@ public sealed partial class PipelineJob
         if (index > 0 && (asset.ApprovedBaseImageId is null
             || asset.ApprovedBaseImageId != asset.Frames[0].CurrentImageId))
             return Result<SpriteFrameInput>.Fail(ErrorCode.SpriteNotReady, "승인된 기준 이미지가 필요합니다");
+        var reopening = IsTerminal;
         CancelPendingSpriteTasks(assetId, index == 0 ? null : index);
         asset.InvalidateFrame(index);
         Sprites.Touch([assetId]);
         OpenSpriteReview();
-        Status = JobStatus.Running;
+        Status = reopening ? JobStatus.Pending : JobStatus.Running;
         Sprites.SetPhase(index == 0 ? SpritePhase.BaseGeneration : SpritePhase.FrameGeneration);
         return Result<SpriteFrameInput>.Ok(SpriteInput(asset, index));
     }
@@ -202,7 +205,9 @@ public sealed partial class PipelineJob
             return export.Assets.Select(a => a.Id).Concat(export.ExcludedAssetIds).ToHashSet()
                     .SetEquals(Sprites.Assets.Select(a => a.Plan.Id))
                 && export.Assets.All(a => Sprites.Assets.Any(current => current.Plan.Id == a.Id && current.Approval is not null && SameApprovedAsset(current.Approval.Snapshot, a)));
-        return true;
+        return task.Kind != TaskKind.AnalyzeSprites
+            || (Sprites.Phase == SpritePhase.Analyzing && Sprites.Assets.Count == 0
+                && task.Id == _tasks.Where(t => t.Kind == TaskKind.AnalyzeSprites).MaxBy(t => t.Ordinal)?.Id);
     }
 
     public bool TryAttachSpriteImage(SpriteImage image)
@@ -235,10 +240,11 @@ public sealed partial class PipelineJob
             return Result<SpriteExportInput>.Fail(ErrorCode.SpriteNotReady, "내보낼 대상의 최종 승인이 필요합니다");
         if (_tasks.Any(t => t.SpriteExportInput is not null && !t.IsTerminal && IsCurrentTask(t)))
             return Result<SpriteExportInput>.Fail(ErrorCode.SpriteBusy, "내보내기가 진행 중입니다");
+        var reopening = IsTerminal;
         Sprites!.Touch(assetIds.ToArray());
         OpenSpriteReview();
         Sprites.SetPhase(SpritePhase.Packaging);
-        Status = JobStatus.Running;
+        Status = reopening ? JobStatus.Pending : JobStatus.Running;
         return Result<SpriteExportInput>.Ok(new(1, Guid.NewGuid(), Sprites.ReviewRevision,
             Sprites.Settings.View, Sprites.Settings.OutputKind, Sprites.SourceCanvas, Sprites.OutputCanvas,
             Array.AsReadOnly(selected.Value!.OrderBy(a => a.Plan.Order).Select(a => a.Approval!.Snapshot).ToArray()),
@@ -363,6 +369,14 @@ public sealed partial class PipelineJob
         if (tasks.Any(t => !t.IsTerminal))
         {
             UpdateSpriteState();
+            return;
+        }
+        if (exportTask is { Status: TaskStatus.Failed } && IsCurrentTask(exportTask)
+            && Sprites.Images.Count > 0)
+        {
+            Status = JobStatus.PartiallySucceeded;
+            CompletedAt = now;
+            FailureReason = exportTask.FailureReason;
             return;
         }
         if (Sprites.Assets.Count == 0 || Sprites.Assets.All(a => a.Frames.All(f => f.CurrentImageId is null)))

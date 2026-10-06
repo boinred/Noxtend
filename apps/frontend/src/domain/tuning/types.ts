@@ -12,7 +12,8 @@ import type { AssetCategory, TaskKind } from '@/domain/job/types'
  * 프롬프트 슬롯 축 (background-similarity-tuning §7.1) — pipeline TaskKind 에서 분리됐다.
  * 유사도 평가처럼 공정이 아닌 호출의 슬롯이 여기에만 산다. reconstruct 는 LLM 이 없다.
  */
-export type PromptKind = Exclude<TaskKind, 'reconstruct' | 'synthesize'> | 'similarityEvaluate'
+export type PromptKind =
+  Exclude<TaskKind, 'reconstruct' | 'synthesize' | 'packSprites'> | 'similarityEvaluate'
 
 const PROMPT_KIND_LABELS: Record<PromptKind, string> = {
   analyze: '장면 분석',

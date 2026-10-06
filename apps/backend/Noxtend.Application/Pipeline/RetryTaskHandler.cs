@@ -49,7 +49,7 @@ public sealed class RetryTaskHandler(
         {
             return Result<PipelineJob>.Fail(
                 ErrorCode.TaskNotRetryable,
-                "실패한 이미지 생성 또는 3D 제작 공정만 다시 돌릴 수 있습니다");
+                "현재 입력의 실패한 공정만 다시 돌릴 수 있습니다");
         }
 
         await jobs.SaveChangesAsync(ct);

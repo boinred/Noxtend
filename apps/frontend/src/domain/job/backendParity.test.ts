@@ -99,7 +99,7 @@ describe('백엔드 열거형과 프론트 유니온이 일치한다', () => {
       [
         ...backendEnumValues(jobBackend, 'TaskKind')
           .map(toWire)
-          .filter((kind) => !['reconstruct', 'synthesize'].includes(kind)),
+          .filter((kind) => !['reconstruct', 'synthesize', 'packSprites'].includes(kind)),
         'similarityEvaluate',
       ].sort(),
     )

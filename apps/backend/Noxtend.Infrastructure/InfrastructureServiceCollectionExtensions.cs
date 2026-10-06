@@ -274,6 +274,9 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<JobOrchestrator>();
         services.AddScoped<CreateUploadHandler>();
         services.AddScoped<StartJobHandler>();
+        services.AddScoped<Noxtend.Application.Sprites.SpriteCommandsHandler>();
+        services.AddScoped<Noxtend.Application.Sprites.SpritePackageWriter>();
+        services.AddScoped<Noxtend.Application.Sprites.RunSpritePackTaskHandler>();
         services.AddScoped<Noxtend.Application.Sprites.StartSpriteJobHandler>();
         services.AddScoped<Noxtend.Application.Sprites.RunSpriteAnalysisTaskHandler>();
         services.AddScoped<Noxtend.Application.Sprites.RunSpriteGenerationTaskHandler>();

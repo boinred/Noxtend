@@ -151,7 +151,7 @@ public sealed class SpriteAnalysisTests
         Assert.Equal(result.Value!.JobId, duplicate.Value!.JobId);
         Assert.Equal(result.Value.TaskIds, duplicate.Value.TaskIds);
         var conflict = await f.StartSprites.HandleAsync(command with { Settings = command.Settings with { View = SpriteView.TopDown } }, Ct);
-        Assert.Equal(ErrorCode.SpriteRevisionConflict, conflict.ErrorCode);
+        Assert.Equal(ErrorCode.SpriteRequestConflict, conflict.ErrorCode);
     }
 
     [Theory]

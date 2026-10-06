@@ -30,7 +30,7 @@ public sealed class StartSpriteJobHandler(
         command = command with { Model = command.Model.Trim(), ImageModel = command.ImageModel.Trim() };
         var validation = SpriteRules.ValidateSettings(command.Settings, new(1, 1));
         if (!validation.IsSuccess) return Fail(validation.ErrorCode!, validation.ErrorMessage!);
-        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(command)));
+        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { kind = SpriteRequestKind.Create, command })));
 
         // 원본 삭제 이후에도 접수 응답 재사용
         if (await jobs.GetSpriteRequestAsync(command.RequestId, ct) is { } accepted)
@@ -168,6 +168,6 @@ public sealed class StartSpriteJobHandler(
     private static Result<SpriteReceipt> Receipt(SpriteAcceptedRequest request, string fingerprint)
         => request.Kind == SpriteRequestKind.Create && request.Fingerprint == fingerprint
             ? Result<SpriteReceipt>.Ok(request.Receipt)
-            : Fail(ErrorCode.SpriteRevisionConflict, "같은 요청 ID에 다른 본문을 사용할 수 없습니다");
+            : Fail(ErrorCode.SpriteRequestConflict, "같은 요청 ID에 다른 본문을 사용할 수 없습니다");
     private static Result<SpriteReceipt> Fail(string code, string message) => Result<SpriteReceipt>.Fail(code, message);
 }

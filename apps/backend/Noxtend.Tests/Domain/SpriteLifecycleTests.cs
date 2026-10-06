@@ -201,7 +201,8 @@ public sealed class SpriteLifecycleTests
         Assert.Equal(JobStatus.Failed, job.Status);
         var retry = job.RegenerateSpriteFrame(plan.Id, 0, Revision(job));
         Assert.True(retry.IsSuccess);
-        Assert.Equal(JobStatus.Running, job.Status);
+        Assert.Equal(JobStatus.Pending, job.Status);
+        Assert.Null(job.CompletedAt);
         var retryTask = job.PlanTask(TaskKind.Generate, 1);
         job.BindSpriteFrame(retryTask.Id, retry.Value!);
         retryTask.Claim(Now, TimeSpan.FromMinutes(2));

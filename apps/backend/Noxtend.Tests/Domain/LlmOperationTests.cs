@@ -28,10 +28,13 @@ public sealed class LlmOperationTests
     }
 
     /// <summary>Reconstruct 는 LLM 을 부르지 않는다 — 매핑하면 잘못된 기록이 생긴다.</summary>
-    [Fact]
-    public void FromTask_RefusesANonLlmStage()
+    [Theory]
+    [InlineData(TaskKind.Reconstruct)]
+    [InlineData(TaskKind.Synthesize)]
+    [InlineData(TaskKind.PackSprites)]
+    public void FromTask_RefusesANonLlmStage(TaskKind kind)
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => LlmOperation.FromTask(TaskKind.Reconstruct));
+        Assert.Throws<ArgumentOutOfRangeException>(() => LlmOperation.FromTask(kind));
     }
 
     /// <summary>평가 값 100 — pipeline enum 이 늘어도 충돌하지 않는 자리 (§7.1).</summary>

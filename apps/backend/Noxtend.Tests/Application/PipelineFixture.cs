@@ -68,6 +68,9 @@ public sealed class PipelineFixture
             Execution, Clock, Options, GenerationOptions,
             RateLimitGate,
             NullLogger<RunGenerationTaskHandler>.Instance);
+        SpriteCommands = new SpriteCommandsHandler(Jobs, Orchestrator, Providers, Catalog);
+        RunSpritePack = new RunSpritePackTaskHandler(Jobs, Blobs, new SpritePackageWriter(new SkiaImageTranscoder()),
+            Execution, Clock, Options, NullLogger<RunSpritePackTaskHandler>.Instance);
         StartSprites = new StartSpriteJobHandler(Jobs, Images, Blobs, Providers, Catalog, Prompts,
             new SkiaImageTranscoder(), Orchestrator, Clock, NullLogger<StartSpriteJobHandler>.Instance);
         RunSpriteAnalysis = new RunSpriteAnalysisTaskHandler(Images, Blobs, new StubProviderFactory(Llm),
@@ -142,6 +145,8 @@ public sealed class PipelineFixture
     public JobOrchestrator Orchestrator { get; }
     public CreateUploadHandler Upload { get; }
     public StartJobHandler Start { get; }
+    public SpriteCommandsHandler SpriteCommands { get; }
+    public RunSpritePackTaskHandler RunSpritePack { get; }
     public StartSpriteJobHandler StartSprites { get; }
     public RunSpriteAnalysisTaskHandler RunSpriteAnalysis { get; }
     public RunSpriteGenerationTaskHandler RunSpriteGeneration { get; }

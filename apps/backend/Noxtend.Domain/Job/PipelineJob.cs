@@ -1,4 +1,5 @@
 using Noxtend.Domain.Mesh;
+using Noxtend.Domain.Sprites;
 
 namespace Noxtend.Domain.Job;
 
@@ -729,6 +730,26 @@ public sealed partial class PipelineJob
     public bool RetryOutputTask(Guid taskId)
     {
         var task = _tasks.FirstOrDefault(t => t.Id == taskId);
+
+        if (ProductionMode == ProductionMode.TwoD)
+        {
+            if (Status == JobStatus.Canceled || task is not { Status: TaskStatus.Failed }
+                || task.Kind is not (TaskKind.AnalyzeSprites or TaskKind.GenerateSprite or TaskKind.PackSprites)
+                || !IsCurrentTask(task)
+                || (task.SpriteInput is { } input && Sprites!.Assets.Single(a => a.Plan.Id == input.AssetId)
+                    .Frames[input.FrameIndex].CurrentImageId is not null)
+                || (task.Kind == TaskKind.PackSprites && task.Id != _tasks
+                    .Where(t => t.Kind == TaskKind.PackSprites).MaxBy(t => t.Ordinal)?.Id)) return false;
+            var reopening = IsTerminal;
+            task.ResetForManualRetry();
+            Status = reopening ? JobStatus.Pending : JobStatus.Running;
+            CompletedAt = null;
+            FailureReason = null;
+            Sprites!.SetPhase(task.Kind == TaskKind.AnalyzeSprites ? SpritePhase.Analyzing
+                : task.Kind == TaskKind.PackSprites ? SpritePhase.Packaging
+                : task.SpriteInput!.FrameIndex == 0 ? SpritePhase.BaseGeneration : SpritePhase.FrameGeneration);
+            return true;
+        }
 
         // 결과물을 내는 두 단계만 다시 돌릴 수 있다 (§4.7). 3D 재구성이 여기 들어오는
         // 이유는 이미지와 같은 성질이기 때문이다 — 파츠마다 독립이고, 하나를 다시

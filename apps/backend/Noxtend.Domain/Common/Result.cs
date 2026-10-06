@@ -56,6 +56,7 @@ public static class ErrorCode
 
     public const string SpriteSettingsInvalid = "SPRITE_SETTINGS_INVALID";
     public const string SpriteWrongMode = "SPRITE_WRONG_MODE";
+    public const string SpriteRequestConflict = "SPRITE_REQUEST_CONFLICT";
     public const string SpriteRevisionConflict = "SPRITE_REVISION_CONFLICT";
     public const string SpriteBusy = "SPRITE_BUSY";
     public const string SpriteNotReady = "SPRITE_NOT_READY";
