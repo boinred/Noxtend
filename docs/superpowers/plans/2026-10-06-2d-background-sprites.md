@@ -23,7 +23,7 @@
 - 동작 설명은 최대 500자이며 프롬프트 변수로 재해석하지 않고 데이터로 전달한다.
 - ROI는 유한한 정규화 좌표, 양수 넓이·높이, 원본 내부; 레이어 앵커 (0,0), 타일 앵커 셀 중심이다.
 - 원본+승인 기준 이미지를 프레임마다 참조한다. 위상은 `index/frameCount`이며 마지막 프레임을 첫 프레임 복제로 만들지 않는다.
-- 모든 프레임에 같은 캔버스·앵커·contain 변환을 사용한다. 자동 trim·회전·프레임별 재중앙 정렬을 하지 않는다.
+- 모든 프레임에 같은 캔버스·앵커·contain 변환을 사용한다. Order는 back-to-front 오름차순이며 중복을 거부한다. diamond와 맨 뒤 이외 layer는 RequiresTransparency=true가 필수다. 자동 trim·회전·프레임별 재중앙 정렬을 하지 않는다.
 - 생성 응답은 기존 32 MiB 바이트 상한도 유지하며 픽셀·실제 알파·비어 있지 않은 콘텐츠를 검사한다.
 - 투명 지원과 생성 크기는 모델별 확인된 계약만 사용한다. 지원 정보가 없으면 승인 전에 거부한다.
 - SQL 상태가 정본이다. 요청 ID·SHA-256 fingerprint·접수 응답과 상태 변경을 한 트랜잭션에 저장한다.
@@ -128,7 +128,7 @@ Manifest JSON은 camelCase, `coordinateOrigin="topLeft"`, `coordinateUnits="pixe
 
 **Files:** Create `B/Noxtend.Domain/Job/ProductionMode.cs`, `B/Noxtend.Domain/Sprites/{SpriteTypes.cs,SpriteRules.cs,SpritePipelineState.cs}`, `B/Noxtend.Domain/Job/PipelineJob.Sprites.cs`, `B/Noxtend.Tests/Domain/SpriteRulesTests.cs`. Modify `B/Noxtend.Domain/Job/PipelineJob.cs`, `B/Noxtend.Domain/Common/Result.cs`, `docs/xHuman/backend.md`.
 
-**Interfaces:** `SpriteRules.ValidateSettings(SpriteSettings settings, SpriteCanvas source) -> Result<bool>`는 분석 전 입력만 검사한다. 기존 `PipelineJob.Create(...)`는 ThreeD를 만든다. `CreateSprites(Guid sourceImageId, Guid providerConfigId, string model, Guid imageProviderConfigId, string imageModel, SpriteSettings settings, SpriteCanvas sourceCanvas, SpriteCanvas generationCanvas, DateTimeOffset now) -> Result<PipelineJob>`. `SpriteRules.Validate(SpriteSettings settings, SpriteCanvas source, IReadOnlyList<SpriteAssetPlan> assets) -> Result<bool>`, `OutputCanvas(settings, source) -> SpriteCanvas`. 새 작업은 Background·TwoD·Analyzing이고 아직 공정을 만들지 않는다.
+**Interfaces:** `SpriteRules.ValidateSettings(SpriteSettings settings, SpriteCanvas source) -> Result<bool>`는 분석 전 입력만 검사한다. 기존 `PipelineJob.Create(...)`는 ThreeD를 만든다. `CreateSprites(Guid sourceImageId, Guid imageProviderConfigId, string imageModel, SpriteSettings settings, SpriteCanvas sourceCanvas, SpriteCanvas generationCanvas, DateTimeOffset now) -> Result<PipelineJob>`. `SpriteRules.Validate(SpriteSettings settings, SpriteCanvas source, IReadOnlyList<SpriteAssetPlan> assets) -> Result<bool>`, `OutputCanvas(settings, source) -> SpriteCanvas`. 새 작업은 Background·TwoD·Analyzing이고 아직 공정을 만들지 않는다.
 
 - [ ] 아래 테스트와 입력별 Theory를 작성한다. 픽셀·범위·프레임·FPS·대상·notes·64프레임 경계의 바로 안/밖을 모두 검사한다.
 
@@ -147,6 +147,7 @@ Manifest JSON은 camelCase, `coordinateOrigin="topLeft"`, `coordinateUnits="pixe
 - [ ] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpriteRulesTests` 실행; 처음은 신규 심볼 미정의로 실패해야 한다.
 - [ ] 기존 PipelineJob을 partial로 바꾸고 위 타입·검증만 구현한다. 유한값·`X+W<=1`·`Y+H<=1`을 검사하며 기존 3D Bounds의 오차 허용을 바꾸지 않는다. `Transform(SpriteCanvas generation, SpriteCanvas output) -> SpriteTransform`은 순수 계산이므로 여기서 구현해 CreateSprites가 고정 변환을 저장하게 한다. SpriteImage/Export/AcceptedRequest와 그 factory는 Task 2의 입력·manifest 타입과 함께 구현하며 Task 1에는 초기 state 필드만 둔다.
 - [ ] 같은 명령을 재실행해 통과시킨다. `LegacyCreate_WithoutMesh_RemainsThreeD`도 추가하여 기존 생성 경로를 검증한다.
+- [ ] `GeneratedImageRepositoryTests` 등에서 아직 매핑하지 않은 sprite 타입의 EF 자동 탐색 실패가 실제 재현되면 `B/Noxtend.Infrastructure/Persistence/Configurations/PipelineJobConfiguration.cs`에서 Sprites/ProductionMode만 임시 Ignore한다. Task 4가 매핑·migration과 함께 제거하며 영속화 완료로 기록하지 않는다.
 - [ ] backend 문서에 모드와 초기 상한을 동기화하고 이번 파일만 `feat(domain): add sprite production settings`로 커밋한다.
 
 ## Task 2: 슬롯·승인·revision·상태 도메인
@@ -239,7 +240,7 @@ await Assert.ThrowsAsync<DbUpdateException>(() => saveDuplicateRequest);
 ```
 
 - [ ] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpritePersistenceTests`로 실패를 확인한다. Docker가 없으면 환경 제약으로 기록하고 통과로 계산하지 않는다.
-- [ ] Jobs에 nullable owned state, SpriteAssets/Frames/Images/Exports/Requests 테이블을 매핑한다. Jobs/Tasks rowversion을 유지하고 소유 관계·FK·cascade 경로를 SQL로 검증한다. JSON의 image ID·Blob key를 검증 없이 사용하지 않는다.
+- [ ] Task 1의 Sprites/ProductionMode 임시 Ignore가 있으면 제거한다. Jobs에 nullable owned state, SpriteAssets/Frames/Images/Exports/Requests 테이블을 매핑한다. Jobs/Tasks rowversion을 유지하고 소유 관계·FK·cascade 경로를 SQL로 검증한다. JSON의 image ID·Blob key를 검증 없이 사용하지 않는다.
 - [ ] owned request 조회는 Jobs에서 projection으로 수행한다. 이미지·export 이력은 job이 소유하며 제작 대상 제거가 과거 snapshot의 결과를 삭제하지 않게 한다.
 - [ ] `dotnet ef --version`을 확인한다. 도구가 없거나 버전이 다르면 실행 환경의 임시 tool-path에 EF 패키지와 같은 `10.0.10`을 설치해 사용한다. 기존 전역 도구나 저장소 의존성을 바꾸지 않는다.
 - [ ] `dotnet ef migrations add AddSpriteProduction --project apps/backend/Noxtend.Infrastructure --startup-project apps/backend/Noxtend.Api`를 실행하고 생성 SQL을 리뷰한다. DesignTimeDbContextFactory를 사용하며 개발 DB에 update를 실행하지 않는다.
@@ -274,7 +275,7 @@ Assert.DoesNotContain(entries, x => x.Contains("../") || Path.IsPathRooted(x));
 - [ ] `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName~SpriteSheetLayoutTests|FullyQualifiedName~SpritePackageTests'`로 실패를 확인한다.
 - [ ] 페이지를 최대 4096px에 맞추고 Skia에서 한 페이지 canvas와 한 프레임 decode만 유지한다. 회전·trim 없이 2px extrusion을 셀 안에 배치하고 rect에서 padding을 제외한다.
 - [ ] `ZipArchive`와 바이트 상한을 검사하는 write stream을 사용한다. worker가 전달하는 서버 임시 FileStream에 순차 기록하며 ZIP 전체를 MemoryStream에 올리지 않는다. 256MiB 경계는 상한 stream에 chunk를 쓰는 작은 테스트로 확인한다.
-- [ ] `manifest.json`, `layers|tiles/{assetId}.png`, `frames/{assetId}/frame-000.png`, `sheets/{assetId}-000.png`를 생성해 같은 테스트를 통과시킨다. export 계약을 동기화하고 `feat(export): build sprite sheets and bounded zip packages`로 커밋한다.
+- [ ] `manifest.json`, `layers|tiles/asset-{assetId}.png`, `frames/asset-{assetId}/frame-000.png`, `sheets/asset-{assetId}-000.png`를 생성해 같은 테스트를 통과시킨다. export 계약을 동기화하고 `feat(export): build sprite sheets and bounded zip packages`로 커밋한다.
 
 ## Task 6: 모델별 크기·투명 요청·호출 기록
 
@@ -368,7 +369,7 @@ Assert.Equal(1, nonRetryableAttemptCount);
 
 - [ ] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpriteGenerationTests`로 실패를 확인한다.
 - [ ] 원본·고정 base·SpriteFrameInput.Plan snapshot·canvas·phase를 별도 변수로 전달한다. 생성 prompt의 허용 변수는 `settings / asset / frame / sourceCanvas / outputCanvas`이며 JSON 데이터로 삽입한다. 3D ViewDirection을 프레임에 쓰지 않는다. SeedSpriteGeneratePrompt를 생성한다.
-- [ ] 공급자는 기존 Factory·Recording·RateLimitGate를 통과한다. Task 3 이미지 검사·PNG 정규화·Blob 저장→SQL 결과 공개 순서를 지킨다. 미공개 새 Blob만 정리하고 기존 이력을 삭제하지 않는다. FakeImageProvider의 기본 성공·지연 응답은 GenerateSprite 요청일 때 요청 size의 디코딩 가능한 RGBA PNG를 만든다. 기존 12-byte PNG 헤더를 2D 성공 fixture로 쓰지 않고, Returning의 명시적 잘못된 응답은 그대로 유지한다.
+- [ ] 공급자는 기존 Factory·Recording·RateLimitGate를 통과한다. raw 응답의 크기가 고정 GenerationCanvas와 일치하는지 확인하고 불일치는 비재시도 오류로 처리한다. Task 3 이미지 검사·PNG 정규화·Blob 저장→SQL 결과 공개 순서를 지킨다. 미공개 새 Blob만 정리하고 기존 이력을 삭제하지 않는다. FakeImageProvider의 기본 성공·지연 응답은 GenerateSprite 요청일 때 요청 size의 디코딩 가능한 RGBA PNG를 만든다. 기존 12-byte PNG 헤더를 2D 성공 fixture로 쓰지 않고, Returning의 명시적 잘못된 응답은 그대로 유지한다.
 - [ ] 공통 TaskExecution의 commit 직전에 최신 aggregate/task를 reload해 `IsCurrentTask`·canceled를 확인한다. sprite 조건은 Domain에 두며 body/commit 계약을 유지한다. 기존 3D와 병렬 asset 결과 반영을 회귀 검증한다.
 - [ ] GenerateSprite에 기존 GenerationOptions lease와 재시도 한도를 적용하고 ReclaimPlan idle도 해당 lease×2로 정한다. generationWorkers 등록을 재사용하면 3D+2D 합계 동시 실행 수가 늘므로 기존 공급자 RateLimitGate 공유를 테스트한다.
 - [ ] 같은 테스트와 `RunGenerationTaskHandlerTests / JobLifecycleTests / ReclaimPlanTests / ImageProviderUsageTests`를 통과시키고 문서와 `feat(sprites): generate reviewed bases and animation frames`로 커밋한다.
@@ -468,7 +469,7 @@ it('job list caches separate modes and limits', () => {
 
 **Files:** Create `F/src/features/screens/sprites/{SpriteStudioScreen.tsx,SpriteInput.tsx,SpritePlanReview.tsx,SpriteFrameReview.tsx,SpritePreview.tsx,SpriteExport.tsx}`, `F/tests/e2e/{spriteFakeApi.ts,sprites-static.spec.ts}`. Modify `F/src/routes/{paths.ts,index.tsx,prefetch.ts}`, `F/tests/e2e/fakeApi.ts`의 필요한 handler 연결만,`docs/xHuman/frontend.md`.
 
-**Interfaces:** `ROUTES.spriteBackground='/2d/background'`, `spriteBackgroundJob='/2d/background/:jobId'`. Studio는 URL jobId와 useJob/useSprites를 사용한다. Preview props는 `{sprite:SpriteState;timeMs:number;playing:boolean}`이며 Export는 승인된 asset ID를 받는다. 편집 draft·재생 위치 외의 단계 상태는 job 응답에서 도출한다.
+**Interfaces:** `ROUTES.spriteBackground='/2d/background'`, `spriteBackgroundJob='/2d/background/:jobId'`. Studio는 URL jobId와 useJob/useSprites를 사용한다. Preview props는 `{sprite:SpriteState;timeMs:number;playing:boolean}`이며 Export는 승인된 asset ID를 받는다. 정적 3×3 square/diamond 반복의 tileOffsets는 기존 rules.ts에 먼저 구현하고 Task 13이 재사용한다. 편집 draft·재생 위치 외의 단계 상태는 job 응답에서 도출한다.
 
 - [ ] 기존 `installFakeApi(page,options)`에 작은 sprite 시나리오를 연결한다. 정적 fixture의 접수/분석/승인/결과/export 응답과 요청 기록은 새 파일에 둔다.
 
@@ -490,7 +491,7 @@ test('static layers require plan and base review before export', async ({ page }
 
 **Files:** Create `F/src/domain/sprites/{playback.ts,playback.test.ts}`, `F/tests/e2e/sprites-animation.spec.ts`. Modify Task 12의 sprite components/fake,`docs/xHuman/frontend.md`.
 
-**Interfaces:** `frameAt(timeMs:number,fps:number,frameCount:number):number`, `tileOffsets(view:SpriteView,canvas:SpriteCanvas,repeat:SpriteRepeat):readonly {x:number;y:number}[]`는 순수 계산이다. UI는 대상별 loop/frameCount/notes/FPS, current image ID와 승인 snapshot을 사용한다. 재생 중에만 requestAnimationFrame을 쓰고 reduced-motion의 초기 상태는 paused다.
+**Interfaces:** `frameAt(timeMs:number,fps:number,frameCount:number):number`는 순수 계산이며 `tileOffsets(view:SpriteView,canvas:SpriteCanvas,repeat:SpriteRepeat):readonly {x:number;y:number}[]`는 Task 12의 rules.ts 함수를 재사용한다. UI는 대상별 loop/frameCount/notes/FPS, current image ID와 승인 snapshot을 사용한다. 재생 중에만 requestAnimationFrame을 쓰고 reduced-motion의 초기 상태는 paused다.
 
 - [ ] 순수 함수 테스트와 UI E2E를 먼저 작성한다.
 
