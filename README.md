@@ -139,5 +139,5 @@ dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName!~TripoSmokeTe
 - [제품 방향](PRODUCT.md) · [디자인 시스템](DESIGN.md)
 - [저장소 작업·에이전트 지침](AGENTS.md)
 - [Backend 개발 지침](apps/backend/AGENTS.md) · [Frontend 개발 지침](apps/frontend/AGENTS.md)
-- [LLM·공급자 에이전트 안내](docs/llm/README.md)
+- [LLM·공급자 에이전트 안내](docs/xHuman/README.md)
 - [인프라 개요](docs/infrastructure.md) · [Kubernetes 로컬 실행 안내](deploy/k8s/README.md)

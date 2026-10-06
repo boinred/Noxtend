@@ -25,7 +25,7 @@
 | 코드 작성·수정·디버깅·테스트·리뷰 | [karpathy-guidelines](.agents/skills/karpathy-guidelines/SKILL.md) |
 | 기능·버그 수정·리팩터링·테스트 구현 | [tdd-cycle](.agents/skills/tdd-cycle/SKILL.md): 계획 → 설계 → 구현 → 검증 |
 | Backend | [apps/backend/AGENTS.md](apps/backend/AGENTS.md), [noxtend-workflow](.agents/skills/noxtend-workflow/SKILL.md)의 Backend·검증 자료 |
-| LLM·AI 공급자·프롬프트·호출 내역 | 변경 전 [docs/llm/README.md](docs/llm/README.md)에서 작업별 Backend 자료 선택 |
+| LLM·AI 공급자·프롬프트·호출 내역 | 변경 전 [docs/xHuman/README.md](docs/xHuman/README.md)에서 작업별 Backend 자료 선택 |
 | Frontend·UI·모션 | [apps/frontend/AGENTS.md](apps/frontend/AGENTS.md), [DESIGN.md](DESIGN.md), 위 스킬의 Frontend·검증 자료 |
 | 인프라·Azure·Kubernetes·루트 CI | [deploy/AGENTS.md](deploy/AGENTS.md), 위 스킬의 배포·검증 자료 |
 | PDCA 문서·단계·복구·구현 자동화 | [pdca-cycle](.agents/skills/pdca-cycle/SKILL.md)와 해당 기능의 canonical 문서 |
