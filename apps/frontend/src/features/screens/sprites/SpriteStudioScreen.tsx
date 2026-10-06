@@ -31,8 +31,10 @@ export function SpriteStudioScreen() {
   const cancel = useCancelJob()
   const job = query.job
   const sprite = job?.sprite
+  const currentFrameTasks = new Set(
+    sprite?.assets.flatMap((a) => a.frames.map((f) => f.currentTaskId)),
+  )
   const canceled = job?.status === 'canceled'
-  const active = job?.tasks.some((t) => t.status === 'running' || t.status === 'pending') ?? false
   const packTask = job?.tasks.filter((task) => task.kind === 'packSprites').at(-1)
   const packing =
     sprite?.phase === 'packaging' &&
@@ -109,26 +111,28 @@ export function SpriteStudioScreen() {
                 {job.failureReason}
               </p>
             ) : null}
-            {job.tasks.map((task) => (
-              <div key={task.id} className={styles.row}>
-                <span>
-                  {taskKindLabel(task.kind)} · {jobStatusLabel(task.status)} · 시도{' '}
-                  {task.attemptCount}
-                </span>
-                {task.failureReason ? (
-                  <span className={styles.error}>{task.failureReason}</span>
-                ) : null}
-                {task.status === 'failed' && !canceled ? (
-                  <Button
-                    variant="outline"
-                    disabled={retry.isPending || query.isError}
-                    onClick={() => retry.mutate(task.id)}
-                  >
-                    실패 공정 재시도
-                  </Button>
-                ) : null}
-              </div>
-            ))}
+            {job.tasks
+              .filter((task) => task.kind !== 'generateSprite' || currentFrameTasks.has(task.id))
+              .map((task) => (
+                <div key={task.id} className={styles.row}>
+                  <span>
+                    {taskKindLabel(task.kind)} · {jobStatusLabel(task.status)} · 시도{' '}
+                    {task.attemptCount}
+                  </span>
+                  {task.failureReason ? (
+                    <span className={styles.error}>{task.failureReason}</span>
+                  ) : null}
+                  {task.status === 'failed' && !canceled ? (
+                    <Button
+                      variant="outline"
+                      disabled={retry.isPending || query.isError}
+                      onClick={() => retry.mutate(task.id)}
+                    >
+                      실패 공정 재시도
+                    </Button>
+                  ) : null}
+                </div>
+              ))}
             {retry.error || cancel.error ? (
               <p role="alert" className={styles.error}>
                 {apiErrorMessage(
@@ -141,17 +145,19 @@ export function SpriteStudioScreen() {
               <p role="status">ZIP 패키징 중입니다. 완료된 파일만 다운로드할 수 있습니다.</p>
             ) : null}
           </section>
-          {sprite.phase === 'planReview' && !canceled ? (
+          {sprite.phase !== 'analyzing' && !canceled ? (
             <SpritePlanReview
               key={job.id}
               jobId={job.id}
               sourceImageId={job.sourceImageId}
               sprite={sprite}
               model={job.models.image?.model ?? '모델 미확인'}
-              disabled={active || query.isError}
+              tasks={job.tasks}
+              disabled={packing || query.isError}
             />
           ) : null}
-          {sprite.phase !== 'analyzing' && sprite.phase !== 'planReview' ? (
+          {sprite.phase !== 'analyzing' &&
+          (sprite.phase !== 'planReview' || sprite.images.length > 0) ? (
             <>
               <SpritePreview sprite={sprite} timeMs={0} playing={false} />
               <SpriteFrameReview
@@ -159,14 +165,14 @@ export function SpriteStudioScreen() {
                 jobId={job.id}
                 sprite={sprite}
                 tasks={job.tasks}
-                disabled={canceled || packing || query.isError}
+                disabled={canceled || packing || query.isError || sprite.phase === 'planReview'}
               />
               <SpriteExport
                 key={job.id}
                 jobId={job.id}
                 sprite={sprite}
                 approvedAssetIds={sprite.assets.filter((a) => a.approval !== null).map((a) => a.id)}
-                disabled={canceled || packing || query.isError}
+                disabled={canceled || packing || query.isError || sprite.phase === 'planReview'}
               />
             </>
           ) : null}

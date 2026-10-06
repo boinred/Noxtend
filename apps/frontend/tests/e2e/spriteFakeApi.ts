@@ -19,7 +19,8 @@ export const SPRITE_IDS = {
 const now = '2026-10-06T00:00:00Z'
 export interface SpriteFakeOptions {
   records?: { path: string; body: Record<string, unknown> }[]
-  seed?: 'baseReview' | 'failed' | 'canceled' | 'packFailed' | 'completed' | 'analyzing'
+  seed?:
+    'baseReview' | 'failed' | 'canceled' | 'packFailed' | 'completed' | 'analyzing' | 'frameReview'
   providerErrorOnce?: boolean
   providersEmpty?: boolean
   detailErrorOnce?: boolean
@@ -28,7 +29,9 @@ export interface SpriteFakeOptions {
   priceError?: boolean
   conflictOnce?: boolean
   lostStartOnce?: boolean
+  lostAssetApprovalOnce?: boolean
   approveErrorOnce?: boolean
+  frameStates?: boolean
   runningBase?: boolean
   partialBases?: boolean
   settings?: SpriteSettings
@@ -124,40 +127,36 @@ export function spriteZip(job: Job, included: string[], exportId: string) {
   const files: { name: string; data: Buffer }[] = []
   const assets = sprite.assets.filter((a) => included.includes(a.id))
   const manifestAssets = assets.map((a) => {
-    const imageId = a.frames[0]!.currentImageId!
     const basePath = `${sprite.settings.outputKind}/asset-${a.id}.png`
-    const path = `frames/asset-${a.id}/frame-000.png`,
-      sheetPath = `sheets/asset-${a.id}-000.png`
-    const data = spritePng(sprite, a)
-    files.push(
-      { name: basePath, data },
-      { name: path, data },
-      {
-        name: sheetPath,
-        data: png(sprite.outputCanvas.width + 4, sprite.outputCanvas.height + 4, (x, y) =>
-          framePixel(
-            sprite,
-            a,
-            Math.max(0, Math.min(sprite.outputCanvas.width - 1, x - 2)),
-            Math.max(0, Math.min(sprite.outputCanvas.height - 1, y - 2)),
-          ),
+    const sheetPath = `sheets/asset-${a.id}-000.png`
+    const { width, height } = sprite.outputCanvas
+    const cellWidth = width + 4,
+      cellHeight = height + 4
+    files.push({ name: basePath, data: spritePng(sprite, a) })
+    const frames = a.frames.map((frame) => {
+      const path = `frames/asset-${a.id}/frame-${String(frame.index).padStart(3, '0')}.png`
+      files.push({ name: path, data: spritePng(sprite, a) })
+      return {
+        imageId: frame.currentImageId!,
+        index: frame.index,
+        path,
+        sheetPath,
+        page: 0,
+        rect: { x: frame.index * cellWidth + 2, y: 2, width, height },
+      }
+    })
+    files.push({
+      name: sheetPath,
+      data: png(cellWidth * frames.length, cellHeight, (x, y) =>
+        framePixel(
+          sprite,
+          a,
+          Math.max(0, Math.min(width - 1, (x % cellWidth) - 2)),
+          Math.max(0, Math.min(height - 1, y - 2)),
         ),
-      },
-    )
-    return {
-      asset: a.approval!.snapshot,
-      basePath,
-      frames: [
-        {
-          imageId,
-          index: 0,
-          path,
-          sheetPath,
-          page: 0,
-          rect: { x: 2, y: 2, ...sprite.outputCanvas },
-        },
-      ],
-    }
+      ),
+    })
+    return { asset: a.approval!.snapshot, basePath, frames }
   })
   const input = {
     schemaVersion: 1,
@@ -212,6 +211,7 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
     detailFailure = options.detailErrorOnce ?? false,
     conflict = options.conflictOnce ?? false,
     lost = options.lostStartOnce ?? false,
+    lostAssetApproval = options.lostAssetApprovalOnce ?? false,
     approvalFailure = options.approveErrorOnce ?? false
   function task(kind: JobTask['kind'], status: JobTask['status'] = 'succeeded'): JobTask {
     return {
@@ -308,6 +308,15 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
     sprite.phase = 'baseReview'
     job!.status = 'pendingReview'
     sprite.assets.forEach((a, index) => {
+      if (
+        a.frames[0]?.currentImageId ||
+        job!.tasks.some(
+          (t) =>
+            t.id === a.frames[0]?.currentTaskId &&
+            (t.status === 'running' || t.status === 'pending'),
+        )
+      )
+        return
       const failed = options.partialBases && index === 1
       const running = options.runningBase && index === 1
       const generated = task(
@@ -320,7 +329,11 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
       }
       job!.tasks.push(generated)
       const id = failed || running ? null : guid(4)
-      a.frames = [{ index: 0, currentTaskId: generated.id, currentImageId: id }]
+      a.frames = Array.from({ length: a.plan.loop ? a.plan.frameCount : 1 }, (_, index) => ({
+        index,
+        currentTaskId: index === 0 ? generated.id : null,
+        currentImageId: index === 0 ? id : null,
+      }))
       if (id)
         sprite.images.push({
           id,
@@ -335,28 +348,56 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
         })
     })
   }
+  function generate(asset: SpriteAsset, index: number, status: JobTask['status'] = 'succeeded') {
+    const sprite = job!.sprite!
+    const generated = task('generateSprite', status)
+    job!.tasks.push(generated)
+    const id = status === 'succeeded' ? guid(4) : null
+    asset.frames[index] = { index, currentTaskId: generated.id, currentImageId: id }
+    if (id)
+      sprite.images.push({
+        id,
+        taskId: generated.id,
+        assetId: asset.id,
+        frameIndex: index,
+        planRevision: asset.planRevision,
+        baseImageId: index === 0 ? null : asset.approvedBaseImageId,
+        ...sprite.outputCanvas,
+        contentType: 'image/png',
+        createdAt: now,
+      })
+  }
+  function approveAsset(a: SpriteAsset) {
+    const sprite = job!.sprite!
+    a.approval = {
+      planRevision: a.planRevision,
+      snapshot: {
+        id: a.id,
+        name: a.plan.name,
+        order: a.plan.order,
+        fps: a.plan.fps,
+        loop: a.plan.loop,
+        anchor: a.anchor,
+        repeat: sprite.settings.repeat,
+        layout:
+          sprite.settings.view === 'isometric' && sprite.settings.outputKind === 'tiles'
+            ? 'diamond'
+            : 'square',
+        baseImageId: a.approvedBaseImageId!,
+        imageIds: a.frames.map((f) => f.currentImageId!),
+      },
+    }
+    if (sprite.assets.every((asset) => asset.approval)) sprite.phase = 'exportReady'
+  }
   function approve(ids: string[]) {
     const sprite = job!.sprite!
     for (const a of sprite.assets.filter((a) => ids.includes(a.id))) {
-      const id = a.frames[0]!.currentImageId!
-      a.approvedBaseImageId = id
-      a.approval = {
-        planRevision: a.planRevision,
-        snapshot: {
-          id: a.id,
-          name: a.plan.name,
-          order: a.plan.order,
-          fps: 8,
-          loop: false,
-          anchor: a.anchor,
-          repeat: sprite.settings.repeat,
-          layout:
-            sprite.settings.view === 'isometric' && sprite.settings.outputKind === 'tiles'
-              ? 'diamond'
-              : 'square',
-          baseImageId: id,
-          imageIds: [id],
-        },
+      if (a.approvedBaseImageId === a.frames[0]!.currentImageId) continue
+      a.approvedBaseImageId = a.frames[0]!.currentImageId!
+      if (!a.plan.loop) approveAsset(a)
+      else {
+        a.frames.slice(1).forEach((frame) => generate(a, frame.index))
+        sprite.phase = 'frameReview'
       }
     }
     if (sprite.assets.every((a) => a.approval)) sprite.phase = 'exportReady'
@@ -396,7 +437,24 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
       job.status = 'running'
       job.tasks[0]!.status = 'running'
     } else {
+      if (options.seed === 'frameReview')
+        job.sprite!.assets.forEach((a, index) => {
+          a.plan.loop = true
+          a.plan.frameCount = 8
+          a.plan.fps = index === 0 ? 4 : 8
+        })
       bases()
+      if (options.seed === 'frameReview') {
+        approve(job.sprite!.assets.map((a) => a.id))
+        if (options.frameStates) {
+          const a = job.sprite!.assets[0]!
+          generate(a, 1, 'failed')
+          generate(a, 2, 'running')
+          a.frames[3] = { index: 3, currentTaskId: null, currentImageId: null }
+          job.sprite!.phase = 'frameGeneration'
+          job.status = 'running'
+        }
+      }
       if (options.seed === 'failed') {
         job.status = 'failed'
         job.sprite!.images = []
@@ -524,6 +582,13 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
         if (failed.kind === 'packSprites')
           pack(job.sprite!.assets.filter((a) => a.approval).map((a) => a.id))
         else if (job.sprite!.images.length === 0) bases()
+        else {
+          const a = job.sprite!.assets.find((a) =>
+            a.frames.some((f) => f.currentTaskId === failed.id),
+          )
+          const frame = a?.frames.find((f) => f.currentTaskId === failed.id)
+          if (a && frame) generate(a, frame.index)
+        }
       }
       return ok(route, { id: job.id, status: job.status }, 202)
     }
@@ -557,51 +622,117 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
           approvalFailure = false
           return fail(route, 503, '승인 응답 유실')
         }
+        const sprite = job.sprite!
+        let affectedIds: string[] | null = []
+        if (path.endsWith('/plan')) {
+          const plans = body.assets as SpriteAssetPlan[]
+          affectedIds =
+            plans.length !== sprite.assets.length ||
+            sprite.assets.some((a) => !plans.some((p) => p.id === a.id))
+              ? null
+              : plans
+                  .filter(
+                    (p) => !sprite.assets.some((a) => JSON.stringify(a.plan) === JSON.stringify(p)),
+                  )
+                  .map((p) => p.id)
+        } else if (path.endsWith('/plan/approve')) {
+          affectedIds = sprite.assets.filter((a) => !a.frames[0]?.currentImageId).map((a) => a.id)
+        } else if (path.endsWith('/base/approve')) {
+          affectedIds = sprite.assets
+            .filter(
+              (a) =>
+                (body.assetIds as string[]).includes(a.id) &&
+                a.approvedBaseImageId !== a.frames[0]?.currentImageId,
+            )
+            .map((a) => a.id)
+        } else if (path.includes('/assets/'))
+          affectedIds = sprite.assets.filter((a) => path.includes(a.id)).map((a) => a.id)
         if (path.endsWith('/plan') && method === 'PUT') {
           const plans = body.assets as SpriteAssetPlan[]
-          job.sprite!.assets = plans.map((plan) =>
-            job!.sprite!.assets.find((a) => a.id === plan.id)
-              ? { ...job!.sprite!.assets.find((a) => a.id === plan.id)!, plan }
-              : {
-                  id: plan.id,
-                  plan,
-                  planRevision: 1,
-                  anchor:
-                    job!.sprite!.settings.outputKind === 'layers'
-                      ? { x: 0, y: 0 }
-                      : {
-                          x: job!.sprite!.outputCanvas.width / 2,
-                          y: job!.sprite!.outputCanvas.height / 2,
-                        },
-                  approvedBaseImageId: null,
-                  approval: null,
-                  frames: [{ index: 0, currentTaskId: null, currentImageId: null }],
-                },
-          )
+          job.sprite!.assets = plans.map((plan) => {
+            const existing = job!.sprite!.assets.find((a) => a.id === plan.id)
+            if (existing) {
+              if (JSON.stringify(existing.plan) === JSON.stringify(plan)) return existing
+              const generationChanged =
+                (existing.plan.loop && existing.plan.frameCount !== plan.frameCount) ||
+                ['sourceBounds', 'requiresTransparency', 'loop', 'motionNotes'].some(
+                  (key) =>
+                    JSON.stringify(existing.plan[key as keyof SpriteAssetPlan]) !==
+                    JSON.stringify(plan[key as keyof SpriteAssetPlan]),
+                )
+              existing.plan = plan
+              existing.approval = null
+              if (generationChanged) {
+                existing.planRevision++
+                existing.approvedBaseImageId = null
+                existing.frames = Array.from(
+                  { length: plan.loop ? plan.frameCount : 1 },
+                  (_, index) => ({ index, currentTaskId: null, currentImageId: null }),
+                )
+                job!.sprite!.phase = 'planReview'
+              } else if (job!.sprite!.phase !== 'planReview') job!.sprite!.phase = 'frameReview'
+              return existing
+            }
+            return {
+              id: plan.id,
+              plan,
+              planRevision: 1,
+              anchor:
+                job!.sprite!.settings.outputKind === 'layers'
+                  ? { x: 0, y: 0 }
+                  : {
+                      x: job!.sprite!.outputCanvas.width / 2,
+                      y: job!.sprite!.outputCanvas.height / 2,
+                    },
+              approvedBaseImageId: null,
+              approval: null,
+              frames: [{ index: 0, currentTaskId: null, currentImageId: null }],
+            }
+          })
         } else if (path.endsWith('/plan/approve')) bases()
         else if (path.endsWith('/base/approve')) approve(body.assetIds as string[])
         else if (path.endsWith('/exports')) pack(body.assetIds as string[])
-        else if (path.endsWith('/regenerate')) {
+        else if (path.endsWith('/approve') && path.includes('/assets/')) {
+          approveAsset(job.sprite!.assets.find((a) => path.includes(a.id))!)
+        } else if (path.endsWith('/regenerate')) {
           const asset = job.sprite!.assets.find((a) => path.includes(a.id))!
+          const index = Number(/frames\/(\d+)\/regenerate$/.exec(path)![1])
           asset.approval = null
-          asset.approvedBaseImageId = null
-          const generated = task('generateSprite')
-          job.tasks.push(generated)
-          const id = guid(4)
-          asset.frames = [{ index: 0, currentTaskId: generated.id, currentImageId: id }]
-          job.sprite!.images.push({
-            id,
-            taskId: generated.id,
-            assetId: asset.id,
-            frameIndex: 0,
-            planRevision: asset.planRevision,
-            baseImageId: null,
-            ...job.sprite!.outputCanvas,
-            contentType: 'image/png',
-            createdAt: now,
-          })
-          job.sprite!.phase = 'baseReview'
+          if (index === 0) {
+            asset.approvedBaseImageId = null
+            asset.frames.forEach((f) => {
+              f.currentTaskId = null
+              f.currentImageId = null
+            })
+          }
+          generate(asset, index)
+          job.sprite!.phase = index === 0 ? 'baseReview' : 'frameReview'
           job.status = 'pendingReview'
+        }
+        if (!path.endsWith('/exports')) {
+          sprite.exports.forEach((e) => {
+            if (affectedIds === null || e.includedAssetIds.some((id) => affectedIds?.includes(id)))
+              e.isCurrent = false
+          })
+          const activeFrames = sprite.assets
+            .flatMap((a) => a.frames)
+            .filter((f) =>
+              job!.tasks.some(
+                (t) =>
+                  t.id === f.currentTaskId && (t.status === 'running' || t.status === 'pending'),
+              ),
+            )
+          job.status = activeFrames.length ? 'running' : 'pendingReview'
+          if (sprite.phase !== 'planReview')
+            sprite.phase = activeFrames.some((f) => f.index === 0)
+              ? 'baseGeneration'
+              : activeFrames.length
+                ? 'frameGeneration'
+                : sprite.assets.every((a) => a.approval)
+                  ? 'exportReady'
+                  : sprite.assets.some((a) => !a.approvedBaseImageId)
+                    ? 'baseReview'
+                    : 'frameReview'
         }
         job.sprite!.reviewRevision++
       }
@@ -612,6 +743,10 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
         taskIds: job!.tasks.map((t) => t.id),
       }
       receipts.set(requestId, { fingerprint, receipt })
+      if (path.includes('/assets/') && path.endsWith('/approve') && lostAssetApproval) {
+        lostAssetApproval = false
+        return route.abort('failed')
+      }
       if (path === '/api/jobs/sprites' && lost) {
         lost = false
         return route.abort('failed')

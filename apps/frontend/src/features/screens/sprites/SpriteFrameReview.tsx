@@ -1,7 +1,11 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { spriteImageUrl } from '@/app/queries/media'
-import { useApproveSpriteBases, useRegenerateSpriteFrame } from '@/app/queries/useSprites'
+import {
+  useApproveSpriteBases,
+  useRegenerateSpriteFrame,
+  useApproveSpriteAsset,
+} from '@/app/queries/useSprites'
 import { apiErrorMessage, apiErrorStatus } from '@/app/queries/errors'
 import type { SpriteState } from '@/domain/sprites/types'
 import type { JobTask } from '@/domain/job/types'
@@ -21,16 +25,19 @@ export function SpriteFrameReview({
   const [selected, setSelected] = useState<string[]>([])
   const approve = useApproveSpriteBases()
   const regenerate = useRegenerateSpriteFrame()
-  const busy = disabled || approve.isPending || regenerate.isPending
-  const reviewing = sprite.phase === 'baseReview' || sprite.phase === 'baseGeneration'
+  const approveAsset = useApproveSpriteAsset()
+  const busy = disabled || approve.isPending || regenerate.isPending || approveAsset.isPending
+  const reviewing =
+    sprite.phase !== 'completed' && sprite.phase !== 'packaging' && sprite.phase !== 'planReview'
   const selectable = sprite.assets.filter(
     (a) =>
       a.frames[0]?.currentImageId &&
       reviewing &&
-      !a.approval &&
+      a.approvedBaseImageId !== a.frames[0]?.currentImageId &&
       !tasks.some(
         (t) =>
-          t.id === a.frames[0]?.currentTaskId && (t.status === 'running' || t.status === 'pending'),
+          a.frames.some((f) => f.currentTaskId === t.id) &&
+          (t.status === 'running' || t.status === 'pending'),
       ),
   )
   const ids = selected.filter((id) => selectable.some((a) => a.id === id))
@@ -49,8 +56,13 @@ export function SpriteFrameReview({
       <div className={styles.grid}>
         {sprite.assets.map((a) => {
           const imageId = a.frames[0]?.currentImageId
-          const task = tasks.find((t) => t.id === a.frames[0]?.currentTaskId)
-          const active = task?.status === 'pending' || task?.status === 'running'
+          const active = a.frames.some((f) =>
+            tasks.some(
+              (t) => t.id === f.currentTaskId && (t.status === 'pending' || t.status === 'running'),
+            ),
+          )
+          const baseApproved = !!a.approvedBaseImageId && a.approvedBaseImageId === imageId
+          const complete = baseApproved && a.frames.every((f) => f.currentImageId) && !active
           return (
             <article key={a.id} className={styles.asset}>
               <h3 className="font-semibold break-words">{a.plan.name}</h3>
@@ -70,8 +82,10 @@ export function SpriteFrameReview({
                 <p className={styles.hint}>{active ? '기준 이미지 생성 중' : '기준 이미지 없음'}</p>
               )}
               {a.approval ? (
-                <p className={styles.hint}>최종 승인 완료 · 1프레임</p>
-              ) : reviewing ? (
+                <p className={styles.hint}>
+                  최종 승인 완료 · {a.approval.snapshot.imageIds.length}프레임
+                </p>
+              ) : reviewing && !baseApproved ? (
                 <label className={styles.row}>
                   <input
                     type="checkbox"
@@ -88,13 +102,77 @@ export function SpriteFrameReview({
                   {a.plan.name} 기준 승인 선택
                 </label>
               ) : null}
-              {reviewing ? (
+              {(reviewing && sprite.phase !== 'exportReady') ||
+              (a.plan.loop && sprite.phase !== 'planReview' && sprite.phase !== 'packaging') ? (
                 <Button
                   variant="outline"
                   disabled={busy || active}
                   onClick={() => regenerate.mutate({ ...context(), assetId: a.id, index: 0 })}
                 >
                   {a.plan.name} 기준 재생성
+                </Button>
+              ) : null}
+              {a.plan.loop ? (
+                <>
+                  <p className={styles.hint}>
+                    기준 재생성은 후속 프레임과 최종 승인을 무효화합니다. 기준 이미지를 다시 검수해
+                    주세요.
+                  </p>
+                  <div className={styles.grid}>
+                    {a.frames
+                      .filter((f) => f.index > 0)
+                      .map((frame) => {
+                        const current = tasks.find((t) => t.id === frame.currentTaskId)
+                        const running =
+                          current?.status === 'running' || current?.status === 'pending'
+                        return (
+                          <div key={frame.index} className={styles.asset}>
+                            <p>
+                              프레임 {frame.index + 1} ·{' '}
+                              {running
+                                ? '생성 중'
+                                : current?.status === 'failed'
+                                  ? '실패'
+                                  : frame.currentImageId
+                                    ? '완료'
+                                    : '누락'}
+                            </p>
+                            {current?.failureReason ? (
+                              <p className={styles.error}>{current.failureReason}</p>
+                            ) : null}
+                            {frame.currentImageId ? (
+                              <img
+                                className={styles.image}
+                                style={checkerboard}
+                                src={spriteImageUrl(jobId, frame.currentImageId)}
+                                alt={`${a.plan.name} 프레임 ${frame.index + 1}`}
+                              />
+                            ) : null}
+                            <Button
+                              variant="outline"
+                              disabled={busy || running || !baseApproved}
+                              onClick={() =>
+                                regenerate.mutate({
+                                  ...context(),
+                                  assetId: a.id,
+                                  index: frame.index,
+                                })
+                              }
+                            >
+                              {a.plan.name} 프레임 {frame.index + 1} 재생성
+                            </Button>
+                          </div>
+                        )
+                      })}
+                  </div>
+                </>
+              ) : null}
+              {!a.approval && baseApproved ? (
+                <Button
+                  disabled={busy || !complete}
+                  onClick={() => approveAsset.mutate({ ...context(), assetId: a.id })}
+                >
+                  {a.plan.name} {a.plan.loop ? '애니메이션' : '최종'} 승인
                 </Button>
               ) : null}
             </article>
@@ -109,7 +187,7 @@ export function SpriteFrameReview({
           선택한 기준 이미지 승인
         </Button>
       ) : null}
-      {[approve, regenerate].map((mutation, index) =>
+      {[approve, regenerate, approveAsset].map((mutation, index) =>
         mutation.error ? (
           <p key={index} role="alert" className={styles.error}>
             {apiErrorStatus(mutation.error) === 409
@@ -130,6 +208,19 @@ export function SpriteFrameReview({
           onClick={() => approve.mutate(approve.variables!)}
         >
           같은 기준 승인 재전송
+        </Button>
+      ) : null}
+      {approveAsset.error &&
+      approveAsset.variables &&
+      (apiErrorStatus(approveAsset.error) === null ||
+        apiErrorStatus(approveAsset.error) === 0 ||
+        (apiErrorStatus(approveAsset.error) ?? 0) >= 500) ? (
+        <Button
+          variant="outline"
+          disabled={busy}
+          onClick={() => approveAsset.mutate(approveAsset.variables!)}
+        >
+          같은 애니메이션 승인 재전송
         </Button>
       ) : null}
       {regenerate.error &&
