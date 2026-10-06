@@ -6,7 +6,7 @@
 
 ## 목적과 범위
 
-승인 [설계](../specs/2026-10-06-2d-background-sprites-design.md)와 [구현 계획](2026-10-06-2d-background-sprites.md)의 Task 15 기록이다. 이미지 입력의 2D 배경만 추가하며 기존 3D 흐름을 유지한다. 최종 검증 시작 기준은 `e8c265f67b62114b7db3b0ae472134b2a2c97bbf`, 브랜치는 `codex/2d-background-sprites`다. Task 1..14의 scoped 독립 리뷰가 끝난 뒤 기존 checkout에서 검증했다. 아래 자동 검사·브라우저 Fake 관찰·픽셀 fixture와 실 AI 품질을 구분한다.
+승인 [설계](../specs/2026-10-06-2d-background-sprites-design.md)와 [구현 계획](2026-10-06-2d-background-sprites.md)의 구현·검증·전체 리뷰 기록이다. 이미지 입력의 2D 배경만 추가하며 기존 3D 흐름을 유지한다. Task15 검증 시작 기준은 `e8c265f67b62114b7db3b0ae472134b2a2c97bbf`, 브랜치는 `codex/2d-background-sprites`다. Task 1..14의 scoped 독립 리뷰가 끝난 뒤 기존 checkout에서 검증했다. 아래 자동 검사·브라우저 Fake 관찰·픽셀 fixture와 실 AI 품질을 구분한다.
 
 ## Global Constraints
 
@@ -31,9 +31,10 @@
 **Files:** `README.md`, `docs/xHuman/backend.md`, `docs/xHuman/frontend.md`, `docs/xHuman/providers-and-prompts.md`, `apps/backend/Noxtend.Tests/Api/SpriteApiTests.cs`, `apps/backend/Noxtend.Tests/Infrastructure/SpritePackageTests.cs`, 본 실행 기록. 부모의 구현 계획은 Task15 커밋에서 제외한다.
 
 - [x] 구현자 계약 대조·기존 deferred assertion 보강·최종 자동 회귀·브라우저 관찰·Ruling 보존
-- [ ] 부모의 Task15 scoped/전체 브랜치 독립 리뷰 최종 판정
+- [x] 부모의 Task15 scoped 독립 리뷰 판정
+- [x] 전체 브랜치 리뷰 지적 수정·최신 회귀·scoped 재리뷰 최종 판정
 
-## 최종 자동 검증
+## Task15 자동 검증 (`703acb9`)
 
 최종 소스 변경은 기존 테스트 두 파일의 assertion 보강뿐이다. 앱 소스 임시 mutation은 RED 확인 직후 원본 바이트로 복원했다. source/self-review 완료 뒤 full 검사를 시작했으며 Backend 명령은 각각 `caffeinate -i`가 해당 dotnet 프로세스 수명 동안만 idle 수면을 막도록 실행했다. SQL 테스트는 기존 `sql-server` shared collection에서 직렬이고 별도 dotnet/DB suite를 동시에 실행하지 않았다. Frontend·브라우저와 Backend는 독립 실행했다.
 
@@ -50,14 +51,14 @@
 | `pnpm docs:check` | 최종 exit0; 원래 계획500행 경고 |
 | `git diff --check`·로컬 링크·추가 내용 secret pattern 검사 | exit0, 로컬 링크32개 존재, secret pattern0건 |
 
-명령의 `|`는 표 안 Markdown 표시를 위해 이스케이프했다. 실제 filter 문자열은 루트 지침 그대로 한 인수로 실행했다. 원시 log는 로컬 Task 15 보고서가 가리키며 이 문서에는 결과를 보존한다. Vitest 수집은 `src/**/*.test.ts`이고 `.test.tsx` DOM 수집은 주장하지 않는다. DOM은 Playwright Chromium과 Fake 응답으로 확인한다. 유료 `TripoSmokeTests`·`SimilaritySmokeTests`는 filter로 미수집이며 통과/skip에 합산하지 않는다. 실제 설정된 API 호스트 관통·개발 DB migration·유료 AI·배포·push·merge는 미실행이다.
+명령의 `|`는 표 안 Markdown 표시를 위해 이스케이프했다. 실제 filter 문자열은 루트 지침 그대로 한 인수로 실행했다. 임시 원시 log·보고서는 검토용이며 결과·명령·실패 경계·판정은 이 문서와 Git에 보존한다. 전용 SDD 작업폴더는 기록 보존 뒤 정리한다. Vitest 수집은 `src/**/*.test.ts`이고 `.test.tsx` DOM 수집은 주장하지 않는다. DOM은 Playwright Chromium과 Fake 응답으로 확인한다. 유료 `TripoSmokeTests`·`SimilaritySmokeTests`는 filter로 미수집이며 통과/skip에 합산하지 않는다. 실제 설정된 API 호스트 관통·개발 DB migration·유료 AI·배포·push·merge는 미실행이다.
 
 ### 기존 deferred 테스트 보강과 실패 기록
 
 - Task10: 정상 request/settings를 먼저 MVC formatter에 바인딩하고 오류 없음을 확인한 뒤 blobKey/sourceUrl을 추가해 binding.HasError를 직접 요구한다. StartSpriteJobRequest의 Disallow attribute 하나만 임시 제거한 mutation RED는 4수집/2통과/2실패/0skip, exit1. null-settings 400으로 unknown-field 검사를 숨길 수 없음을 확인하고 원본 복원했다.
 - Task5: 기존 padding test의 실제 입력 MemoryStream 두 개, 기존 layers/tiles ZIP test의 callback 모든 입력이 완료 뒤 CanRead=false인지 확인한다. sheet callback의 await using 하나를 임시 제거한 mutation RED는 3수집/0통과/3실패/0skip, exit1. 원본 복원 후 `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName~SpriteApiTests|FullyQualifiedName~SpritePackageTests'` GREEN52수집/52통과/0실패/0skip, exit0. 새 프레임워크·앱 동작 변경 없음.
 - 관찰용 scratch harness 첫 실행은 12수집/11통과/1실패, exit1. conflictOnce가 approveErrorOnce보다 먼저 처리되는 기존 Fake를 한 시나리오로 겹쳐 재전송 버튼을 잘못 기다린 timeout이었다. 별도 saved-UUID retry와 409 conflict로 나눠 해당 2건만 다시 확인: 2/2통과. 앱 변경 없음.
-- 캡처 첫 패스의 base 화면 일부가 내부 스크롤의 이전 폼 위치여서 해당 섹션으로 스크롤한 source/plan/base/subset/export 4조건을 재캡처했다. 추가 4/4통과; 최종 캡처 경로는 Task15 보고서에 남김.
+- 캡처 첫 패스의 base 화면 일부가 내부 스크롤의 이전 폼 위치여서 해당 섹션으로 스크롤한 source/plan/base/subset/export 4조건을 재캡처했다. 추가 4/4통과. 임시 캡처의 관찰 결과는 아래 표에 보존한다.
 - 독립 Python 이미지 검사 첫 초안은 불투명 후경에도 alpha0을 기대해 assertion 실패했다. 모델의 투명 요구가 없는 후경255와 실제 투명 전경0..255를 구분해 조건을 고쳤다. Pillow getdata의 deprecation 경고도 초안에 있었고 수정 검사에서는 getpixel을 사용했다. 제품 결함으로 보고하거나 최초 검사 통과로 계산하지 않음.
 
 실행 기록 첫 `pnpm docs:check`는 plans 디렉터리의 필수 Goal/Spec/Global Constraints/Task Files·체크리스트 형식을 빠뜨려 exit1이었다. 실제 Goal/Spec/제약/Task15 파일·완료/리뷰대기 기록으로 형식을 보완한 최종 재검사는 exit0이며 원래 계획500행 경고만 남았다. 작성용 Python 초안의 Markdown pipe escape SyntaxWarning도 코드 작성 오류 기록이며 제품 경고가 아니다.
@@ -108,7 +109,53 @@ SSH.NET2025.1.0 NU1903 high advisory `GHSA-mggc-4xg6-vcxf`와`GHSA-q939-rpr3-328
 
 자체검토에서는 작업 범위7파일, 기존 테스트의 실제 binding/disposal 검출성, mutation 원본 복원, nullable/enum/receipt/ZIP계약, 이미지/알파/패딩 해석, Ruling61행 순서·원문 일치, 문서/링크32개와 추가secret pattern0을 확인했다. 앱 기능 변경·새프레임워크·plan staging은 없고 비밀값/공백 결함을 찾지 못했다. 픽셀Fixture/브라우저Fake는 실AI품질을 확인하지 못한다는 제약과 baseline경고는 유지한다.
 
-Task15 scoped 독립 리뷰는 `703acb9`의 7개 변경 파일을 검토하여 Spec compliant / Approved, Critical0 / Important0으로 통과했다. 전체 브랜치 독립 리뷰는 아직 대기다. 구현자 자체검토를 독립리뷰로 계산하지 않는다. 부모가 계획checkbox/실행 기록 링크를 관리한다. ignored scratch 정리는 모든 Ruling과 필요한 증거가 본 기록에 보존되고 전체 리뷰가 끝난 뒤 부모가 수행하며 Task15 구현자는 삭제하지 않는다.
+Task15 scoped 독립 리뷰는 `703acb9`의 7개 변경 파일을 검토하여 Spec compliant / Approved, Critical0 / Important0으로 통과했다. 이후 전체 브랜치 리뷰와 수정 검증은 아래 별도 기록이다. 구현자 자체검토를 독립리뷰로 계산하지 않는다. 부모가 계획checkbox/실행 기록 링크를 관리한다. ignored scratch는 모든 Ruling과 필요한 증거를 본 기록에 보존하고 최종 리뷰 뒤 정리한다.
+
+## 전체 브랜치 리뷰와 한 번의 수정
+
+독립 reviewer가 `8ba352399247733679edcea45fd22e29cbf96a67..23c48aa0f2f606d498ab2ffc84fee12756912ee7`의 39커밋·162개 파일을 검토했다. 판정은 **With fixes, Critical0 / Important3 / Minor1**이다. 기존 최종 green과 새 결함 발견을 구분한다. Backend/API/SQL/이미지/ZIP/UI/nav/E2E/docs를 대조했으며 후속 migration Designer는 첫 모델과 명칭 외 동일성도 확인했다. 기존 suite는 다시 실행하지 않았다.
+
+| 지적 | 결함과 수정 방향 |
+| --- | --- |
+| I1/P1 | 부분 ZIP 완료가 실행 중 제외 대상보다 먼저 terminal을 만들어 공통 실행기가 늦은 결과 공개를 skip. 현재 공정 실행/대기를 우선 집계하고 저장 ZIP은 즉시 다운로드, 마지막 현재 공정 종료 뒤 export 소비. terminal/lease 보호 유지 |
+| I2/P2 | 실제 ZIP의 productionMode/view/outputKind/repeat/layout은 숫자지만 Fake·문서 계약은 문자열. 패키지 전용 BCL camelCase enum converter와 실제 manifest JSON kind/value assertion |
+| I3/P2 | loop 조건 때문에 완료/exportReady 정적 대상의 기준 재생성 버튼 누락. 기존 API로 같은 job 재개·해당 승인/current ZIP 무효화·다른 대상 결과 보존 |
+| M1/P3 | X/Y 단일 행/열인데 3×3 안내. 기존 Both offset으로 최소3×3 검수 격자, 실제 선택 반복축 안내. 생성·manifest 반복 설정 유지 |
+
+reviewer의 Domain DLL/F# stdin probe는 `job=PartiallySucceeded, terminal=true, sibling=Running/current=true`와 manifest enum `1/0/0/2/0`을 재현했다. 최초 harness FS0597 및 EOF exit1은 통과로 계산하지 않았고 `;;`/`#quit;;`를 보완한 최종 좁은 probe는 exit0이다. 실제 worker/ZIP 통합 실행을 대신하지 않는다. unchanged caller는 공유 fresh commit의 기존 `RunTaskHandler`/`RunGenerationTaskHandler`/`Stages`와 Golden `useJob` 소비 영향만 좁게 확인했다.
+
+기존 deferred assertion Task5/10, readonly, 임시 Ignore/nav 예외는 해결을 확인했다. 과거 warnings는 유지하며 전체 리뷰의 새 지적과 중복 집계하지 않는다. Ruling01..61은 전부 triage했고 후속 판단은 아래 원문에 보존한다. 실 AI 품질/가용성, 운영 DB/배포/Git/인증 승인, SSH 취약성 악용·업그레이드 적합성, 실제256MiB/ZIP64/peak memory, liveAPI/실기기/접근성 전수 인증, Golden 전체 UX와 useJobCalls, 역사적 모든 suite 재실행, 후속 text/character/object/importer/과금 exactly-once, HEAD 이후 수정 완료를 범위 밖으로 둔 각각의 항목은 부모가 아래 Ruling으로 판정했다.
+
+fresh 구현 담당이 I1/I2/I3/M1을 한 번의 fix wave로 맡았다. Backend targeted RED8/8 실패(지연 sibling6·실제ZIP enum2), FE RED8/8 실패(정적 재생성2·선택 축/격자6) 후 최소 수정했다. SQL reload의 목록 순서는 ID 조회로 확인하고 취소된 Pending의 기존 Skipped 계약은 유지했다. 소스 자체검토 뒤 GREEN Backend8/8·sprite E2E40/40·취소 재생성 잠금1/1을 확인했다. 최신 양 스택 전체 회귀와 한 번의 독립 scoped 재리뷰가 모두 통과했다.
+
+최초 BE RED8건 중4건은 fixture의 SQL asset 목록 순서 가정 때문에 승인 이전 assertion에서 실패해 결함 재현 근거에서 제외했다. ID 조회로 고친 확정 RED8건은 실제 지적의 예상 상태·JSON kind 불일치에서 실패했다. 최초 BE 관련 GREEN107건은106통과/1실패였고 Pending 취소의 기존 `Skipped`를 `Canceled`로 잘못 기대한 assertion을 바로잡았다. 이번 nullable assertion 경고도 수정했다. terminal 보호는 변경하지 않았다. 잘못 찾은 `dist/.vite/manifest.json`의 MODULE_NOT_FOUND/exit1은 예산 근거에서 제외했고 실제 기존 bundle 검사 스크립트와 최종 build 결과만 사용했다.
+
+## 수정 후 최신 자동 검증 (`9c74d12`)
+
+`9c74d12d44eb79ee32e9cc67f661e0f9a7df198b`는12파일·207추가/23삭제다. 앱5파일·실제 SQL/ZIP/E2E/Fake와 관련 Backend/Frontend xHuman 문서만 scoped commit했다. 부모의 본 실행 기록은 제외했다. 자체검토 후12파일 SHA-256을 고정하고 전체 회귀 종료·commit 때 동일함을 확인했다. Backend build/test는 직렬, SQL collection 한 번, Frontend는 독립 병렬이다. 앱 코드 변경 뒤 전체 회귀를 한 번 수행했으며 부모의 문서 추가는 앱 소스 변경으로 세지 않는다.
+
+| 명령 | 최신 결과 |
+| --- | --- |
+| `dotnet build apps/backend/Noxtend.slnx` | exit0, errors0, 기존 NU1903 warnings4 |
+| `caffeinate -i dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName!~TripoSmokeTests&FullyQualifiedName!~SimilaritySmokeTests'` | 1556 collected/passed, failed0, skipped0, exit0, 6m37s |
+| `pnpm test` | 50 files, 422 collected/passed, failed0, skipped0, exit0 |
+| `pnpm test:e2e` | 296 collected/passed, failed0, skipped0, exit0, 5.8m |
+| `pnpm lint`·`pnpm typecheck` | 모두 exit0 |
+| `pnpm build` | exit0, 초기JS113.66kB / 기존예산122.55kB, 여유8.89kB |
+| `pnpm docs:check`·xHuman 로컬 링크·`git diff --check`·추가행 secret heuristic | exit0, 기존plan500행 경고 유지 |
+| 기존 `.githooks/pre-commit` | staged docs + Frontend lint/Prettier 통과, 훅 우회 없음 |
+
+SQL6건은 실제 pack worker·blocking generation worker·EF reload로 Pending/Running × 지연 성공/실패/취소를 확인한다. ZIP 저장 즉시 열기·current slot/task·소비 전null/종료 뒤marker·explicit reopen과 다른 승인/과거ZIP 보존·취소 재개 거부를 검사한다. ZIP2건은 반환 객체만이 아닌 실제 `manifest.json`의 enum JSON kind/value를 검사한다. FE는 정적 전체/부분 ZIP 후 재생성과6개 축/격자의 실제9개 image·안내·취소 잠금을 확인했다. Fake의 subset도 Running/생성 phase와 현재ZIP 다운로드 공존으로 동기화했다. 실AI·실기기·운영 환경을 검증한 의미는 아니다.
+
+## 최종 독립 판정과 기록 보존
+
+fresh reviewer가 `23c48aa..9c74d12`의 단일 수정 커밋·12파일을 재리뷰했다. **I1/I2/I3/M1 모두 ADDRESSED, 새 Critical/Important/Minor0, 미해결 지적0**이다. 다른 코드를 전체 재리뷰하지 않고 named boundary와 수정 diff만 확인했다. SQL/worker 결과 공개·소비 표식·명시 재개·취소, ZIP 실제 JSON, 정적 재생성·잠금,9개 타일·반복축 안내를 대조했다.
+
+재리뷰는 worker의 RED/GREEN/full 원로그와 실제 assertion을 함께 대조했다. 최초 harness/중간 실패는 최종 pass에서 제외하고12개 frozen SHA-256을 재확인해 mismatch0/exit0이었다. 같은 코드의 suite를 반복하지 않았다. 커밋 로그에는 Frontend lint/Prettier 통과가 있으나 staged docs의 별도 출력은 없어 해당 세부 결과는 훅 정의·commit exit0·별도 docs 명령의 직접 출력과 구분한다. 부모의 마지막 docs 검사·scoped 기록 커밋은 앱 소스 변경 없이 수행한다.
+
+부모의 최종 `pnpm docs:check`는 exit0이며 기존 plan500행 경고만 유지했다. 전체 브랜치와 마지막 문서 diff의 `git diff --check`도 exit0, 로컬 링크6개 존재, 추가 내용의 지정 secret token pattern0이었다.73개 Ruling 원문·시간순 일치와 미완료 checkbox0, 마지막 검증 커밋 이후 앱 diff0을 확인했다. secret heuristic을 모든 비밀값 부재의 보장으로 확대하지 않는다.
+
+전체 리뷰의4개 지적은 한 번의 fix wave와 한 번의 scoped 재리뷰로 해결했다. Task1..15의 개별 gate와 전체 리뷰 gate가 완료됐다. 기존 high advisory·실AI/운영·실기기/대형부하 미검증 경계는 그대로다. 모든73개 Ruling 원문을 시간순으로 보존하며 대체된 즉시 취소 제안도 지우지 않는다. 마지막4173 listener 확인은 비어 있었고 새 managed worktree는 만들지 않았다. 전용 `.superpowers/sdd/2026-10-06-2d-background-sprites`만 정리하며 다른 작업폴더·저장소·컨테이너는 건드리지 않는다. 앱 소스·테스트·계약의 정본은 `9c74d12`, 이후 부모 커밋은 최종 계획·실행 기록뿐이다. Git 통합은 사용자 선택 전까지 미실행이다.
 
 ## 시간순 Ruling 원문
 
@@ -235,3 +282,27 @@ Ruling: Task12 fix round1에서 tileOffsets readonly 반환 선언도 명시 계
 Ruling: Task14 GoldenRunsScreen은 사용 인터페이스·의존 영향만 확인하고 명시 Home/Studio/Calls 범위 유지 — 기존 golden 관찰 UI의 관련 없는 변경을 묶지 않음 — 새 쿼리 오류 의미가 실제 깨진 동작을 만들면 조건을 확인하여 최소 범위 보완 필요
 
 Ruling: Task14 MobileStudioMenu.tsx 한 파일 추가로 모바일 Radix 그룹 메뉴 lazy 경계 분리 — 기존 primitives·desktop 구조·초기 JS122.55 예산을 유지하고 새 라이브러리/상태 프레임워크를 도입하지 않음 — 경계 로딩 시 키보드·focus·직접 주소 접근이 깨지거나 desktop에서 불필요 로드되면 해당 회귀·실제 로딩 조건 보완 필요
+
+Ruling: 최종 리뷰의 부분 ZIP 성공은 승인 spec의 부분 성공 종료·명시적 재개·공통 terminal skip 유지에 따라 남은 미종료 공정을 취소하고 이미 생성·승인한 결과는 보존 — SQL에 Running/current를 남긴 terminal을 방지하며 완료 후 추가 제작은 기존 regenerate/retry로 접수 — subset ZIP 완료 시 진행 중이던 제외 대상의 미공개 출력은 폐기될 수 있고 유료 호출이 이미 시작됐으면 비용은 남음
+
+Ruling: 앞선 부분 ZIP 즉시 취소 판단을 대체하여 현재 공정 실행/대기를 export 완료 소비보다 먼저 집계 — spec178의 명시 우선순위·기존 공정 결과 보존·더 작은 상태 전이 수정을 함께 지킴, 저장된 ZIP은 즉시 다운로드 가능하고 마지막 현재 공정 종료 후 부분 성공을 소비 — 남은 공정의 재시도/대기가 길면 job 종료 표시가 ZIP 준비보다 늦어질 수 있음
+
+Ruling: 최종 Minor M1은 spec126과 plan474의 최소3×3 검수 격자를 적용하고 실제 반복축을 안내 — 기존 tileOffsets의 Both 격자를 미리보기에서 재사용하며 생성 설정·manifest의 X/Y/Both는 유지 — 비반복축 경계도 표시하므로 사용자가 해당 축까지 seamless 요구로 오인하지 않도록 선택 축 안내 필요
+
+Ruling: 최종 리뷰의 실 AI 품질·credential별 가용성 Declined 항목은 미확인으로 유지 — 유료 호출 승인 없이 Fake/픽셀 결과를 실 모델 품질로 확대하지 않음 — 실제 alpha·시점·반복·loop 품질 실패는 이후 실 AI 검수에서 드러날 수 있음
+
+Ruling: 운영/개발 DB 적용·배포·push/merge·인증/키/네트워크 승인 Declined 항목은 이번 구현 완료와 분리 — 격리 SQL 검증과 로컬 브랜치 작업만 완료 근거로 사용 — 실제 환경 적용·노출·키 보존·통합은 별도 실행 증거가 필요
+
+Ruling: 기존 SSH.NET advisory 악용 가능성·업그레이드 적합성 Declined 항목은 high 경고를 남긴 별도 유지보수로 기록 — 이번 sprite 기능과 무관한 의존성 교체를 묶지 않고 안전 판정을 하지 않음 — 취약 의존성이 남으므로 실제 SSH 경로·운영 노출에 대한 보안 판단이 필요
+
+Ruling: 실제256MiB ZIP·ZIP64·최대 작업 peak memory/처리시간 Declined 항목은 미실측 유지 — 작은 chunk 상한/픽셀/layout 검증을 실제 대형 부하 증거로 확대하지 않음 — 큰 작업의 자원·시간 한계는 실제 부하에서 추가 확인 필요
+
+Ruling: 실제 API 호스트·터치기기·접근성 전수 인증 Declined 항목은 미검증 유지 — preview/Fake/Chromium의 폭·키보드·focus·reduced-motion 관찰 범위만 인정 — 실제 기기/호스트의 추가 오류나 접근성 문제는 남을 수 있음
+
+Ruling: GoldenRuns 전체 오류 UX·useJobCalls 계약·관련 없는3D 정리 Declined 항목은 승인 Home/Studio/Calls 범위 밖으로 유지 — reviewer가 확인한 Golden의 job-only 소비 영향만 인정 — Golden 전체 품질과 별도 호출 내역 계약까지 승인한 의미는 아님
+
+Ruling: 과거 임시 Ignore/nav 예외와 모든 중간 suite 재실행 Declined 항목은 현재 코드·최종 회귀·Git/RED 기록 대조로 처리 — 제거된 개발 중간 상태를 현재 결함으로 계산하지 않음 — 과거 모든 실행을 새로 재현한 증거는 아님
+
+Ruling: text 입력·2D character/object·engine importer·provider 과금 exactly-once Declined 항목은 후속/제외 범위로 유지 — 승인된 이미지 기반2D background 제작만 구현 완료로 보고 — 해당 추가 기능과 retry/regen 포함 실제 과금 상한은 제공하지 않음
+
+Ruling: HEAD 이후R62–R64 실제 완료 Declined 항목은 fix wave·최신 전체 회귀·한 번의 scoped re-review가 끝날 때까지 pending — 제안과 구현 검증을 구분 — 수정 실패나 새 breakage가 남으면 final cap 판정에 명시 필요

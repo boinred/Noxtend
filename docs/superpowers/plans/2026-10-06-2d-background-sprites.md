@@ -10,7 +10,7 @@
 
 **Spec:** [승인한 설계](../specs/2026-10-06-2d-background-sprites-design.md). 기준 코드: `19bad98`. 이 문서의 신규 타입·테스트·명령은 구현할 계약이며 현재 구현 완료나 테스트 통과를 뜻하지 않는다.
 
-**Execution:** [최종 검증·판단 기록](2026-10-06-2d-background-sprites-execution.md). 구현 Task 1..15의 검증·개별 독립 리뷰 완료. 전체 브랜치 리뷰는 후속 게이트다.
+**Execution:** [최종 검증·판단 기록](2026-10-06-2d-background-sprites-execution.md). Task1..15의 구현·개별 리뷰, 전체 브랜치 리뷰 지적4건의 단일 수정·scoped 재리뷰 완료. 최종 소스 `9c74d12`: Backend1556/1556·Frontend422/422·E2E296/296 통과. 실AI/운영 검증과 Git 통합은 별도다.
 
 ## Global Constraints
 
