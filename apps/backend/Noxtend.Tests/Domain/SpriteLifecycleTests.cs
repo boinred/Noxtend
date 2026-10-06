@@ -339,6 +339,119 @@ public sealed class SpriteLifecycleTests
         Assert.Equal(2, job.Sprites.Assets[1].PlanRevision);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ExcludedAssetChangeAndApproval_DoesNotBlockSuccessfulExport(bool generationEdit)
+    {
+        var (job, first, second) = ApprovedPair();
+        var input = job.CaptureSpriteExport([first.Id], Revision(job)).Value!;
+        var task = job.PlanTask(TaskKind.Synthesize, job.Tasks.Count);
+        task.BindSpriteExport(input);
+        task.Claim(Now, TimeSpan.FromMinutes(2));
+        var changed = generationEdit ? second with { MotionNotes = "움직임" } : second with { Fps = 12 };
+        Assert.True(job.ReplaceSpritePlan([first, changed], Revision(job)).IsSuccess);
+        if (generationEdit) Assert.Equal(SpritePhase.PlanReview, job.Sprites!.Phase);
+        else Assert.True(job.ApproveSpriteAsset(second.Id, Revision(job)).IsSuccess);
+        Assert.True(job.IsCurrentTask(task));
+        var manifest = new SpriteManifest(1, job.Id, ProductionMode.TwoD, input, "topLeft", "pixels", []);
+        task.Succeed(Now);
+        Assert.True(job.TryAttachSpriteExport(SpriteExport.Create(task.Id, input, manifest, "subset.zip", Now)));
+        job.ReconcileFromTasks(Now);
+        Assert.True(Assert.Single(job.Sprites!.Exports).IsCurrent);
+        Assert.Equal(JobStatus.PartiallySucceeded, job.Status);
+        Assert.Equal(SpritePhase.Completed, job.Sprites.Phase);
+        Assert.Equal(Now, job.CompletedAt);
+    }
+
+    [Fact]
+    public void AssetApproval_PreservesSiblingCurrentGenerationStatus()
+    {
+        var (job, first, second) = ApprovedPair();
+        job.ReplaceSpritePlan([first, second with { Fps = 12 }], Revision(job));
+        var input = job.RegenerateSpriteFrame(first.Id, 0, Revision(job)).Value!;
+        var task = job.PlanTask(TaskKind.Generate, job.Tasks.Count);
+        job.BindSpriteFrame(task.Id, input);
+        task.Claim(Now, TimeSpan.FromMinutes(2));
+        Assert.True(job.ApproveSpriteAsset(second.Id, Revision(job)).IsSuccess);
+        Assert.True(job.IsCurrentTask(task));
+        Assert.Equal(Noxtend.Domain.Job.TaskStatus.Running, task.Status);
+        Assert.Equal(JobStatus.Running, job.Status);
+        Assert.Equal(SpritePhase.BaseGeneration, job.Sprites!.Phase);
+        Assert.Null(job.CompletedAt);
+    }
+
+    [Fact]
+    public void StaticBaseApproval_PreservesSiblingCurrentGenerationStatus()
+    {
+        var (job, first) = Planned();
+        var second = first with { Id = Guid.NewGuid(), Order = 1, RequiresTransparency = true };
+        job.ReplaceSpritePlan([first, second], Revision(job));
+        var inputs = job.ApproveSpritePlan(Revision(job)).Value!;
+        Complete(job, inputs[1]);
+        var task = job.PlanTask(TaskKind.Generate, job.Tasks.Count);
+        job.BindSpriteFrame(task.Id, inputs[0]);
+        task.Claim(Now, TimeSpan.FromMinutes(2));
+        Assert.Empty(job.ApproveSpriteBases([second.Id], Revision(job)).Value!);
+        Assert.NotNull(job.Sprites!.Assets[1].Approval);
+        Assert.True(job.IsCurrentTask(task));
+        Assert.Equal(Noxtend.Domain.Job.TaskStatus.Running, task.Status);
+        Assert.Equal(JobStatus.Running, job.Status);
+        Assert.Equal(SpritePhase.BaseGeneration, job.Sprites.Phase);
+        Assert.Null(job.CompletedAt);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CompletedSubsetExport_DoesNotCloseExplicitlyReopenedReviewOrGeneration(bool regenerate)
+    {
+        var (job, first, second) = ApprovedPair();
+        var input = job.CaptureSpriteExport([first.Id], Revision(job)).Value!;
+        var pack = job.PlanTask(TaskKind.Synthesize, job.Tasks.Count);
+        pack.BindSpriteExport(input);
+        pack.Claim(Now, TimeSpan.FromMinutes(2));
+        var manifest = new SpriteManifest(1, job.Id, ProductionMode.TwoD, input, "topLeft", "pixels", []);
+        pack.Succeed(Now);
+        Assert.True(job.TryAttachSpriteExport(SpriteExport.Create(pack.Id, input, manifest, "completed.zip", Now)));
+        job.ReconcileFromTasks(Now);
+        Assert.Equal(JobStatus.PartiallySucceeded, job.Status);
+        if (regenerate)
+        {
+            var frameInput = job.RegenerateSpriteFrame(second.Id, 0, Revision(job)).Value!;
+            var task = job.PlanTask(TaskKind.Generate, job.Tasks.Count);
+            job.BindSpriteFrame(task.Id, frameInput);
+            task.Claim(Now, TimeSpan.FromMinutes(2));
+            job.ReconcileFromTasks(Now);
+            Assert.Equal(JobStatus.Running, job.Status);
+            task.Succeed(Now);
+            Assert.True(job.TryAttachSpriteImage(SpriteImage.Create(task.Id, frameInput, "regenerated.png", Now)));
+        }
+        else
+        {
+            job.ReplaceSpritePlan([first, second with { Fps = 12 }], Revision(job));
+            Assert.True(job.ApproveSpriteAsset(second.Id, Revision(job)).IsSuccess);
+        }
+        job.ReconcileFromTasks(Now);
+        Assert.True(Assert.Single(job.Sprites!.Exports).IsCurrent);
+        Assert.Equal(JobStatus.PendingReview, job.Status);
+        Assert.Null(job.CompletedAt);
+        Assert.Equal(input.ExportId, job.Sprites.CompletedExportId);
+        var next = job.CaptureSpriteExport([first.Id], Revision(job)).Value!;
+        var nextTask = job.PlanTask(TaskKind.Synthesize, job.Tasks.Count);
+        nextTask.BindSpriteExport(next);
+        nextTask.Claim(Now, TimeSpan.FromMinutes(2));
+        nextTask.Succeed(Now);
+        var nextManifest = new SpriteManifest(1, job.Id, ProductionMode.TwoD, next, "topLeft", "pixels", []);
+        Assert.True(job.TryAttachSpriteExport(SpriteExport.Create(nextTask.Id, next, nextManifest, "next.zip", Now)));
+        job.ReconcileFromTasks(Now);
+        Assert.NotEqual(input.ExportId, next.ExportId);
+        Assert.Equal(next.ExportId, job.Sprites.CompletedExportId);
+        Assert.Equal(JobStatus.PartiallySucceeded, job.Status);
+        Assert.Equal(SpritePhase.Completed, job.Sprites.Phase);
+        Assert.Equal(2, job.Sprites.Exports.Count);
+    }
+
     private static (PipelineJob Job, SpriteAssetPlan First, SpriteAssetPlan Second) ApprovedPair()
     {
         var (job, first) = Planned();

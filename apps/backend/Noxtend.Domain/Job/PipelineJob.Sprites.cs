@@ -57,15 +57,10 @@ public sealed partial class PipelineJob
             return asset;
         }).ToArray();
         var generationChanged = affected.Length > 0 || plans.Any(p => !state.Assets.Any(a => a.Plan.Id == p.Id));
-        var previousPhase = state.Phase;
         state.ReplaceAssets(assets);
         state.Touch(membershipChanged ? null : changedIds);
-        OpenSpriteReview();
-        var active = _tasks.Any(t => !t.IsTerminal && IsCurrentTask(t));
-        if (active) Status = JobStatus.Running;
         if (generationChanged) state.SetPhase(SpritePhase.PlanReview);
-        else if (active) state.SetPhase(previousPhase);
-        else UpdateSpriteReviewPhase();
+        UpdateSpriteState();
         return Result<bool>.Ok(true);
     }
 
@@ -110,9 +105,7 @@ public sealed partial class PipelineJob
         if (changed.Count > 0)
         {
             Sprites!.Touch(changed);
-            OpenSpriteReview();
-            UpdateSpriteReviewPhase();
-            if (inputs.Count > 0) { Status = JobStatus.Running; Sprites.SetPhase(SpritePhase.FrameGeneration); }
+            UpdateSpriteState(inputs.Count > 0);
         }
         return Result<IReadOnlyList<SpriteFrameInput>>.Ok(inputs.AsReadOnly());
     }
@@ -130,8 +123,7 @@ public sealed partial class PipelineJob
         if (asset.Approval is not null) return Result<bool>.Ok(false);
         asset.Approve(SpriteApproval(asset));
         Sprites.Touch([assetId]);
-        OpenSpriteReview();
-        UpdateSpriteReviewPhase();
+        UpdateSpriteState();
         return Result<bool>.Ok(true);
     }
 
@@ -321,28 +313,36 @@ public sealed partial class PipelineJob
         CompletedAt = null;
         FailureReason = null;
     }
-    private void UpdateSpriteReviewPhase()
+    private void UpdateSpriteState(bool hasNewFrames = false)
     {
+        OpenSpriteReview();
         var state = Sprites!;
-        state.SetPhase(state.Assets.All(a => a.Approval is not null) ? SpritePhase.ExportReady
+        var active = _tasks.Where(t => !t.IsTerminal && IsCurrentTask(t)).ToArray();
+        if (active.Length > 0 || hasNewFrames) Status = JobStatus.Running;
+        if (state.Phase == SpritePhase.PlanReview) return;
+        state.SetPhase(active.Any(t => t.SpriteExportInput is not null) ? SpritePhase.Packaging
+            : active.Any(t => t.SpriteInput?.FrameIndex == 0) ? SpritePhase.BaseGeneration
+            : hasNewFrames || active.Any(t => t.SpriteInput is not null) ? SpritePhase.FrameGeneration
+            : state.Assets.All(a => a.Approval is not null) ? SpritePhase.ExportReady
             : state.Assets.Any(a => a.ApprovedBaseImageId is null) ? SpritePhase.BaseReview : SpritePhase.FrameReview);
     }
     private void ReconcileSpriteTasks(DateTimeOffset now)
     {
         if (Status == JobStatus.Canceled || IsTerminal) return;
         var tasks = _tasks.Where(IsCurrentTask).ToArray();
-        if (tasks.Any(t => !t.IsTerminal))
-        {
-            Status = JobStatus.Running;
-            return;
-        }
-        var export = Sprites!.Exports.LastOrDefault(e => e.IsCurrent);
-        if (Sprites.Phase == SpritePhase.Packaging && export is not null
-            && tasks.Any(t => t.Id == export.TaskId && t.Status == TaskStatus.Succeeded))
+        var exportTask = _tasks.Where(t => t.SpriteExportInput is not null).MaxBy(t => t.Ordinal);
+        var export = Sprites!.Exports.LastOrDefault(e => e.IsCurrent && e.TaskId == exportTask?.Id);
+        if (export is not null && export.Id != Sprites.CompletedExportId
+            && exportTask?.Status == TaskStatus.Succeeded && IsCurrentTask(exportTask))
         {
             Status = export.Input.ExcludedAssetIds.Count == 0 ? JobStatus.Succeeded : JobStatus.PartiallySucceeded;
             CompletedAt = now;
-            Sprites.SetPhase(SpritePhase.Completed);
+            Sprites.CompleteExport(export.Id);
+            return;
+        }
+        if (tasks.Any(t => !t.IsTerminal))
+        {
+            UpdateSpriteState();
             return;
         }
         if (Sprites.Assets.Count == 0 || Sprites.Assets.All(a => a.Frames.All(f => f.CurrentImageId is null)))
@@ -351,7 +351,6 @@ public sealed partial class PipelineJob
             if (failure is not null) Fail(failure.FailureReason ?? ErrorCode.SpriteNotReady, now);
             return;
         }
-        OpenSpriteReview();
-        if (Sprites.Phase != SpritePhase.PlanReview) UpdateSpriteReviewPhase();
+        UpdateSpriteState();
     }
 }

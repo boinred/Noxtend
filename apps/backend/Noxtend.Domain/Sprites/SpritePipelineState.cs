@@ -29,11 +29,17 @@ public sealed class SpritePipelineState
     public SpriteTransform Transform { get; private set; } = null!;
     public SpritePhase Phase { get; private set; }
     public int ReviewRevision { get; private set; }
+    public Guid? CompletedExportId { get; private set; }
     public IReadOnlyList<SpriteAsset> Assets => _assets.AsReadOnly();
     public IReadOnlyList<SpriteImage> Images => _images.AsReadOnly();
     public IReadOnlyList<SpriteExport> Exports => _exports.AsReadOnly();
     public IReadOnlyList<SpriteAcceptedRequest> Requests => _requests.AsReadOnly();
     internal void SetPhase(SpritePhase phase) => Phase = phase;
+    internal void CompleteExport(Guid exportId)
+    {
+        CompletedExportId = exportId;
+        Phase = SpritePhase.Completed;
+    }
     internal void Touch(IReadOnlyCollection<Guid>? affectedAssetIds = null)
     {
         ReviewRevision++;
