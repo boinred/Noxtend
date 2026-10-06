@@ -376,11 +376,11 @@ Assert.Equal(1, nonRetryableAttemptCount);
 
 ## Task 9: 중복 접수·검수 명령·pack worker
 
-**Files:** Create `B/Noxtend.Application/Sprites/{SpriteCommandsHandler.cs,RunSpritePackTaskHandler.cs}`, `B/Noxtend.Tests/Application/SpriteCommandTests.cs`, `B/Noxtend.Tests/Infrastructure/SpriteRequestConcurrencyTests.cs`. Modify `SpriteCommands.cs`, `B/Noxtend.Domain/Common/Result.cs`의 request 충돌 상수, `StartSpriteJobHandler.cs`와 `SpriteAnalysisTests.cs`의 같은 ID·다른 본문 충돌 계약, `F/src/domain/job/{types.ts,backendParity.test.ts}`의 PackSprites label·wire, Domain state/partial/TaskKind, DI/worker/fixture, `B/Noxtend.Application/Pipeline/{RetryTaskHandler.cs,DeleteJobHandler.cs}`, EF/InMemory 삭제 key 수집, `docs/xHuman/backend.md`.
+**Files:** Create `B/Noxtend.Application/Sprites/{SpriteCommandsHandler.cs,RunSpritePackTaskHandler.cs}`, `B/Noxtend.Tests/Application/SpriteCommandTests.cs`, `B/Noxtend.Tests/Infrastructure/SpriteRequestConcurrencyTests.cs`. Modify `SpriteCommands.cs`, `B/Noxtend.Domain/Common/Result.cs`의 request 충돌 상수, `StartSpriteJobHandler.cs`와 `SpriteAnalysisTests.cs`의 같은 ID·다른 본문 충돌 계약, `F/src/domain/job/{types.ts,backendParity.test.ts}`의 PackSprites label·wire와 `F/src/domain/tuning/types.ts`의 non-LLM 제외, Domain state/partial/TaskKind, DI/worker/fixture, `B/Noxtend.Application/Pipeline/RetryTaskHandler.cs`, 관련 `B/Noxtend.Tests/Domain/{LlmOperationTests.cs,SpriteLifecycleTests.cs}`, `docs/xHuman/backend.md`. 기존 DeleteJobHandler·EF/InMemory sprite PNG/ZIP key 수집은 실제 삭제 테스트로 검증해 재사용한다.
 
 **Interfaces:** `SpriteCommandContext(Guid JobId,Guid RequestId,int ExpectedRevision)`. handler는 `UpdatePlanAsync(context,IReadOnlyList<SpriteAssetPlan> plans,ct)`, `ApprovePlanAsync(context,ct)`, `ApproveBasesAsync(context,IReadOnlyList<Guid> assetIds,ct)`, `RegenerateAsync(context,Guid assetId,int index,ct)`, `ApproveAssetAsync(context,Guid assetId,ct)`, `ExportAsync(context,IReadOnlyList<Guid> assetIds,ct)`를 제공하며 모두 `Task<Result<SpriteReceipt>>`다. `TaskKind.PackSprites=9`는 LLM operation으로 매핑하지 않는다. worker는 Task 5 writer를 사용한다.
 
-- [ ] 실제 SQL에서 같은 request를 별도 DbContext로 동시에 제출한다. 본문은 고정 property 순서·ID 집합 정렬의 JSON과 SHA256 hex로 정규화하며 route의 job/asset/index·operation 종류도 fingerprint에 포함한다.
+- [x] 실제 SQL에서 같은 request를 별도 DbContext로 동시에 제출한다. 본문은 고정 property 순서·ID 집합 정렬의 JSON과 SHA256 hex로 정규화하며 route의 job/asset/index·operation 종류도 fingerprint에 포함한다.
 
 ```csharp
 [Fact] public Task DuplicateApproval_AfterRevisionChange_ReturnsReceipt();
@@ -404,16 +404,16 @@ Assert.False(staleExport.IsCurrent);
 Assert.Equal(0, packImageCallCount);
 ```
 
-- [ ] `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName~SpriteCommandTests|FullyQualifiedName~SpriteRequestConcurrencyTests'`로 실패를 확인한다.
-- [ ] request 조회→fingerprint 확인→새 요청만 revision/state 검사→state/task/receipt 함께 Save→dispatch 순서를 구현한다. 진행 중인 분석이 늦게 계획을 덮어쓰지 않도록 분석 대기·실행 중 계획 편집을 거부하고, 실패 분석 retry는 더 새로운 계획이 없는 현재 분석에 한정한다. unique/rowversion 경쟁은 reload 후 기존 receipt를 반환하거나 409로 처리한다. plan/base approval fan-out은 같은 transaction에 저장한다.
-- [ ] 프레임 재생성은 새 task/result로, failed retry는 기존 규칙으로 처리한다. 종료 작업의 명시적 재생성/재시도/export는 Pending으로 되돌리고 CompletedAt을 비운다. canceled는 재개를 거부하며 무관한 asset 승인은 유지한다.
-- [ ] export는 서버에서 현재 Approval의 image IDs·metadata를 고정한다. pack worker는 임시 파일→상한 ZIP→Blob→snapshot 검사 순서로 공개한다. 임시 파일은 finally에서 삭제한다. 취소 후 새 export를 공개하지 않고 오래된 snapshot은 이력으로만 보존하며 pack 실패에도 PNG를 유지한다.
-- [ ] 전체 요청 대상의 승인·package 완료만 succeeded다. 명시적인 subset package 완료 또는 쓸 이미지가 있는 pack 확정 실패는 partiallySucceeded다. 생성 실패만으로 부분 성공 처리하지 않는다. 2D PNG/ZIP key도 기존 IBlobStorage 삭제 목록에 넣는다.
-- [ ] 같은 테스트와 `TaskWorkerRegistrationTests / ReclaimPlanTests / JobLifecycleTests`를 통과시키고 문서와 `feat(sprites): add idempotent review and export commands`로 커밋한다.
+- [x] `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName~SpriteCommandTests|FullyQualifiedName~SpriteRequestConcurrencyTests'`로 실패를 확인한다.
+- [x] request 조회→fingerprint 확인→새 요청만 revision/state 검사→state/task/receipt 함께 Save→dispatch 순서를 구현한다. 진행 중인 분석이 늦게 계획을 덮어쓰지 않도록 분석 대기·실행 중 계획 편집을 거부하고, 실패 분석 retry는 더 새로운 계획이 없는 현재 분석에 한정한다. 최초 request 조회 miss와 job 조회 사이에 접수된 승자 receipt도 state/revision 검사보다 먼저 재확인한다. unique/rowversion 경쟁은 reload 후 기존 receipt를 반환하거나 409로 처리한다. plan/base approval fan-out은 같은 transaction에 저장한다.
+- [x] 프레임 재생성은 새 task/result로, failed retry는 기존 규칙으로 처리한다. 종료 작업의 명시적 재생성/재시도/export는 Pending으로 되돌리고 CompletedAt을 비운다. canceled는 재개를 거부하며 무관한 asset 승인은 유지한다.
+- [x] export는 서버에서 현재 Approval의 image IDs·metadata를 고정한다. pack worker는 임시 파일→상한 ZIP→Blob→snapshot 검사 순서로 공개한다. 임시 파일은 finally에서 삭제한다. 취소 후 새 export를 공개하지 않고 오래된 snapshot은 이력으로만 보존하며 pack 실패에도 PNG를 유지한다.
+- [x] 전체 요청 대상의 승인·package 완료만 succeeded다. 명시적인 subset package 완료 또는 쓸 이미지가 있는 pack 확정 실패는 partiallySucceeded다. 생성 실패만으로 부분 성공 처리하지 않는다. 2D PNG/ZIP key도 기존 IBlobStorage 삭제 목록에 넣는다.
+- [x] 같은 테스트와 `TaskWorkerRegistrationTests / ReclaimPlanTests / JobLifecycleTests`를 통과시키고 문서와 `feat(sprites): add idempotent review and export commands`로 커밋한다.
 
 ## Task 10: HTTP 계약·상세·파일 응답
 
-**Files:** Create `B/Noxtend.Api/{Contracts/SpriteContracts.cs,Controllers/SpriteJobsController.cs}`, `B/Noxtend.Tests/Api/SpriteApiTests.cs`. Modify `B/Noxtend.Api/{Controllers/JobsController.cs,Contracts/{JobResponse.cs,ApiResults.cs}}`, `B/Noxtend.Tests/Api/JobResponseTests.cs`, `docs/xHuman/backend.md`.
+**Files:** Create `B/Noxtend.Api/{Contracts/SpriteContracts.cs,Controllers/SpriteJobsController.cs}`, `B/Noxtend.Tests/Api/SpriteApiTests.cs`. Modify `B/Noxtend.Api/{Controllers/JobsController.cs,Contracts/{JobResponse.cs,ApiResults.cs}}`, `B/Noxtend.Tests/Api/JobResponseTests.cs`, 기존 3D 전용 접수 경계 `B/Noxtend.Application/{Scene/GetSceneLayoutHandler.cs,Scene/SceneRevisionHandlers.cs,Similarity/StartSimilarityRunHandler.cs}`와 `B/Noxtend.Tests/Application/{SceneLayoutHandlerTests.cs,SimilarityStartHandlerTests.cs}`, `docs/xHuman/backend.md`.
 
 **Interfaces:** spec의 신규 sprite 경로와 기존 상세/목록 확장을 구현한다. mutation은 Task 7/9 command로 변환하고 accepted `{id,status,revision,taskIds}`를 기존 JSON 봉투로 반환한다. 상세에는 `productionMode: threeD|twoD`와 nullable `sprite`, 목록에는 mode와 phase/count 요약을 추가한다. productionMode query는 선택 사항이며 잘못된 값은 400이다. items와 total은 같은 조건을 사용한다.
 
@@ -437,12 +437,12 @@ Assert.DoesNotContain(blobKey, responseJson);
 
 - [ ] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpriteApiTests`로 실패를 확인한다.
 - [ ] request DTO를 파싱한 뒤 Domain 검증을 적용한다. status/error의 HTTP 매핑은 기존 방식을 따른다. 파일 조회는 주소 job의 소유 결과만 읽고 서버가 저장한 key로 연다.
-- [ ] 2D 작업에서 3D mesh/views/기존 review API 호출도 거부한다. 기존 POST /api/jobs와 다운로드 계약은 유지한다.
+- [ ] 2D 작업에서 3D mesh/views/기존 review API 호출도 거부한다. 기존 scene-layout 생성·복원과 similarity 접수는 공통 Application 진입점에서 2D를 거부해 3D 상태 저장·평가 dispatch를 막는다. 기존 POST /api/jobs와 다운로드 계약은 유지한다.
 - [ ] 같은 테스트와 `JobResponseTests`를 통과시킨다. API 계약을 다음 Task의 TS와 대조하고 문서와 `feat(api): expose sprite production and artifact contracts`로 커밋한다.
 
 ## Task 11: TypeScript 계약·API·query cache
 
-**Files:** Create `F/src/domain/sprites/{types.ts,rules.ts,rules.test.ts}`, `F/src/infra/api/{spriteApi.ts,spriteApi.test.ts}`, `F/src/app/queries/useSprites.ts`. Modify `F/src/domain/{job/types.ts,job/backendParity.test.ts,provider/types.ts}`, `F/src/infra/api/{jobApi.ts,jobApi.test.ts}`, `F/src/app/queries/{keys.ts,useJob.ts,useJobList.ts}`, `docs/xHuman/frontend.md`.
+**Files:** Create `F/src/domain/sprites/{types.ts,rules.ts,rules.test.ts}`, `F/src/infra/api/{spriteApi.ts,spriteApi.test.ts}`, `F/src/app/queries/useSprites.ts`. Modify `F/src/domain/{job/types.ts,job/backendParity.test.ts,provider/types.ts}`, `F/src/infra/api/{jobApi.ts,jobApi.test.ts}`, `F/src/app/queries/{keys.ts,useJob.ts,useJobList.ts,media.ts}`, `docs/xHuman/frontend.md`.
 
 **Interfaces:** C# records와 camelCase·nullable을 맞춘다. `startSpriteJob(input:StartSpriteJobInput,signal?:AbortSignal):Promise<SpriteAccepted>`와 `updateSpritePlan / approveSpritePlan / approveSpriteBases / regenerateSpriteFrame / approveSpriteAsset / exportSprites`는 Task 10의 요청을 사용한다. StartSpriteJobInput은 upload/source pair의 discriminated union과 공통 settings/model/requestId다. `SpriteMutationContext={jobId:string;requestId:string;expectedRevision:number}`, `SpriteAccepted={id:string;status:JobStatus;revision:number;taskIds:string[]}`.
 
@@ -462,12 +462,12 @@ it('job list caches separate modes and limits', () => {
 - [ ] `pnpm --filter @nextend/frontend test src/domain/sprites/rules.test.ts src/infra/api/spriteApi.test.ts`로 실패를 확인한다.
 - [ ] `productionModeOf(job:{productionMode?:ProductionMode}):ProductionMode`를 domain에 둔다. 기존 apiRequest 봉투 처리를 재사용하며 HTTP 실패나 알 수 없는 sprite 값을 빈 상태로 숨기지 않는다. `getJob` 응답 경계에서 신규 필드의 enum·필수 필드·배열을 검사하는 `readSpriteJob(raw: unknown): Job`를 `domain/sprites/types.ts`에 두며, legacy 누락만 ThreeD/null로 읽는다.
 - [ ] `listJobs(filter,limit,signal,productionMode?)`, `useJobList(filter,limit,productionMode?)`, `queryKeys.jobList(filter,limit=10,productionMode?)`를 맞춘다. 기존 키의 limit 누락도 이 호출 변경에서 함께 보완한다. job 상세는 기존 jobId key를 공유하며 mutation 성공/409 재조회는 job과 jobLists를 invalidate한다.
-- [ ] 같은 본문의 통신 재전송은 requestId를 유지하고 사용자 새 동작에만 crypto.randomUUID()를 만든다. 자동 mutation retry를 추가하지 않는다. useJob의 기존 status polling을 확장해 pendingReview와 실행 중 task 결과를 빠뜨리지 않게 한다.
+- [ ] 같은 본문의 통신 재전송은 requestId를 유지하고 사용자 새 동작에만 crypto.randomUUID()를 만든다. 자동 mutation retry를 추가하지 않는다. useJob의 기존 status polling을 확장해 pendingReview와 실행 중 task 결과를 빠뜨리지 않게 한다. useJobList의 실패→빈 성공 fallback을 제거하고 error/isError를 반환한다. useJob의 isNotFound는 실제 HTTP 404만 의미하며 연결·계약 오류는 별도 반환한다.
 - [ ] 같은 테스트와 `backendParity.test.ts / jobApi.test.ts`, `pnpm typecheck`를 통과시키고 문서와 `feat(frontend): add typed sprite api and queries`로 커밋한다.
 
 ## Task 12: 정적 2D 배경 스튜디오
 
-**Files:** Create `F/src/features/screens/sprites/{SpriteStudioScreen.tsx,SpriteInput.tsx,SpritePlanReview.tsx,SpriteFrameReview.tsx,SpritePreview.tsx,SpriteExport.tsx}`, `F/tests/e2e/{spriteFakeApi.ts,sprites-static.spec.ts}`. Modify `F/src/routes/{paths.ts,index.tsx,prefetch.ts}`, `F/tests/e2e/fakeApi.ts`의 필요한 handler 연결만,`docs/xHuman/frontend.md`.
+**Files:** Create `F/src/features/screens/sprites/{SpriteStudioScreen.tsx,SpriteInput.tsx,SpritePlanReview.tsx,SpriteFrameReview.tsx,SpritePreview.tsx,SpriteExport.tsx,spriteStyles.ts}`, `F/tests/e2e/{spriteFakeApi.ts,sprites-static.spec.ts}`. Modify `F/src/routes/{paths.ts,index.tsx,prefetch.ts}`, `F/src/domain/sprites/{rules.ts,rules.test.ts}`의 정적 tileOffsets, `F/tests/e2e/fakeApi.ts`의 필요한 handler 연결만, `docs/xHuman/frontend.md`.
 
 **Interfaces:** `ROUTES.spriteBackground='/2d/background'`, `spriteBackgroundJob='/2d/background/:jobId'`. Studio는 URL jobId와 useJob/useSprites를 사용한다. Preview props는 `{sprite:SpriteState;timeMs:number;playing:boolean}`이며 Export는 승인된 asset ID를 받는다. 정적 3×3 square/diamond 반복의 tileOffsets는 기존 rules.ts에 먼저 구현하고 Task 13이 재사용한다. 편집 draft·재생 위치 외의 단계 상태는 job 응답에서 도출한다.
 
@@ -513,7 +513,7 @@ test('fps edit updates metadata without generation requests')
 
 ## Task 14: 홈·3D·2D 메뉴와 기존 결과 진입
 
-**Files:** Modify `F/src/routes/{paths.ts,navItems.ts,navItems.test.ts,prefetch.ts,index.tsx}`, `F/src/features/shell/layout/{Sidebar.tsx,SidebarItem.tsx,sidebarStyles.ts}`, `F/src/features/screens/{categoryLabels.ts,home/HomeScreen.tsx,home/ActiveJobSpotlight.tsx,home/WorkStatusSection.tsx}`, jobPath 호출과 기존 결과의 2D 진입 버튼, `F/tests/e2e/{app-shell-responsive.spec.ts,home-active-job.spec.ts}`, `PRODUCT.md`, `DESIGN.md`, `docs/xHuman/frontend.md`.
+**Files:** Modify `F/src/routes/{paths.ts,navItems.ts,navItems.test.ts,prefetch.ts,index.tsx}`, `F/src/features/shell/layout/{Sidebar.tsx,SidebarItem.tsx,sidebarStyles.ts}`, `F/src/features/screens/{categoryLabels.ts,home/HomeScreen.tsx,home/ActiveJobSpotlight.tsx,home/WorkStatusSection.tsx,background/BackgroundStudioScreen.tsx,character/CharacterStudioScreen.tsx,admin/CallsScreen.tsx}`, jobPath 호출과 기존 결과의 2D 진입 버튼, `F/tests/e2e/{app-shell-responsive.spec.ts,home-active-job.spec.ts}`와 기존 호출 내역의 목록 오류 검사, `PRODUCT.md`, `DESIGN.md`, `docs/xHuman/frontend.md`.
 
 **Interfaces:** `NavGroup={key:'threeD'|'twoD';label:string;items:readonly NavItem[]}`와 NAV_GROUPS, home/footer는 별도로 둔다. `jobPath(category:string,jobId:string,productionMode:'threeD'|'twoD'='threeD'):string`. `/2d/character`, `/2d/object`는 기존 ComingSoonScreen을 사용한다.
 
@@ -531,7 +531,7 @@ test('detail url activates its parent group and restores menu focus')
 - [ ] `pnpm --filter @nextend/frontend test src/routes/navItems.test.ts`, build 후 `pnpm --filter @nextend/frontend test:e2e tests/e2e/app-shell-responsive.spec.ts tests/e2e/home-active-job.spec.ts`로 실패를 확인한다.
 - [ ] desktop은 항상 보이는 3D/2D 제목과 하위 항목을 그린다. 그룹별 접힘 상태를 추가하지 않는다. icon rail의 tooltip/accessible name에 '3D 배경'·'2D 배경'을 포함한다.
 - [ ] ≤720px에서는 home/3D/2D/admin 하단 nav를 사용하고 그룹 버튼으로 기존 Radix menu를 연다. 키보드·Escape·focus 복원·준비 중 표시를 유지한다. 3D object도 현재 준비 중 상태를 유지한다.
-- [ ] 홈 카드에 mode/category를 표시하고 모든 jobPath 호출에 mode를 전달한다. 기존 결과에서는 source job/image ID를 가지고 2D 입력으로 이동한다. 외부 URL·Blob key는 넘기지 않는다. route/prefetch를 함께 갱신하고 lazy import를 유지한다.
+- [ ] 홈·기존 스튜디오·공유 작업 목록을 사용하는 호출 내역에서 Task11의 error/404/정상 빈 결과를 구분해 표시한다. 홈 카드에 mode/category를 표시하고 모든 jobPath 호출에 mode를 전달한다. 기존 결과에서는 source job/image ID를 가지고 2D 입력으로 이동한다. 외부 URL·Blob key는 넘기지 않는다. route/prefetch를 함께 갱신하고 lazy import를 유지한다.
 - [ ] 1440×900·390px, 접힌 nav, 직접 job URL, legacy mode 누락, reduced-motion을 같은 테스트로 확인한다. PRODUCT/DESIGN/xHuman을 동기화하고 `feat(navigation): group studios by 3d and 2d modes`로 커밋한다.
 
 ## Task 15: 양쪽 스택 회귀·품질 경계·완료 기록
