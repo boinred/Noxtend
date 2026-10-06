@@ -28,10 +28,9 @@
 | LLM·AI 공급자·프롬프트·호출 내역 | 변경 전 [docs/xHuman/README.md](docs/xHuman/README.md)에서 작업별 Backend 자료 선택 |
 | Frontend·UI·모션 | [apps/frontend/AGENTS.md](apps/frontend/AGENTS.md), [DESIGN.md](DESIGN.md), 위 스킬의 Frontend·검증 자료 |
 | 인프라·Azure·Kubernetes·루트 CI | [deploy/AGENTS.md](deploy/AGENTS.md), 위 스킬의 배포·검증 자료 |
-| PDCA 문서·단계·복구·구현 자동화 | [pdca-cycle](.agents/skills/pdca-cycle/SKILL.md)와 해당 기능의 canonical 문서 |
-| 일반 문서·AGENTS·스타일 설정 | 위 스킬의 검증 자료; 새 TDD 테스트·PDCA 단계 생성 불필요 |
+| 일반 문서·AGENTS·스타일 설정 | 위 스킬의 검증 자료; 새 TDD 테스트 불필요 |
 
-Plan·Design만 요청하면 애플리케이션 소스를 수정하지 않는다. 실행 요청은 승인된 가역적 범위를 검증까지 진행한다. PDCA 도구가 없거나 상태와 문서가 충돌하면 단계 완료·일치율을 임의로 만들거나 상태 JSON을 직접 고치지 않는다.
+Plan·Design만 요청하면 애플리케이션 소스를 수정하지 않는다. 실행 요청은 승인된 가역적 범위를 검증까지 진행한다.
 
 ## 코딩 스타일과 주석
 

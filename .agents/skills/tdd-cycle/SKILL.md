@@ -18,8 +18,8 @@ Implement the user's latest natural-language request in the smallest verifiable 
 2. Design: select the smallest existing-code solution.
    - For API/DB/queue/UI changes, settle the contract, state transitions, failures, cancellation, retry, compatibility, and verification method before implementation.
    - Small changes need only the four-stage rationale in the work report. Do not create a feature document or abstraction for every edit.
-   - For changes across layers or decisions affecting operations/data, update existing Plan/Design/ADR artifacts when needed. Use `$pdca-cycle` only when changing PDCA artifacts or lifecycle state.
-   - Parallelize independent files or checks; assign one owner and sequence shared API contracts, DB schemas, and PDCA state writes.
+   - For changes across layers or decisions affecting operations/data, update existing Plan/Design/ADR artifacts when needed.
+   - Parallelize independent files or checks; assign one owner and sequence shared API contracts and DB schemas.
 
 3. Implement — Red: demonstrate the missing behavior.
    - Select one small behavior or one reproducible defect.
@@ -47,7 +47,7 @@ Implement the user's latest natural-language request in the smallest verifiable 
    - If credentials, services, environment failures, or unrelated existing failures prevent verification, report the exact command and failure instead of claiming completion.
    - Distinguish implemented behavior, automated checks, manual observations, and real API verification. Skipped or uncollected tests are not passing evidence; identify a pre-existing failure only with baseline evidence.
 
-Ordinary documentation, `AGENTS.md`, or formatting configuration changes do not need a new behavior test or PDCA phase. Use the relevant repeatable configuration, link, command, scope, and whitespace checks from the verification reference instead.
+Ordinary documentation, `AGENTS.md`, or formatting configuration changes do not need a new behavior test. Use the relevant repeatable configuration, link, command, scope, and whitespace checks from the verification reference instead.
 
 ## Execution Rules
 

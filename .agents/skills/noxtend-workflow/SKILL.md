@@ -18,5 +18,4 @@ description: Select Noxtend-specific implementation, UI skill routing, infrastru
 변경하는 영역의 자료와 검증 자료만 읽는다. API 계약 변경은 Backend와 Frontend 양쪽 자료를 읽고, 실제 DB·배포 변경은 배포 자료도 확인한다.
 
 - 코드 작성·수정·리뷰에는 기존 `$karpathy-guidelines`를 적용한다. 동작 구현은 `$tdd-cycle`의 계획 → 설계 → 구현 → 검증 흐름을 사용하며, 이 스킬에서 그 절차를 복제하지 않는다.
-- PDCA 문서나 단계 변경은 기존 `$pdca-cycle`을 사용한다. 일반 문서·스타일 도구 설정을 위해 새 PDCA 기능을 등록하지 않는다.
 - 읽기 전용 UI 감사, 계획·설계 요청을 구현 요청으로 확대하지 않는다. 스킬 이름이나 파일 존재는 관련 도구·서비스가 현재 사용 가능하다는 증거가 아니다.

@@ -6,7 +6,7 @@
 
 - `package.json`·루트 `pnpm-lock.yaml`, `vite.config.ts`·`playwright.config.ts`와 관련 테스트를 읽는다.
 - 현재 React 19·TypeScript·Vite·React Router·TanStack Query·Tailwind·shadcn/ui·Radix 구성을 확인하고 기존 훅·프리미티브로 해결 가능한지 먼저 검토한다.
-- API 계약 변경은 Backend DTO·컨트롤러를 함께 확인한다. 과거 PDCA·README 완료 표시를 현재 동작으로 사용하지 않는다.
+- API 계약 변경은 Backend DTO·컨트롤러를 함께 확인한다. 과거 기획 문서·README 완료 표시를 현재 동작으로 사용하지 않는다.
 
 ## UI 스킬 선택
 

@@ -1,4 +1,0 @@
-interface:
-  display_name: "PDCA Cycle"
-  short_description: "PDCA 문서와 상태를 동기화하며 전체 사이클 수행"
-  default_prompt: "Use $pdca-cycle to run this feature PDCA phase and verify state synchronization."
