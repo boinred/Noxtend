@@ -1,3 +1,5 @@
+import type { ProductionMode, SpriteState, SpriteSummary } from '../sprites/types'
+
 /**
  * Design Ref: §3.4 — 작업 도메인 타입. 순수 TS 이며 외부 라이브러리를 쓰지 않는다.
  *
@@ -302,6 +304,8 @@ export interface JobModels {
 }
 
 export interface Job {
+  productionMode?: ProductionMode
+  sprite?: SpriteState | null
   id: string
   category: AssetCategory
   sourceImageId: string
@@ -324,6 +328,8 @@ export interface Job {
 
 /** 홈 두 섹션이 쓰는 요약. 목록에 프롬프트 전문과 공정을 싣지 않는다 (§4.2 #7). */
 export interface JobSummary {
+  productionMode?: ProductionMode
+  sprite?: SpriteSummary | null
   id: string
   category: AssetCategory
   status: JobStatus
@@ -455,7 +461,7 @@ export function nextPollDelayMs(attempt: number): number {
 // 화면마다 달라진다.
 //
 // 별도 파일이 아니라 이 파일에 있는 이유는 §9.2 계층 규칙이다 — `domain/job` 은
-// 타입조차 밖에서 끌어오지 않으므로 형제 파일 사이의 import 도 두지 않는다.
+// 공정의 파생 규칙과 타입을 같은 파일에서 확인한다.
 
 /** 파츠 카드 하나가 알아야 하는 것 전부. */
 export interface PartCard {

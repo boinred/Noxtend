@@ -23,17 +23,18 @@ function backendFile(relative: string): string {
 
 /** C# 열거형 본문에서 값 이름만 뽑는다 — 주석과 특성은 버린다. */
 function backendEnumValues(source: string, name: string): string[] {
-  const body = new RegExp(`enum\\s+${name}\\s*\\{([\\s\\S]*?)\\n\\}`).exec(source)?.[1]
+  const body = new RegExp(`enum\\s+${name}\\s*\\{([^}]+)\\}`).exec(source)?.[1]
   if (body === undefined) {
     throw new Error(`${name} 열거형을 찾지 못했습니다`)
   }
 
   return (
     body
-      .split('\n')
+      .replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '')
+      .split(',')
       .map((line) => line.trim())
-      // 값 줄만 남긴다: 식별자 뒤에 쉼표가 오는 줄
-      .map((line) => /^([A-Z][A-Za-z0-9]*)(?:\s*=\s*\d+)?,$/.exec(line)?.[1])
+      // 같은 줄에 선언된 enum과 마지막 쉼표 없는 값도 포함
+      .map((line) => /^([A-Z][A-Za-z0-9]*)(?:\s*=\s*\d+)?$/.exec(line)?.[1])
       .filter((value): value is string => value !== undefined)
   )
 }
@@ -77,6 +78,22 @@ describe('백엔드 열거형과 프론트 유니온이 일치한다', () => {
   const providerBackend =
     backendFile('Provider/ProviderKind.cs') + backendFile('Provider/ProviderCapability.cs')
   const providerFrontend = readFileSync(resolve(__dirname, '../provider/types.ts'), 'utf8')
+
+  it.each([
+    'ProductionMode',
+    'SpriteView',
+    'SpriteOutputKind',
+    'SpriteRepeat',
+    'SpriteTileLayout',
+    'SpritePhase',
+  ])('%s — 2D wire enum과 일치한다', (name) => {
+    const spriteFrontend = readFileSync(resolve(__dirname, '../sprites/types.ts'), 'utf8')
+    const spriteBackend =
+      backendFile('Job/ProductionMode.cs') + backendFile('Sprites/SpriteTypes.cs')
+    expect(frontendUnion(spriteFrontend, name).sort()).toEqual(
+      backendEnumValues(spriteBackend, name).map(toWire).sort(),
+    )
+  })
 
   it('JobStatus — 값이 늘면 화면이 모르는 상태를 받는다', () => {
     expect(frontendUnion(jobFrontend, 'JobStatus').sort()).toEqual(

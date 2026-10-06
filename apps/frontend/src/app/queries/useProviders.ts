@@ -39,21 +39,15 @@ export interface UseProvidersResult {
   /** 3D 를 만들 수 있는 공급자 (사이클 #10). 없으면 3D 없이 접수한다. */
   meshProviders: Provider[]
   isLoading: boolean
+  error: Error | null
+  isError: boolean
+  refetch: () => Promise<unknown>
 }
 
 export function useProviders(): UseProvidersResult {
   const query = useQuery({
     queryKey: queryKeys.providers(),
-    queryFn: async ({ signal }) => {
-      try {
-        return await listProviders(signal)
-      } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') throw error
-
-        // API 부재 시 빈 목록 — 스튜디오는 "공급자 0개" 안내를 띄우면 된다 (§6)
-        return []
-      }
-    },
+    queryFn: ({ signal }) => listProviders(signal),
     retry: false,
   })
 
@@ -74,19 +68,16 @@ export function useProviders(): UseProvidersResult {
       providerSupports(provider, 'meshGeneration'),
     ),
     isLoading: query.isLoading,
+    error: query.error,
+    isError: query.isError,
+    refetch: query.refetch,
   }
 }
 
 export interface UseProviderModelsResult {
   models: ProviderModel[]
   isLoading: boolean
-  /**
-   * 목록을 못 가져왔을 때 보여줄 한 줄. 성공이면 `null`.
-   *
-   * **빈 배열로 흡수하지 않는다.** 공급자 목록(`useProviders`)은 API 부재를 빈 배열로
-   * 삼켜 홈이 깨지지 않게 하지만 (§8.6), 모델 목록은 반대다 — 여기가 비면 실행이
-   * 막히므로 사용자가 무엇을 해야 하는지 알아야 한다.
-   */
+  /** 목록 조회 실패 안내; 정상 빈 결과와 구분 */
   errorMessage: string | null
 }
 

@@ -2,6 +2,8 @@
  * Design Ref: §4.2 #5~#8 — 작업 엔드포인트.
  */
 import { apiRequest, apiUrl } from './client'
+import { readSpriteJob, readSpriteSummary } from '@/domain/sprites/types'
+import type { ProductionMode } from '@/domain/sprites/types'
 import type {
   SceneLayoutData,
   AssetCategory,
@@ -51,14 +53,14 @@ export function startJob(input: StartJobInput, signal?: AbortSignal): Promise<Jo
   return apiRequest<JobAccepted>('/api/jobs', { method: 'POST', body: input, signal })
 }
 
-export function getJob(jobId: string, signal?: AbortSignal): Promise<Job> {
-  return apiRequest<Job>(`/api/jobs/${jobId}`, { signal })
+export async function getJob(jobId: string, signal?: AbortSignal): Promise<Job> {
+  return readSpriteJob(await apiRequest<unknown>(`/api/jobs/${jobId}`, { signal }))
 }
 
 export type JobListFilter = 'active' | 'terminal'
 
 interface JobListEnvelope {
-  items: JobSummary[]
+  items: unknown[]
   /** 조건에 맞는 전체 건수 — `items` 는 limit 까지만 담는다 */
   total?: number
 }
@@ -74,13 +76,23 @@ export async function listJobs(
   filter: JobListFilter,
   limit = 10,
   signal?: AbortSignal,
+  productionMode?: ProductionMode,
 ): Promise<JobListPage> {
-  const result = await apiRequest<JobListEnvelope>(`/api/jobs?status=${filter}&limit=${limit}`, {
-    signal,
-  })
+  const mode = productionMode === undefined ? '' : `&productionMode=${productionMode}`
+  const result = await apiRequest<JobListEnvelope>(
+    `/api/jobs?status=${filter}&limit=${limit}${mode}`,
+    { signal },
+  )
+  if (
+    !result ||
+    !Array.isArray(result.items) ||
+    (result.total !== undefined && (!Number.isInteger(result.total) || result.total < 0))
+  ) {
+    throw new Error('작업 목록 응답 계약이 유효하지 않습니다')
+  }
 
   // 옛 서버는 total 을 안 보낸다 — 그때는 배지가 보이는 수만 쓴다
-  return { items: result.items, total: result.total }
+  return { items: result.items.map(readSpriteSummary), total: result.total }
 }
 
 export function cancelJob(jobId: string, signal?: AbortSignal): Promise<JobAccepted> {
