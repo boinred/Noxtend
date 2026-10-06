@@ -26,3 +26,4 @@
 - 모든 컨트롤의 접근 가능한 이름·키보드 조작·포커스 표시를 유지한다. 상태는 텍스트·ARIA로도 전달하며 dialog 닫기·포커스 복귀·`prefers-reduced-motion`을 지원한다.
 - 화면은 기본 1440×900과 좁은 화면에서 확인한다. 긴 파츠 이름·메시지·메뉴·이미지·3D 결과의 잘림·가로 넘침을 방지한다.
 - 포맷은 루트 `.editorconfig`·이 디렉터리의 `.prettierrc.json`·`.prettierignore`, 코드 품질·계층 검사는 기존 ESLint·Oxlint 설정을 따른다. `pnpm lint`에는 포맷 검사도 포함한다. 무관한 전체 소스 재포맷을 묶지 않는다.
+- 커밋 전 lint는 루트 `.githooks/pre-commit`이 실행한다. 새 clone은 루트에서 `pnpm hooks:install`로 한 번 등록한다. 실행 대상·부분 stage 제약은 [검증 절차](../../.agents/skills/noxtend-workflow/references/verification.md)의 커밋 훅 항목을 따른다.

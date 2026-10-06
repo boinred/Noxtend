@@ -7,6 +7,8 @@
     "node": ">=24"
   },
   "scripts": {
+    "hooks:install": "git config --local core.hooksPath .githooks",
+    "hooks:test": "node --test .githooks/pre-commit.test.mjs",
     "dev": "pnpm --filter @nextend/frontend dev",
     "build": "pnpm --filter @nextend/frontend build",
     "preview": "pnpm --filter @nextend/frontend preview",

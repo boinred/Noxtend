@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+
+status=0
+git diff --cached --quiet -- apps/frontend/ package.json pnpm-lock.yaml pnpm-workspace.yaml .editorconfig .githooks/ || status=$?
+
+[ "$status" -ne 0 ] || exit 0
+[ "$status" -eq 1 ] || exit "$status"
+
+exec pnpm --filter @nextend/frontend lint

@@ -50,6 +50,18 @@ pnpm test:e2e
 - `tests/e2e/fakeApi.ts`의 가짜 API로 요청·응답·오류·단계 전이를 확인한다. 실제 공급자 생성은 비용·승인 범위를 확인한 별도 검증이다.
 - 계약·상태 변경은 `src/domain/job/backendParity.test.ts`, API client 테스트·관련 가짜 응답을 함께 검토한다. 테스트 파일 존재와 실제 수집·실행을 구분한다.
 
+## 커밋 훅
+
+```bash
+pnpm hooks:install
+pnpm hooks:test
+```
+
+- `.githooks/pre-commit`은 staged 변경에 `apps/frontend/`, 루트 `package.json`·`pnpm-lock.yaml`·`pnpm-workspace.yaml`·`.editorconfig` 또는 `.githooks/`가 있으면 기존 Frontend `lint`를 실행한다. Backend만 변경한 커밋과 staged 변경이 없는 실행은 건너뛴다. lint 또는 Git diff 실패는 커밋을 차단한다.
+- 훅은 검사만 수행하며 자동 포맷·stage·stash를 하지 않는다. 실행 대상은 staged 경로로 결정하지만 lint는 현재 작업 트리 전체 Frontend를 읽는다. 부분 stage의 커밋 내용만 격리해 검증하는 것은 아니다.
+- `hooks:install`은 이 checkout의 Git 설정에 `.githooks` 경로를 등록한다. 새 clone에는 한 번 등록해야 한다. Git의 `--no-verify`로 우회할 수 있으므로 훅 통과가 CI·전체 회귀·수동 검증을 대신하지 않는다.
+- `hooks:test`는 임시 Git 저장소와 가짜 pnpm으로 실행·건너뜀·실패 전파 및 실제 커밋 차단을 확인한다. 실제 Frontend 검사 명령은 위의 `pnpm lint`를 사용한다.
+
 ## 코딩 스타일 도구
 
 - 기본 공백·인코딩·줄 끝은 루트 `.editorconfig`를 따른다. Frontend 포맷은 `apps/frontend/.prettierrc.json`·`.prettierignore`, 코드 품질·계층 검사는 `apps/frontend/eslint.config.js`·기존 Oxlint를 사용한다. `eslint-config-prettier`로 포맷 규칙 충돌을 막고 `pnpm lint`에 포맷 검사도 포함한다.
