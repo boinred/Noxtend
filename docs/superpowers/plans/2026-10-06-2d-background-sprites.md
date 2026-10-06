@@ -467,11 +467,11 @@ it('job list caches separate modes and limits', () => {
 
 ## Task 12: 정적 2D 배경 스튜디오
 
-**Files:** Create `F/src/features/screens/sprites/{SpriteStudioScreen.tsx,SpriteInput.tsx,SpritePlanReview.tsx,SpriteFrameReview.tsx,SpritePreview.tsx,SpriteExport.tsx,spriteStyles.ts}`, `F/tests/e2e/{spriteFakeApi.ts,sprites-static.spec.ts}`. Modify `F/src/routes/{paths.ts,index.tsx,prefetch.ts}`, `F/src/domain/sprites/{rules.ts,rules.test.ts}`의 정적 tileOffsets, `F/tests/e2e/fakeApi.ts`의 필요한 handler 연결만, `docs/xHuman/frontend.md`.
+**Files:** Create `F/src/features/screens/sprites/{SpriteStudioScreen.tsx,SpriteInput.tsx,SpritePlanReview.tsx,SpriteFrameReview.tsx,SpritePreview.tsx,SpriteExport.tsx,spriteStyles.ts}`, `F/tests/e2e/{spriteFakeApi.ts,sprites-static.spec.ts}`. Modify `F/src/app/queries/errors.ts`의 HTTP 상태 전달 helper, `F/src/routes/{paths.ts,index.tsx,prefetch.ts,navItems.test.ts}`, `F/src/domain/sprites/{rules.ts,rules.test.ts}`의 정적 tileOffsets, `F/tests/e2e/fakeApi.ts`의 필요한 handler 연결만, `docs/xHuman/frontend.md`.
 
-**Interfaces:** `ROUTES.spriteBackground='/2d/background'`, `spriteBackgroundJob='/2d/background/:jobId'`. Studio는 URL jobId와 useJob/useSprites를 사용한다. Preview props는 `{sprite:SpriteState;timeMs:number;playing:boolean}`이며 Export는 승인된 asset ID를 받는다. 정적 3×3 square/diamond 반복의 tileOffsets는 기존 rules.ts에 먼저 구현하고 Task 13이 재사용한다. 편집 draft·재생 위치 외의 단계 상태는 job 응답에서 도출한다.
+**Interfaces:** `ROUTES.spriteBackground='/2d/background'`, `spriteBackgroundJob='/2d/background/:jobId'`. Studio는 URL jobId와 useJob/useSprites를 사용한다. Preview props는 `{sprite:SpriteState;timeMs:number;playing:boolean}`이며 Export는 승인된 asset ID를 받는다. 정적 3×3 square/diamond 반복은 `tileOffsets(width:number,height:number,repeat:SpriteRepeat,layout:SpriteTileLayout):readonly {x:number;y:number}[]`를 기존 rules.ts에 먼저 구현하고 Task 13이 재사용한다. 편집 draft·재생 위치 외의 단계 상태는 job 응답에서 도출한다.
 
-- [ ] 기존 `installFakeApi(page,options)`에 작은 sprite 시나리오를 연결한다. 정적 fixture의 접수/분석/승인/결과/export 응답과 요청 기록은 새 파일에 둔다.
+- [x] 기존 `installFakeApi(page,options)`에 작은 sprite 시나리오를 연결한다. 정적 fixture의 접수/분석/승인/결과/export 응답과 요청 기록은 새 파일에 둔다.
 
 ```typescript
 test('static layers require plan and base review before export', async ({ page }) => {
@@ -481,17 +481,17 @@ test('static layers require plan and base review before export', async ({ page }
 })
 ```
 
-- [ ] `pnpm build`, `pnpm --filter @nextend/frontend test:e2e tests/e2e/sprites-static.spec.ts`로 아직 없는 흐름의 실패를 확인한다.
-- [ ] 기존 업로드·ProviderSelect·ModelSelect·버튼·input·tooltip·tokens를 재사용한다. view/kind는 필수이며 모델 지원 거부 이유를 표시한다. 단가 미등록은 '비용 미확인', 생성 장수·모델은 계획 승인 전에 표시한다.
-- [ ] 원본 ROI·depth/name 편집과 add/remove, 1..12개·64프레임 상한을 표시한다. 기준 이미지는 checkerboard에서 검수하고 layer 합성·square/diamond tile 반복을 보여준다. 선택 시점의 재구성 안내를 입력에 표시한다.
-- [ ] plan/base 승인·충돌 재조회·failed task retry·명시적 subset export와 제외 대상을 연결한다. exportReady에는 pack 동작만 표시한다. 오류를 빈 카드나 임의 0 진행률로 숨기지 않는다.
-- [ ] 같은 E2E에서 세 view×두 유형, 정적 1프레임, 새로고침 재개·다운로드 파일명을 확인한다. `pnpm lint / pnpm typecheck`도 통과시키고 문서와 `feat(frontend): add static 2d background studio`로 커밋한다.
+- [x] `pnpm build`, `pnpm --filter @nextend/frontend test:e2e tests/e2e/sprites-static.spec.ts`로 아직 없는 흐름의 실패를 확인한다.
+- [x] 기존 업로드·ProviderSelect·ModelSelect·버튼·input·tooltip·tokens를 재사용한다. view/kind는 필수이며 모델 지원 거부 이유를 표시한다. 단가 미등록은 '비용 미확인', 생성 장수·모델은 계획 승인 전에 표시한다.
+- [x] 원본 ROI·depth/name 편집과 add/remove, 1..12개·64프레임 상한을 표시한다. 기준 이미지는 checkerboard에서 검수하고 layer 합성·square/diamond tile 반복을 보여준다. 선택 시점의 재구성 안내를 입력에 표시한다.
+- [x] plan/base 승인·충돌 재조회·failed task retry·명시적 subset export와 제외 대상을 연결한다. exportReady에는 pack 동작만 표시한다. 오류를 빈 카드나 임의 0 진행률로 숨기지 않는다.
+- [x] 같은 E2E에서 세 view×두 유형, 정적 1프레임, 새로고침 재개·다운로드 파일명을 확인한다. `pnpm lint / pnpm typecheck`도 통과시키고 문서와 `feat(frontend): add static 2d background studio`로 커밋한다.
 
 ## Task 13: 애니메이션 설정·재생·프레임 검수
 
 **Files:** Create `F/src/domain/sprites/{playback.ts,playback.test.ts}`, `F/tests/e2e/sprites-animation.spec.ts`. Modify Task 12의 sprite components/fake,`docs/xHuman/frontend.md`.
 
-**Interfaces:** `frameAt(timeMs:number,fps:number,frameCount:number):number`는 순수 계산이며 `tileOffsets(view:SpriteView,canvas:SpriteCanvas,repeat:SpriteRepeat):readonly {x:number;y:number}[]`는 Task 12의 rules.ts 함수를 재사용한다. UI는 대상별 loop/frameCount/notes/FPS, current image ID와 승인 snapshot을 사용한다. 재생 중에만 requestAnimationFrame을 쓰고 reduced-motion의 초기 상태는 paused다.
+**Interfaces:** `frameAt(timeMs:number,fps:number,frameCount:number):number`는 순수 계산이며 `tileOffsets(width:number,height:number,repeat:SpriteRepeat,layout:SpriteTileLayout):readonly {x:number;y:number}[]`는 Task 12의 rules.ts 함수를 재사용한다. UI는 대상별 loop/frameCount/notes/FPS, current image ID와 승인 snapshot을 사용한다. 재생 중에만 requestAnimationFrame을 쓰고 reduced-motion의 초기 상태는 paused다.
 
 - [ ] 순수 함수 테스트와 UI E2E를 먼저 작성한다.
 
@@ -513,7 +513,7 @@ test('fps edit updates metadata without generation requests')
 
 ## Task 14: 홈·3D·2D 메뉴와 기존 결과 진입
 
-**Files:** Modify `F/src/routes/{paths.ts,navItems.ts,navItems.test.ts,prefetch.ts,index.tsx}`, `F/src/features/shell/layout/{Sidebar.tsx,SidebarItem.tsx,sidebarStyles.ts}`, `F/src/features/screens/{categoryLabels.ts,home/HomeScreen.tsx,home/ActiveJobSpotlight.tsx,home/WorkStatusSection.tsx,background/BackgroundStudioScreen.tsx,character/CharacterStudioScreen.tsx,admin/CallsScreen.tsx}`, jobPath 호출과 기존 결과의 2D 진입 버튼, `F/tests/e2e/{app-shell-responsive.spec.ts,home-active-job.spec.ts}`와 기존 호출 내역의 목록 오류 검사, `PRODUCT.md`, `DESIGN.md`, `docs/xHuman/frontend.md`.
+**Files:** Modify `F/src/routes/{paths.ts,navItems.ts,navItems.test.ts,prefetch.ts,index.tsx}`, `F/src/features/shell/layout/{Sidebar.tsx,SidebarItem.tsx,sidebarStyles.ts}`, `F/src/features/screens/{categoryLabels.ts,home/HomeScreen.tsx,home/ActiveJobSpotlight.tsx,home/WorkStatusSection.tsx,background/BackgroundStudioScreen.tsx,character/CharacterStudioScreen.tsx,admin/CallsScreen.tsx}`, jobPath 호출과 `F/src/features/screens/background/PartGallery.tsx`의 기존 결과 2D 진입 버튼, `F/tests/e2e/{app-shell-responsive.spec.ts,home-active-job.spec.ts}`와 기존 호출 내역의 목록 오류 검사, `PRODUCT.md`, `DESIGN.md`, `docs/xHuman/frontend.md`.
 
 **Interfaces:** `NavGroup={key:'threeD'|'twoD';label:string;items:readonly NavItem[]}`와 NAV_GROUPS, home/footer는 별도로 둔다. `jobPath(category:string,jobId:string,productionMode:'threeD'|'twoD'='threeD'):string`. `/2d/character`, `/2d/object`는 기존 ComingSoonScreen을 사용한다.
 
