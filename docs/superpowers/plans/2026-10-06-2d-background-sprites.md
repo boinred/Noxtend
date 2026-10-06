@@ -188,7 +188,7 @@ Assert.Equal(oldImageIds, job.Sprites.Assets[0].Frames.Select(x => x.CurrentImag
 
 **Interfaces:** 기존 Port에 `InspectSpriteAsync(Stream image, long maxBytes, long maxPixels, CancellationToken ct) -> Task<SpriteImageInfo>`와 `NormalizeSpriteAsync(Stream image, SpriteCanvas canvas, SpriteTransform transform, bool requireTransparency, SpriteTileLayout layout, CancellationToken ct) -> Task<Stream>`를 추가한다. `SpriteImageInfo(int Width,int Height,bool HasTransparentPixels,bool HasVisiblePixels)`를 정의한다. 실패는 기존 공급자 응답/이미지 검증 예외 경로로 변환한다.
 
-- [ ] 유효 RGBA, 전부 투명, 불투명 흰색/체크무늬, PNG MIME의 비이미지, 16,777,217픽셀 헤더 fixture를 테스트 파일에서 작은 byte 배열/Skia로 만든다.
+- [x] 유효 RGBA, 전부 투명, 불투명 흰색/체크무늬, PNG MIME의 비이미지, 16,777,217픽셀 헤더 fixture를 테스트 파일에서 작은 byte 배열/Skia로 만든다.
 
 ```csharp
 [Fact] public Task OpaqueCheckerboard_IsNotTransparency();
@@ -208,16 +208,16 @@ Assert.Equal(0, diamondCornerAlpha);
 Assert.True(info.HasVisiblePixels);
 ```
 
-- [ ] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpritePixelTests`로 실패를 확인한다.
-- [ ] 기존 Skia 구현을 partial로 확장한다. 헤더·64비트 픽셀 곱·상한을 allocation 전에 확인하고 EXIF 방향을 반영한다. 공급자 원본의 실제 알파를 mask/contain 전에 검사하여 인공 padding이 투명 지원을 대신하지 않도록 한다.
-- [ ] fixed contain transform을 한 번 정하고, 프레임별 콘텐츠 bbox를 사용하지 않는다. 평가용 `NormalizeToFrameAsync`의 불투명 배경 채우기를 재사용하지 않는다.
-- [ ] 신규 테스트와 `SkiaImageTranscoderTests`를 통과시키고 문서를 동기화해 `feat(image): validate and normalize sprite png output`로 커밋한다.
+- [x] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpritePixelTests`로 실패를 확인한다.
+- [x] 기존 Skia 구현을 partial로 확장한다. 헤더·64비트 픽셀 곱·상한을 allocation 전에 확인하고 EXIF 방향을 반영한다. 공급자 원본의 실제 알파를 mask/contain 전에 검사하여 인공 padding이 투명 지원을 대신하지 않도록 한다.
+- [x] fixed contain transform을 한 번 정하고, 프레임별 콘텐츠 bbox를 사용하지 않는다. 평가용 `NormalizeToFrameAsync`의 불투명 배경 채우기를 재사용하지 않는다.
+- [x] 신규 테스트와 `SkiaImageTranscoderTests`를 통과시키고 문서를 동기화해 `feat(image): validate and normalize sprite png output`로 커밋한다.
 
 ## Task 4: SQL 저장·고유 제약·이전 작업 호환
 
-**Files:** Create `B/Noxtend.Infrastructure/Persistence/Configurations/SpritePipelineConfiguration.cs`, `B/Noxtend.Infrastructure/Persistence/SpriteJsonSerializer.cs`, `B/Noxtend.Tests/Infrastructure/SpritePersistenceTests.cs`. Modify `B/Noxtend.Domain/Ports/IJobRepository.cs`, `B/Noxtend.Infrastructure/Persistence/{NoxtendDbContext.cs,Configurations/PipelineJobConfiguration.cs,Repositories/EfJobRepository.cs,InMemory/InMemoryJobRepository.cs}`, `B/Noxtend.Application/Pipeline/ListJobsHandler.cs`, `docs/xHuman/backend.md`. EF 생성 파일: `Migrations/<timestamp>_AddSpriteProduction.cs`, Designer, snapshot.
+**Files:** Create `B/Noxtend.Infrastructure/Persistence/Configurations/SpritePipelineConfiguration.cs`, `B/Noxtend.Infrastructure/Persistence/SpriteJsonSerializer.cs`, `B/Noxtend.Tests/Infrastructure/SpritePersistenceTests.cs`. Modify `B/Noxtend.Domain/Ports/IJobRepository.cs`, `B/Noxtend.Infrastructure/Persistence/{Configurations/PipelineJobConfiguration.cs,Repositories/EfJobRepository.cs,InMemory/InMemoryJobRepository.cs}`, `B/Noxtend.Application/Pipeline/ListJobsHandler.cs`, `B/Noxtend.Tests/Domain/SpriteLifecycleTests.cs`의 임시 Ignore assertion과 실제 IJobRepository 테스트 구현, `docs/xHuman/backend.md`. EF 생성 파일: `Migrations/<timestamp>_AddSpriteProduction.cs`, Designer, snapshot.
 
-**Interfaces:** `IJobRepository.GetSpriteRequestAsync(Guid requestId, CancellationToken ct) -> Task<SpriteAcceptedRequest?>`를 추가한다. CountAsync/ListAsync와 ListJobsHandler의 기존 인수 끝에 `ProductionMode? productionMode = null`을 추가해 기존 호출을 유지한다. request는 job이 소유하고 `RecordSpriteRequest(SpriteAcceptedRequest request)`로 기록한다. 기존 `SaveChangesAsync`가 상태·task·request를 함께 저장한다.
+**Interfaces:** `IJobRepository.GetSpriteRequestAsync(Guid requestId, CancellationToken ct) -> Task<SpriteAcceptedRequest?>`를 추가한다. CountAsync/ListAsync와 ListJobsHandler의 기존 인수 끝에 `ProductionMode? productionMode = null`을 추가해 기존 호출을 유지한다. request는 job이 소유하고 `AcceptSpriteRequest(SpriteAcceptedRequest request)`로 기록한다. 기존 `SaveChangesAsync`가 상태·task·request를 함께 저장한다.
 
 - [ ] 기존 `SqlServerFixture.FreshDatabase`와 `[Collection(SqlServerCollection.Name)]`로 round-trip·이전 migration 갱신·slot 중복·request 중복·삭제를 검증한다.
 
