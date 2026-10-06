@@ -742,6 +742,7 @@ public sealed partial class PipelineJob
                     .Where(t => t.Kind == TaskKind.PackSprites).MaxBy(t => t.Ordinal)?.Id)) return false;
             var reopening = IsTerminal;
             task.ResetForManualRetry();
+            if (task.SpriteExportInput is { } exportInput) Sprites!.ResetExportCompletion(exportInput.ExportId);
             Status = reopening ? JobStatus.Pending : JobStatus.Running;
             CompletedAt = null;
             FailureReason = null;

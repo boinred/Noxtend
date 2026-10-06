@@ -278,6 +278,70 @@ public sealed class SpriteCommandTests
         Assert.True(png.Length > 0);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConsumedSubsetPackFailure_DoesNotCloseExcludedAssetRegeneration(bool editMetadata)
+    {
+        var imageCalls = 0;
+        var f = new PipelineFixture(options: new() { MaxAttempts = 1 }, imageProvider: FakeImageProvider.Throwing(() =>
+        {
+            imageCalls++;
+            return new InvalidOperationException("pack must not generate images");
+        }));
+        var job = await Ready(f, 2);
+        var included = job.Sprites!.Assets[0];
+        var excluded = job.Sprites.Assets[1];
+        var receipt = await f.SpriteCommands.ExportAsync(Context(job), [included.Id], default);
+        var pack = job.Tasks.Single(t => t.Id == receipt.Value!.TaskIds.Single());
+        var frozen = pack.SpriteExportInput!;
+        var failing = new RunSpritePackTaskHandler(f.Jobs, new FailingPackageSave(f.Blobs),
+            new SpritePackageWriter(new SkiaImageTranscoder()), f.Execution, f.Clock, f.Options,
+            NullLogger<RunSpritePackTaskHandler>.Instance);
+        Assert.Equal(RunTaskOutcome.Failed, await failing.HandleAsync(pack.Id, default));
+        Assert.Equal(JobStatus.PartiallySucceeded, job.Status);
+        Assert.Equal("SPRITE_PACK_FAILED", job.FailureReason);
+        if (editMetadata)
+        {
+            var plans = job.Sprites.Assets.Select(a => a.Plan.Id == excluded.Id
+                ? a.Plan with { Name = "수정한 제외 대상", Fps = 10 } : a.Plan).ToArray();
+            Assert.True((await f.SpriteCommands.UpdatePlanAsync(Context(job), plans, default)).IsSuccess);
+            job.ReconcileFromTasks(f.Clock.Now);
+            Assert.Equal(JobStatus.PendingReview, job.Status);
+            Assert.Null(job.FailureReason);
+        }
+        var regenerated = await f.SpriteCommands.RegenerateAsync(Context(job), excluded.Id, 0, default);
+        Assert.True(regenerated.IsSuccess);
+        Assert.Null(job.CompletedAt);
+        Assert.Null(job.FailureReason);
+        await FinishFrames(f, job, regenerated.Value!.TaskIds);
+        Assert.Equal(JobStatus.PendingReview, job.Status);
+        Assert.Equal(SpritePhase.BaseReview, job.Sprites.Phase);
+        Assert.Null(job.FailureReason);
+        Assert.Null(job.CompletedAt);
+        Assert.Equal(frozen.ExportId, job.Sprites.CompletedExportId);
+        Assert.Same(included.Approval!.Snapshot, frozen.Assets.Single());
+        var count = job.Tasks.Count;
+        Assert.True((await f.Retry.HandleAsync(job.Id, pack.Id, default)).IsSuccess);
+        Assert.Null(job.Sprites.CompletedExportId);
+        Assert.Same(frozen, pack.SpriteExportInput);
+        Assert.Equal(RunTaskOutcome.Failed, await failing.HandleAsync(pack.Id, default));
+        Assert.Equal(JobStatus.PartiallySucceeded, job.Status);
+        Assert.Equal(frozen.ExportId, job.Sprites.CompletedExportId);
+        Assert.Equal(SpritePhase.Packaging, job.Sprites.Phase);
+        Assert.True((await f.Retry.HandleAsync(job.Id, pack.Id, default)).IsSuccess);
+        Assert.Null(job.Sprites.CompletedExportId);
+        Assert.Equal(RunTaskOutcome.Succeeded, await f.RunSpritePack.HandleAsync(pack.Id, default));
+        Assert.Equal(JobStatus.PartiallySucceeded, job.Status);
+        Assert.Equal(SpritePhase.Completed, job.Sprites.Phase);
+        Assert.Equal(frozen.ExportId, job.Sprites.Exports.Single().Id);
+        Assert.Equal(frozen.ExportId, job.Sprites.CompletedExportId);
+        Assert.Null(job.FailureReason);
+        Assert.Equal(count, job.Tasks.Count);
+        Assert.Equal(0, imageCalls);
+        Assert.Empty(f.Prompts.Queries);
+    }
+
     [Fact]
     public async Task BasesApproval_NormalizesSelectionOrderAndAssetApprovalRequiresAllFrames()
     {
@@ -381,7 +445,7 @@ public sealed class SpriteCommandTests
             return new(SpriteAnalysisTests.PlanJson, null, null);
         }
     }
-    private sealed class FailingPackageSave(IBlobStorage inner) : IBlobStorage
+    internal sealed class FailingPackageSave(IBlobStorage inner) : IBlobStorage
     {
         public Task<string> SaveAsync(Stream content, string contentType, CancellationToken ct)
             => throw new IOException("injected package blob failure");

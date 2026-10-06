@@ -372,11 +372,13 @@ public sealed partial class PipelineJob
             return;
         }
         if (exportTask is { Status: TaskStatus.Failed } && IsCurrentTask(exportTask)
+            && exportTask.SpriteExportInput!.ExportId != Sprites.CompletedExportId
             && Sprites.Images.Count > 0)
         {
             Status = JobStatus.PartiallySucceeded;
             CompletedAt = now;
             FailureReason = exportTask.FailureReason;
+            Sprites.ConsumeFailedExport(exportTask.SpriteExportInput!.ExportId);
             return;
         }
         if (Sprites.Assets.Count == 0 || Sprites.Assets.All(a => a.Frames.All(f => f.CurrentImageId is null)))

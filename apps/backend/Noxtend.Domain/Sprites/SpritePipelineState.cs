@@ -40,6 +40,12 @@ public sealed class SpritePipelineState
         CompletedExportId = exportId;
         Phase = SpritePhase.Completed;
     }
+    // ZIP 완료와 실패 소비 이력 구분
+    internal void ConsumeFailedExport(Guid exportId) => CompletedExportId = exportId;
+    internal void ResetExportCompletion(Guid exportId)
+    {
+        if (CompletedExportId == exportId) CompletedExportId = null;
+    }
     internal void Touch(IReadOnlyCollection<Guid>? affectedAssetIds = null)
     {
         ReviewRevision++;

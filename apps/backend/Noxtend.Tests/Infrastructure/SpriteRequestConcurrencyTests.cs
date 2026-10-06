@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -8,6 +9,7 @@ using Noxtend.Application.Sprites;
 using Noxtend.Domain.Common;
 using Noxtend.Domain.Job;
 using Noxtend.Domain.Sprites;
+using Noxtend.Infrastructure.Image;
 using Noxtend.Infrastructure.Mesh;
 using Noxtend.Infrastructure.Persistence;
 using Noxtend.Infrastructure.Persistence.Repositories;
@@ -186,6 +188,69 @@ public sealed class SpriteRequestConcurrencyTests(SqlServerFixture sql)
         Assert.True((await delete.HandleAsync(shared.Id, default)).IsSuccess);
         Assert.Equal(0, f.Blobs.Count);
         Assert.Equal(0, await db.StoredImages.CountAsync());
+    }
+
+    [Fact]
+    public async Task ConsumedPackFailureAndRetry_ResetPersistAcrossReload()
+    {
+        var imageCalls = 0;
+        var f = new PipelineFixture(options: new() { MaxAttempts = 1 }, imageProvider: FakeImageProvider.Throwing(() =>
+        {
+            imageCalls++;
+            return new InvalidOperationException("pack must not generate images");
+        }));
+        var job = await SpriteCommandTests.Ready(f, 2);
+        var receipt = await f.SpriteCommands.ExportAsync(SpriteCommandTests.Context(job), [job.Sprites!.Assets[0].Id], default);
+        var taskId = receipt.Value!.TaskIds.Single();
+        var frozen = job.Tasks.Single(t => t.Id == taskId).SpriteExportInput!;
+        var frozenJson = JsonSerializer.Serialize(frozen);
+        await Seed(f, job);
+        await using var db = Context();
+        var jobs = new EfJobRepository(db);
+        var orchestrator = new JobOrchestrator(f.Queue, jobs, f.Clock);
+        var execution = new TaskExecution(jobs, orchestrator, f.Clock, f.Scheduler, NullLogger<TaskExecution>.Instance);
+        var failing = new RunSpritePackTaskHandler(jobs, new SpriteCommandTests.FailingPackageSave(f.Blobs),
+            new SpritePackageWriter(new SkiaImageTranscoder()), execution, f.Clock, f.Options,
+            NullLogger<RunSpritePackTaskHandler>.Instance);
+        var successful = new RunSpritePackTaskHandler(jobs, f.Blobs, new SpritePackageWriter(new SkiaImageTranscoder()),
+            execution, f.Clock, f.Options, NullLogger<RunSpritePackTaskHandler>.Instance);
+        var retry = new RetryTaskHandler(jobs, f.MeshRuns, orchestrator);
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            Assert.Equal(RunTaskOutcome.Failed, await failing.HandleAsync(taskId, default));
+            await using (var check = Context())
+            {
+                var saved = (await new EfJobRepository(check).GetAsync(job.Id, default))!;
+                Assert.Equal(frozen.ExportId, saved.Sprites!.CompletedExportId);
+                Assert.Equal(JobStatus.PartiallySucceeded, saved.Status);
+                Assert.Equal(SpritePhase.Packaging, saved.Sprites.Phase);
+                Assert.Empty(saved.Sprites.Exports);
+                Assert.Equal(frozenJson, JsonSerializer.Serialize(saved.Tasks.Single(t => t.Id == taskId).SpriteExportInput));
+                await using var png = await f.Blobs.OpenReadAsync(saved.Sprites.Images[0].BlobKey, default);
+                Assert.True(png.Length > 0);
+            }
+            Assert.True((await retry.HandleAsync(job.Id, taskId, default)).IsSuccess);
+            await using (var check = Context())
+            {
+                var reset = (await new EfJobRepository(check).GetAsync(job.Id, default))!;
+                Assert.Null(reset.Sprites!.CompletedExportId);
+                Assert.Null(reset.CompletedAt);
+                Assert.Null(reset.FailureReason);
+                Assert.Equal(JobStatus.Pending, reset.Status);
+                Assert.Equal(SpritePhase.Packaging, reset.Sprites.Phase);
+                Assert.Equal(frozenJson, JsonSerializer.Serialize(reset.Tasks.Single(t => t.Id == taskId).SpriteExportInput));
+            }
+        }
+        Assert.Equal(RunTaskOutcome.Succeeded, await successful.HandleAsync(taskId, default));
+        var completed = (await jobs.ReloadAsync(job.Id, default))!;
+        Assert.Equal(frozen.ExportId, completed.Sprites!.CompletedExportId);
+        Assert.Equal(frozen.ExportId, completed.Sprites.Exports.Single().Id);
+        Assert.Equal(SpritePhase.Completed, completed.Sprites.Phase);
+        Assert.Equal(JobStatus.PartiallySucceeded, completed.Status);
+        Assert.Null(completed.FailureReason);
+        Assert.Equal(job.Tasks.Count, completed.Tasks.Count);
+        Assert.Equal(0, imageCalls);
+        Assert.Empty(f.Prompts.Queries);
     }
 
     private async Task Seed(PipelineFixture f, PipelineJob job)
