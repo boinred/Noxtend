@@ -11,4 +11,8 @@ public sealed record SpriteManifestAsset(SpriteApprovedAsset Asset, string BaseP
     IReadOnlyList<SpriteManifestFrame> Frames);
 public sealed record SpriteManifest(int SchemaVersion, Guid JobId, ProductionMode ProductionMode,
     SpriteExportInput Input, string CoordinateOrigin, string CoordinateUnits,
-    IReadOnlyList<SpriteManifestAsset> Assets);
+    IReadOnlyList<SpriteManifestAsset> Assets)
+{
+    public IReadOnlyList<Guid> IncludedAssetIds => Input.Assets.Select(a => a.Id).ToArray();
+    public IReadOnlyList<Guid> ExcludedAssetIds => Input.ExcludedAssetIds;
+}

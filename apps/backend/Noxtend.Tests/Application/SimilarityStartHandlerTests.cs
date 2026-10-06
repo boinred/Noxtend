@@ -445,6 +445,10 @@ public sealed class PassThroughTranscoder : Noxtend.Domain.Ports.IImageTranscode
         Noxtend.Domain.Sprites.SpriteTileLayout layout, CancellationToken ct)
         => throw new NotSupportedException();
 
+    public Task WriteSpriteSheetAsync(Noxtend.Domain.Sprites.SpriteSheetLayout layout,
+        Func<Guid, CancellationToken, Task<Stream>> openFrame, Stream output, CancellationToken ct)
+        => throw new NotSupportedException();
+
     public bool IsUploadable(string contentType) => true;
 
     public Task<(int Width, int Height)> MeasureAsync(Stream image, CancellationToken ct)

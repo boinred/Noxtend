@@ -79,6 +79,52 @@ public sealed partial class SkiaImageTranscoder
         return new MemoryStream(png.ToArray());
     }
 
+    public async Task WriteSpriteSheetAsync(SpriteSheetLayout layout,
+        Func<Guid, CancellationToken, Task<Stream>> openFrame, Stream output, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (layout.Canvas.Width is < 1 or > 4096 || layout.Canvas.Height is < 1 or > 4096)
+            throw new ArgumentOutOfRangeException(nameof(layout));
+        using var sheet = new SKBitmap(new SKImageInfo(
+            layout.Canvas.Width, layout.Canvas.Height, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using var drawing = new SKCanvas(sheet);
+        drawing.Clear(SKColors.Transparent);
+        foreach (var cell in layout.Cells)
+        {
+            ct.ThrowIfCancellationRequested();
+            var r = cell.Rect;
+            if (r.Width <= 0 || r.Height <= 0 || r.X < 2 || r.Y < 2
+                || (long)r.X + r.Width + 2 > sheet.Width || (long)r.Y + r.Height + 2 > sheet.Height)
+                throw new ArgumentOutOfRangeException(nameof(layout));
+            await using var source = await openFrame(cell.ImageId, ct);
+            var (bitmap, origin, info) = await DecodeSpriteAsync(source, SpriteMaxBytes, SpriteMaxPixels, ct);
+            using var frame = bitmap;
+            if (origin != SKEncodedOrigin.TopLeft || info.Width != r.Width || info.Height != r.Height)
+                throw new ProviderBadResponseException("프레임 크기·방향이 고정 시트와 다릅니다");
+
+            // 패딩 내부의 가장자리 복제, 원본 rect·알파 유지
+            var xs = new[] { 0, 0, r.Width - 1 };
+            var ys = new[] { 0, 0, r.Height - 1 };
+            var widths = new[] { 1, r.Width, 1 };
+            var heights = new[] { 1, r.Height, 1 };
+            var targetsX = new[] { r.X - 2, r.X, r.X + r.Width };
+            var targetsY = new[] { r.Y - 2, r.Y, r.Y + r.Height };
+            var targetsWidth = new[] { 2, r.Width, 2 };
+            var targetsHeight = new[] { 2, r.Height, 2 };
+            for (var y = 0; y < 3; y++)
+                for (var x = 0; x < 3; x++)
+                    drawing.DrawBitmap(frame,
+                        new SKRect(xs[x], ys[y], xs[x] + widths[x], ys[y] + heights[y]),
+                        new SKRect(targetsX[x], targetsY[y], targetsX[x] + targetsWidth[x], targetsY[y] + targetsHeight[y]),
+                        new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.None));
+        }
+        drawing.Flush();
+        ct.ThrowIfCancellationRequested();
+        if (!sheet.Encode(output, SKEncodedImageFormat.Png, 100))
+            throw new ProviderBadResponseException("시트 PNG를 인코딩할 수 없습니다");
+        ct.ThrowIfCancellationRequested();
+    }
+
     private static async Task<(SKBitmap Bitmap, SKEncodedOrigin Origin, SpriteImageInfo Info)> DecodeSpriteAsync(
         Stream image, long maxBytes, long maxPixels, CancellationToken ct)
     {

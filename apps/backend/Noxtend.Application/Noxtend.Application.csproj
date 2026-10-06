@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Noxtend.Tests" />
     <ProjectReference Include="..\Noxtend.Domain\Noxtend.Domain.csproj" />
   </ItemGroup>
 

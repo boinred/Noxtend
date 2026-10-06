@@ -99,4 +99,26 @@ public static class SpriteRules
         return new(scale, (output.Width - generation.Width * scale) / 2,
             (output.Height - generation.Height * scale) / 2);
     }
+
+    public static IReadOnlyList<SpriteSheetLayout> SheetPages(SpriteCanvas frame, IReadOnlyList<Guid> imageIds)
+    {
+        if (frame is null || frame.Width is < 1 or > 4092 || frame.Height is < 1 or > 4092)
+            throw new ArgumentOutOfRangeException(nameof(frame));
+        ArgumentNullException.ThrowIfNull(imageIds);
+        var strideX = frame.Width + 4;
+        var strideY = frame.Height + 4;
+        var columns = 4096 / strideX;
+        var capacity = columns * (4096 / strideY);
+        var pages = new List<SpriteSheetLayout>();
+        for (var start = 0; start < imageIds.Count; start += capacity)
+        {
+            var count = Math.Min(capacity, imageIds.Count - start);
+            var cells = Enumerable.Range(0, count).Select(i => new SpriteSheetCell(
+                imageIds[start + i], start + i, new SpriteRect(
+                    i % columns * strideX + 2, i / columns * strideY + 2, frame.Width, frame.Height))).ToArray();
+            pages.Add(new(pages.Count, new(Math.Min(count, columns) * strideX,
+                ((count + columns - 1) / columns) * strideY), cells));
+        }
+        return pages;
+    }
 }
