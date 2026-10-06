@@ -41,8 +41,7 @@ Implement the user's latest natural-language request in the smallest verifiable 
 6. Verify completion.
    - Run all tests directly related to the changed behavior.
    - Read `$noxtend-workflow` and its [verification reference](../noxtend-workflow/references/verification.md), then run full regression for each stack the change touches after targeted tests pass.
-   - Backend general regression excludes paid smoke tests: `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName!~TripoSmokeTests&FullyQualifiedName!~SimilaritySmokeTests'`.
-   - Frontend (repository root): `pnpm test`, `pnpm lint`, `pnpm typecheck`, `pnpm build`, `pnpm test:e2e`. API contract changes touch both stacks.
+   - Use the full regression commands in the root `AGENTS.md` ("빌드·테스트 명령"). API contract changes touch both stacks.
    - Treat the work as complete only when both targeted and full regression checks pass.
    - If credentials, services, environment failures, or unrelated existing failures prevent verification, report the exact command and failure instead of claiming completion.
    - Distinguish implemented behavior, automated checks, manual observations, and real API verification. Skipped or uncollected tests are not passing evidence; identify a pre-existing failure only with baseline evidence.

@@ -49,6 +49,22 @@ Plan·Design만 요청하면 애플리케이션 소스를 수정하지 않는다
 - 일반 주석은 단답형의 짧은 명사구로 쓴다. 제품·도메인은 한국어(예: `// 검수 승인 전 생성 보류`), 빌드·CI·배포는 영어로 쓰고 서술형 종결어미·마침표·여러 문장을 피한다. C#·JS·TS는 `//`, 그 밖의 언어는 문법상 필요한 주석 구문을 쓴다.
 - XML 문서화·라이선스·자동 생성 주석·도구 지시문은 기존 형식을 유지한다. 기존 주석을 일괄 수정하지 않는다.
 
+## 빌드·테스트 명령
+
+저장소 루트 기준이다. 필터 의미·Docker 요구·유료 smoke 조건은 [검증 자료](.agents/skills/noxtend-workflow/references/verification.md)를 따른다.
+
+```bash
+# Backend 빌드·전체 회귀(유료 smoke 제외, Docker 필요)
+dotnet build apps/backend/Noxtend.slnx
+dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName!~TripoSmokeTests&FullyQualifiedName!~SimilaritySmokeTests'
+
+# Frontend 전체 회귀
+pnpm test && pnpm lint && pnpm typecheck && pnpm build && pnpm test:e2e
+
+# 새 clone의 커밋 훅 등록
+pnpm hooks:install
+```
+
 ## 실행·외부 행동·Git
 
 - 런타임·명령은 `package.json`, `pnpm-lock.yaml`, `.csproj`, 실제 스크립트가 정본이다. 현재 요구는 Node.js `>=24`, pnpm `11.9.0`, Backend `.NET 10`이다. 루트의 앱 실행·검증 `pnpm` 스크립트는 Frontend 대상이며 Backend 검증을 대신하지 않는다.
