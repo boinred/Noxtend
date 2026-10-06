@@ -419,9 +419,21 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
     sprite.exports.forEach((e) => (e.isCurrent = false))
     sprite.exports.push(item)
     archives.set(id, spriteZip(job!, ids, id))
-    sprite.completedExportId = id
-    sprite.phase = 'completed'
-    job!.status = ids.length === sprite.assets.length ? 'succeeded' : 'partiallySucceeded'
+    const active = sprite.assets
+      .flatMap((a) => a.frames)
+      .filter((f) =>
+        job!.tasks.some(
+          (t) => t.id === f.currentTaskId && (t.status === 'running' || t.status === 'pending'),
+        ),
+      )
+    if (active.length) {
+      sprite.phase = active.some((f) => f.index === 0) ? 'baseGeneration' : 'frameGeneration'
+      job!.status = 'running'
+    } else {
+      sprite.completedExportId = id
+      sprite.phase = 'completed'
+      job!.status = ids.length === sprite.assets.length ? 'succeeded' : 'partiallySucceeded'
+    }
   }
   if (options.seed) {
     job = make(

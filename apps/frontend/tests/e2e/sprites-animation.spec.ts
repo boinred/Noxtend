@@ -212,7 +212,7 @@ for (const view of ['topDown', 'isometric'] as const)
       })
       await page.goto(`/2d/background/${SPRITE_IDS.job}`)
       const preview = page.getByRole('img', { name: '반복 경계 검수', exact: true })
-      await expect(preview.locator('image')).toHaveCount(repeat === 'both' ? 9 : 3)
+      await expect(preview.locator('image')).toHaveCount(9)
       const scrub = page.getByRole('slider', { name: '후경 지면 프레임 탐색', exact: true })
       await scrub.focus()
       await page.keyboard.press('ArrowRight')
@@ -225,9 +225,16 @@ for (const view of ['topDown', 'isometric'] as const)
       const height = view === 'isometric' ? 64 : 128
       expect(coordinates).toContainEqual([-64, -height / 2])
       if (view === 'isometric') {
-        expect(coordinates).toContainEqual([-128, repeat === 'y' ? 0 : -64])
-      } else if (repeat === 'x') expect(new Set(coordinates.map((p) => p[1])).size).toBe(1)
-      else if (repeat === 'y') expect(new Set(coordinates.map((p) => p[0])).size).toBe(1)
+        expect(coordinates).toContainEqual([-128, -64])
+      } else {
+        expect(new Set(coordinates.map((p) => p[1])).size).toBe(3)
+        expect(new Set(coordinates.map((p) => p[0])).size).toBe(3)
+      }
+      await expect(
+        page.getByText(`검수할 반복축: ${repeat === 'both' ? 'X·Y' : repeat.toUpperCase()}`, {
+          exact: false,
+        }),
+      ).toBeVisible()
     })
 
 test('current missing failed and running slots are shown without historical tasks', async ({

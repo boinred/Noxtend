@@ -468,6 +468,103 @@ public sealed class SpriteGenerationTestsSql(Noxtend.Tests.Infrastructure.SqlSer
         Assert.Equal(TaskStatus.Running, saved.Tasks.Single(t => t.Id == task.Id).Status);
     }
 
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, true)]
+    [InlineData(true, false, true)]
+    public async Task SubsetZip_WaitsForCurrentSiblingAndPreservesDelayedResult(bool running, bool fail, bool cancel)
+    {
+        var f = new PipelineFixture();
+        var job = await SpriteGenerationTests.Prepare(f, 2);
+        job.ReplaceSpritePlan(job.Sprites!.Assets.Select(a => a.Plan with { Loop = false }).ToArray(), job.Sprites.ReviewRevision);
+        job.PlanSpriteFrames(job.ApproveSpritePlan(job.Sprites.ReviewRevision).Value!, Guid.NewGuid());
+        await using (var setup = Context())
+        {
+            await setup.Database.MigrateAsync();
+            setup.StoredImages.Add((await f.Images.GetAsync(job.SourceImageId, default))!);
+            setup.Jobs.Add(job);
+            await setup.SaveChangesAsync();
+        }
+        await using (var first = Context())
+            Assert.Equal(RunTaskOutcome.Succeeded, await Handler(f, first).HandleAsync(job.Tasks[0].Id, default));
+        var provider = new BlockingProvider(fail);
+        await using var worker = Context();
+        Task<RunTaskOutcome>? delayed = null;
+        try
+        {
+            if (running)
+            {
+                delayed = Handler(f, worker, provider).HandleAsync(job.Tasks[1].Id, default);
+                await provider.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            }
+            await using var db = Context();
+            var repository = new EfJobRepository(db);
+            var current = (await repository.GetAsync(job.Id, default))!;
+            var firstId = job.Tasks[0].SpriteInput!.AssetId;
+            var siblingId = job.Tasks[1].SpriteInput!.AssetId;
+            Assert.True(current.ApproveSpriteBases([firstId], current.Sprites!.ReviewRevision).IsSuccess);
+            var input = current.CaptureSpriteExport([firstId], current.Sprites.ReviewRevision).Value!;
+            var pack = current.PlanTask(TaskKind.PackSprites, current.Tasks.Count);
+            pack.BindSpriteExport(input);
+            await repository.SaveChangesAsync(default);
+            var execution = new TaskExecution(repository, new(f.Queue, repository, f.Clock), f.Clock, f.Scheduler, NullLogger<TaskExecution>.Instance);
+            var packer = new RunSpritePackTaskHandler(repository, f.Blobs, new SpritePackageWriter(new SkiaImageTranscoder()),
+                execution, f.Clock, f.Options, NullLogger<RunSpritePackTaskHandler>.Instance);
+            Assert.Equal(RunTaskOutcome.Succeeded, await packer.HandleAsync(pack.Id, default));
+            current = (await repository.ReloadAsync(job.Id, default))!;
+            Assert.Equal(JobStatus.Running, current.Status);
+            Assert.False(current.IsTerminal);
+            Assert.Null(current.CompletedAt);
+            Assert.Null(current.Sprites!.CompletedExportId);
+            Assert.Equal(SpritePhase.BaseGeneration, current.Sprites.Phase);
+            Assert.Equal(running ? TaskStatus.Running : TaskStatus.Pending, current.Tasks.Single(t => t.Id == job.Tasks[1].Id).Status);
+            Assert.True(current.IsCurrentTask(current.Tasks.Single(t => t.Id == job.Tasks[1].Id)));
+            var export = Assert.Single(current.Sprites.Exports);
+            Assert.True(export.IsCurrent);
+            await using (var zip = await f.Blobs.OpenReadAsync(export.BlobKey, default)) Assert.True(zip.Length > 0);
+            if (cancel)
+            {
+                current.Cancel(f.Clock.Now);
+                await repository.SaveChangesAsync(default);
+            }
+            if (!running) delayed = Handler(f, worker, provider).HandleAsync(job.Tasks[1].Id, default);
+            provider.Complete.TrySetResult();
+            Assert.Equal(cancel ? running ? RunTaskOutcome.Canceled : RunTaskOutcome.Skipped
+                : fail ? RunTaskOutcome.Failed : RunTaskOutcome.Succeeded, await delayed!);
+            current = (await repository.ReloadAsync(job.Id, default))!;
+            Assert.Equal(cancel ? JobStatus.Canceled : JobStatus.PartiallySucceeded, current.Status);
+            Assert.Equal(cancel ? TaskStatus.Canceled : fail ? TaskStatus.Failed : TaskStatus.Succeeded,
+                current.Tasks.Single(t => t.Id == job.Tasks[1].Id).Status);
+            Assert.Equal(cancel || fail ? 1 : 2, current.Sprites!.Images.Count);
+            Assert.Equal(cancel ? null : export.Id, current.Sprites.CompletedExportId);
+            Assert.True(current.Sprites.Exports.Single().IsCurrent);
+            if (cancel)
+            {
+                Assert.False(current.RegenerateSpriteFrame(siblingId, 0, current.Sprites.ReviewRevision).IsSuccess);
+                return;
+            }
+            var reopen = current.RegenerateSpriteFrame(siblingId, 0, current.Sprites.ReviewRevision).Value!;
+            var regenerated = Assert.Single(current.PlanSpriteFrames([reopen], Guid.NewGuid()));
+            await repository.SaveChangesAsync(default);
+            await using var nextWorker = Context();
+            Assert.Equal(RunTaskOutcome.Succeeded, await Handler(f, nextWorker).HandleAsync(regenerated.Id, default));
+            current = (await repository.ReloadAsync(job.Id, default))!;
+            Assert.Equal(JobStatus.PendingReview, current.Status);
+            Assert.Null(current.CompletedAt);
+            Assert.Equal(export.Id, current.Sprites!.CompletedExportId);
+            Assert.True(current.Sprites.Exports.Single().IsCurrent);
+            Assert.NotNull(current.Sprites.Assets.Single(a => a.Id == firstId).Approval);
+        }
+        finally
+        {
+            provider.Complete.TrySetResult();
+            if (delayed is not null) await delayed;
+        }
+    }
+
     private async Task<PipelineJob> Seed(PipelineFixture f, int assets = 1)
     {
         var job = await SpriteGenerationTests.Prepare(f, assets);

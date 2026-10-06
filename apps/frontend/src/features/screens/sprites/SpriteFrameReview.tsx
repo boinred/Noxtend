@@ -102,8 +102,7 @@ export function SpriteFrameReview({
                   {a.plan.name} 기준 승인 선택
                 </label>
               ) : null}
-              {(reviewing && sprite.phase !== 'exportReady') ||
-              (a.plan.loop && sprite.phase !== 'planReview' && sprite.phase !== 'packaging') ? (
+              {sprite.phase !== 'planReview' && sprite.phase !== 'packaging' ? (
                 <Button
                   variant="outline"
                   disabled={busy || active}

@@ -142,6 +142,19 @@ public sealed class SpritePackageTests
         using var json = zip.GetEntry("manifest.json")!.Open();
         using var doc = await JsonDocument.ParseAsync(json);
         Assert.Equal("topLeft", doc.RootElement.GetProperty("coordinateOrigin").GetString());
+        var wireEnums = new[]
+        {
+            (doc.RootElement.GetProperty("productionMode"), "twoD"),
+            (doc.RootElement.GetProperty("input").GetProperty("view"), "sideView"),
+            (doc.RootElement.GetProperty("input").GetProperty("outputKind"), kind == SpriteOutputKind.Layers ? "layers" : "tiles"),
+            (doc.RootElement.GetProperty("assets")[0].GetProperty("asset").GetProperty("repeat"), "both"),
+            (doc.RootElement.GetProperty("assets")[0].GetProperty("asset").GetProperty("layout"), "square"),
+        };
+        foreach (var (value, expected) in wireEnums)
+        {
+            Assert.Equal(JsonValueKind.String, value.ValueKind);
+            Assert.Equal(expected, value.GetString());
+        }
         Assert.Equal(2, doc.RootElement.GetProperty("includedAssetIds").GetArrayLength());
         Assert.Equal(input.ExcludedAssetIds[0], doc.RootElement.GetProperty("excludedAssetIds")[0].GetGuid());
         Assert.DoesNotContain("blobKey", doc.RootElement.GetRawText(), StringComparison.OrdinalIgnoreCase);

@@ -356,6 +356,11 @@ public sealed partial class PipelineJob
     {
         if (Status == JobStatus.Canceled || IsTerminal) return;
         var tasks = _tasks.Where(IsCurrentTask).ToArray();
+        if (tasks.Any(t => !t.IsTerminal))
+        {
+            UpdateSpriteState();
+            return;
+        }
         var exportTask = _tasks.Where(t => t.SpriteExportInput is not null).MaxBy(t => t.Ordinal);
         var export = Sprites!.Exports.LastOrDefault(e => e.IsCurrent && e.TaskId == exportTask?.Id);
         if (export is not null && export.Id != Sprites.CompletedExportId
@@ -364,11 +369,6 @@ public sealed partial class PipelineJob
             Status = export.Input.ExcludedAssetIds.Count == 0 ? JobStatus.Succeeded : JobStatus.PartiallySucceeded;
             CompletedAt = now;
             Sprites.CompleteExport(export.Id);
-            return;
-        }
-        if (tasks.Any(t => !t.IsTerminal))
-        {
-            UpdateSpriteState();
             return;
         }
         if (exportTask is { Status: TaskStatus.Failed } && IsCurrentTask(exportTask)

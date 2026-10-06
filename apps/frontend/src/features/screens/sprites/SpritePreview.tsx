@@ -57,7 +57,9 @@ export function SpritePreview({
       <h2 className={styles.title}>{tiles ? '타일 반복 미리보기' : '레이어 합성 미리보기'}</h2>
       <p className={styles.hint}>
         고정 캔버스 {width}×{height}px ·{' '}
-        {tiles ? '셀 중심 앵커 · 3×3 격자' : '왼쪽 위 앵커 (0, 0) · 뒤에서 앞으로 합성'}
+        {tiles
+          ? `셀 중심 앵커 · 3×3 격자 · 검수할 반복축: ${sprite.settings.repeat === 'both' ? 'X·Y' : sprite.settings.repeat.toUpperCase()}${sprite.settings.view === 'isometric' ? ' (다이아몬드 격자 축)' : ''}`
+          : '왼쪽 위 앵커 (0, 0) · 뒤에서 앞으로 합성'}
       </p>
       {tiles ? (
         <div className={styles.field}>
@@ -150,7 +152,7 @@ export function SpritePreview({
               ? tileOffsets(
                   width,
                   height,
-                  sprite.settings.repeat,
+                  'both',
                   sprite.settings.view === 'isometric' ? 'diamond' : 'square',
                 )
               : [{ x: 0, y: 0 }]

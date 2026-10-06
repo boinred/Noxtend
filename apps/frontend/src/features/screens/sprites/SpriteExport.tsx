@@ -25,7 +25,8 @@ export function SpriteExport({
     <section className={styles.panel} aria-label="승인 결과 내보내기">
       <h2 className={styles.title}>승인 결과 내보내기</h2>
       <p className={styles.hint}>
-        내보낼 승인 대상을 명시적으로 선택해 주세요. 제외 대상이 있으면 부분 성공으로 종료합니다.
+        내보낼 승인 대상을 명시적으로 선택해 주세요. 저장된 ZIP은 바로 내려받을 수 있습니다. 제외
+        대상이 있으면 현재 실행·대기 공정이 끝난 뒤 부분 성공으로 종료합니다.
       </p>
       <div className={styles.stack}>
         {sprite.assets.map((a) => (

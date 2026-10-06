@@ -351,6 +351,9 @@ test('failed generation can retry and cancellation is authoritative', async ({ p
   await page.getByRole('button', { name: '작업 취소' }).click()
   await expect(page.getByRole('status').first()).toContainText('취소')
   await expect(page.getByRole('button', { name: '내보내기', exact: true })).toBeDisabled()
+  await expect(
+    page.getByRole('button', { name: '후경 지면 기준 재생성', exact: true }),
+  ).toBeDisabled()
   await page.reload()
   await expect(page.getByRole('status').first()).toContainText('취소')
 })
@@ -461,6 +464,11 @@ test('approved subset can package while another asset is generating', async ({ p
   await expect(page.getByRole('button', { name: '내보내기', exact: true })).toBeEnabled()
   await page.getByRole('button', { name: '내보내기', exact: true }).click()
   await expect(page.getByRole('link', { name: '현재 ZIP 다운로드', exact: false })).toBeVisible()
+  await expect(page.getByRole('button', { name: '작업 취소', exact: true })).toBeVisible()
+  await expect(page.getByText('실행 중 · 기준 이미지 생성', { exact: false })).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: '전경 나무 기준 재생성', exact: true }),
+  ).toBeDisabled()
   const exports = records.filter((r) => r.path.endsWith('/exports'))
   expect(exports).toHaveLength(1)
   expect(exports[0]!.body.assetIds).toHaveLength(1)
@@ -475,3 +483,46 @@ test('failed packaging does not become a spinner for unrelated generation', asyn
   await page.getByLabel('후경 지면 내보내기 선택', { exact: false }).check()
   await expect(page.getByRole('button', { name: '내보내기', exact: true })).toBeEnabled()
 })
+
+for (const partial of [false, true])
+  test(`static ${partial ? 'partial' : 'full'} ZIP allows base regeneration and preserves other assets`, async ({
+    page,
+  }) => {
+    const records: NonNullable<SpriteFakeOptions['records']> = []
+    await installFakeApi(page, { sprites: { records } })
+    await start(page)
+    await approvePlan(page)
+    await approveBases(page)
+    await expect(
+      page.getByRole('button', { name: '후경 지면 기준 재생성', exact: true }),
+    ).toBeEnabled()
+    await page.getByLabel('후경 지면 내보내기 선택', { exact: false }).check()
+    if (!partial) await page.getByLabel('전경 나무 내보내기 선택', { exact: false }).check()
+    await page.getByRole('button', { name: '내보내기', exact: true }).click()
+    await expect(page.getByRole('link', { name: '현재 ZIP 다운로드', exact: false })).toBeVisible()
+    await page.reload()
+    const other = await page
+      .getByRole('img', { name: '전경 나무 기준 이미지', exact: true })
+      .getAttribute('src')
+    const original = await page
+      .getByRole('img', { name: '후경 지면 기준 이미지', exact: true })
+      .getAttribute('src')
+    await page.getByRole('button', { name: '후경 지면 기준 재생성', exact: true }).click()
+    await expect(page).toHaveURL(`/2d/background/${SPRITE_IDS.job}`)
+    await expect(
+      page.getByRole('img', { name: '후경 지면 기준 이미지', exact: true }),
+    ).not.toHaveAttribute('src', original!)
+    await expect(
+      page.getByRole('img', { name: '전경 나무 기준 이미지', exact: true }),
+    ).toHaveAttribute('src', other!)
+    await expect(page.getByText('최종 승인 완료 · 1프레임', { exact: true })).toHaveCount(1)
+    await expect(page.getByLabel('후경 지면 기준 승인 선택', { exact: true })).toBeEnabled()
+    await expect(page.getByRole('link', { name: '현재 ZIP 다운로드', exact: false })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: '이전 ZIP 다운로드', exact: false })).toBeVisible()
+    expect(records.at(-1)!.path).toContain('/frames/0/regenerate')
+    await page.reload()
+    await expect(page.getByLabel('후경 지면 기준 승인 선택', { exact: true })).toBeEnabled()
+    await expect(
+      page.getByRole('img', { name: '전경 나무 기준 이미지', exact: true }),
+    ).toHaveAttribute('src', other!)
+  })

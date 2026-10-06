@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Noxtend.Domain.Job;
 using Noxtend.Domain.Ports;
 using Noxtend.Domain.Sprites;
@@ -42,7 +43,8 @@ public sealed class SpritePackageWriter(IImageTranscoder transcoder)
                 assets.Add(new(asset, basePath, frames));
             }
             await using var json = zip.CreateEntry("manifest.json", CompressionLevel.Optimal).Open();
-            await JsonSerializer.SerializeAsync(json, manifest, new JsonSerializerOptions(JsonSerializerDefaults.Web), ct);
+            await JsonSerializer.SerializeAsync(json, manifest, new JsonSerializerOptions(JsonSerializerDefaults.Web)
+            { Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) } }, ct);
         }
         // ZIP 중앙 디렉터리까지 상한 검증 후 성공 반환
         ct.ThrowIfCancellationRequested();
