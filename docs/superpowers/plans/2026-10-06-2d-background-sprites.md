@@ -89,7 +89,7 @@ public sealed record SpriteReceipt(Guid JobId, JobStatus Status, int Revision,
     IReadOnlyList<Guid> TaskIds);
 ```
 
-`SpritePipelineState`는 private setter와 소유 collection을 가진 class로 두고 EF 생성자는 기존 형식을 따른다. Settings·SourceCanvas·GenerationCanvas·OutputCanvas·Transform·Phase·ReviewRevision, Assets·Images·Exports·Requests를 보관한다. `SpriteAsset`은 Plan·PlanRevision·Anchor·Frames·nullable Approval, `SpriteFrame`은 Index·CurrentTaskId·CurrentImageId를 가진다. `SpriteImage`에는 Id·TaskId·AssetId·FrameIndex·PlanRevision·BaseImageId·BlobKey·Width·Height·ContentType·CreatedAt, `SpriteExport`에는 Id·TaskId·Input·Manifest·BlobKey·IsCurrent·CreatedAt을 둔다. `SpriteAcceptedRequest`는 RequestId·JobId·Kind·Fingerprint·Receipt를 가진다. 모든 collection은 애그리게이트의 메서드로 변경한다.
+`SpritePipelineState`는 private setter와 소유 collection을 가진 class로 두고 EF 생성자는 기존 형식을 따른다. Settings·SourceCanvas·GenerationCanvas·OutputCanvas·Transform·Phase·ReviewRevision·nullable CompletedExportId, Assets·Images·Exports·Requests를 보관한다. `SpriteAsset`은 Plan·PlanRevision·Anchor·Frames·nullable Approval, `SpriteFrame`은 Index·CurrentTaskId·CurrentImageId를 가진다. `SpriteImage`에는 Id·TaskId·AssetId·FrameIndex·PlanRevision·BaseImageId·BlobKey·Width·Height·ContentType·CreatedAt, `SpriteExport`에는 Id·TaskId·Input·Manifest·BlobKey·IsCurrent·CreatedAt을 둔다. `SpriteAcceptedRequest`는 RequestId·JobId·Kind·Fingerprint·Receipt를 가진다. 모든 collection은 애그리게이트의 메서드로 변경한다.
 
 `SpriteAsset.Approval`의 타입은 `SpriteAssetApproval(int PlanRevision, SpriteApprovedAsset Snapshot)?`, request Kind의 타입은 `SpriteRequestKind`다. `SpriteImage.Create(Guid taskId, SpriteFrameInput input, string blobKey, DateTimeOffset now) -> SpriteImage`는 PNG metadata를 input.Canvas로 고정하고 새 ID를 만든다. `SpriteExport.Create(Guid taskId, SpriteExportInput input, SpriteManifest manifest, string blobKey, DateTimeOffset now) -> SpriteExport`, `SpriteAcceptedRequest.Create(Guid requestId, Guid jobId, SpriteRequestKind kind, string fingerprint, SpriteReceipt receipt) -> SpriteAcceptedRequest`도 같은 파일에 둔다.
 
@@ -156,7 +156,7 @@ Manifest JSON은 camelCase, `coordinateOrigin="topLeft"`, `coordinateUnits="pixe
 
 **Interfaces:** `PipelineTask.SpriteInput: SpriteFrameInput?`, `SpriteExportInput: SpriteExportInput?`, `RequestId: Guid?`를 추가한다. PipelineJob에 `ReplaceSpritePlan(IReadOnlyList<SpriteAssetPlan> plans, int expectedRevision) -> Result<bool>`, `ApproveSpritePlan(int expectedRevision) -> Result<IReadOnlyList<SpriteFrameInput>>`, `ApproveSpriteBases(IReadOnlyList<Guid> assetIds, int expectedRevision) -> Result<IReadOnlyList<SpriteFrameInput>>`, `ApproveSpriteAsset(Guid assetId, int expectedRevision) -> Result<bool>`, `CaptureSpriteExport(IReadOnlyList<Guid> assetIds, int expectedRevision) -> Result<SpriteExportInput>`, `TryAttachSpriteExport(SpriteExport export) -> bool`를 추가한다. `RegenerateSpriteFrame(Guid assetId, int index, int expectedRevision) -> Result<SpriteFrameInput>`, `BindSpriteFrame(Guid taskId, SpriteFrameInput input)`, `TryAttachSpriteImage(SpriteImage image) -> bool`와 `IsCurrentTask(PipelineTask task) -> bool`가 슬롯과 늦은 결과를 연결한다.
 
-- [ ] `SpriteLifecycleTests`에 최소 다음 상태 시나리오와 assertion을 구현한다. 테스트별 실제 image/slot fixture는 이 파일의 private 메서드로 만들고 새 테스트 프레임워크를 만들지 않는다.
+- [x] `SpriteLifecycleTests`에 최소 다음 상태 시나리오와 assertion을 구현한다. 테스트별 실제 image/slot fixture는 이 파일의 private 메서드로 만들고 새 테스트 프레임워크를 만들지 않는다.
 
 ```csharp
 [Fact] public void StaticBaseApproval_RequiresExportBeforeSuccess();
@@ -177,10 +177,10 @@ Assert.All(inputs, x => Assert.Equal(baseImageId, x.BaseImageId));
 Assert.Equal(oldImageIds, job.Sprites.Assets[0].Frames.Select(x => x.CurrentImageId));
 ```
 
-- [ ] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpriteLifecycleTests`로 신규 동작의 실패를 확인한다.
-- [ ] 상태 메서드와 에러 코드를 구현한다. 생성 입력 변경만 해당 asset PlanRevision을 증가시키고 표시·결과·승인 변경은 ReviewRevision을 증가시킨다. FPS/name/order만 바뀌면 기존 프레임과 PlanRevision을 유지한다. SpriteFrameInput.Plan은 생성 접수 시의 immutable snapshot이며 worker는 frameCount/motion/transparency를 현재 편집 상태에서 다시 읽지 않는다. 공통 view/kind/canvas는 수정 계약에 넣지 않는다. 요청 expectedRevision은 전역 검수 revision을 검사하며 비동기 export 유효성은 포함 승인 snapshot과 고정 task input을 비교한다. 다른 대상의 변경은 기존·진행 export를 보존하고 대상 추가·제거는 included/excluded 의미가 바뀌므로 모두 무효화한다.
-- [ ] `PlanReadyFollowUpTasks / IsReadyToRun / ReconcileFromTasks`에 모드별 분기만 추가한다. frame input을 반환하는 승인과 실제 task 생성은 Task 8에서 같은 트랜잭션으로 연결한다.
-- [ ] 같은 테스트를 통과시키고 기존 `PartGenerationPlanningTests / JobLifecycleTests`도 실행한다. 도메인 문서를 동기화해 `feat(domain): add sprite review and frame lifecycle`로 커밋한다.
+- [x] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpriteLifecycleTests`로 신규 동작의 실패를 확인한다.
+- [x] 상태 메서드와 에러 코드를 구현한다. 생성 입력 변경만 해당 asset PlanRevision을 증가시키고 표시·결과·승인 변경은 ReviewRevision을 증가시킨다. FPS/name/order만 바뀌면 기존 프레임과 PlanRevision을 유지한다. SpriteFrameInput.Plan은 생성 접수 시의 immutable snapshot이며 worker는 frameCount/motion/transparency를 현재 편집 상태에서 다시 읽지 않는다. 공통 view/kind/canvas는 수정 계약에 넣지 않는다. 요청 expectedRevision은 전역 검수 revision을 검사하며 비동기 export 유효성은 포함 승인 snapshot과 고정 task input을 비교한다. 다른 대상의 변경은 기존·진행 export를 보존하고 대상 추가·제거는 included/excluded 의미가 바뀌므로 모두 무효화한다. CompletedExportId는 이미 종료에 사용한 export를 기록하여 명시적 reopen 후 같은 과거 결과로 다시 종료하지 않게 한다.
+- [x] `PlanReadyFollowUpTasks / IsReadyToRun / ReconcileFromTasks`에 모드별 분기만 추가한다. frame input을 반환하는 승인과 실제 task 생성은 Task 8에서 같은 트랜잭션으로 연결한다.
+- [x] 같은 테스트를 통과시키고 기존 `PartGenerationPlanningTests / JobLifecycleTests`도 실행한다. 도메인 문서를 동기화해 `feat(domain): add sprite review and frame lifecycle`로 커밋한다.
 
 ## Task 3: 디코딩·투명 PNG·공통 좌표 변환
 
@@ -240,7 +240,7 @@ await Assert.ThrowsAsync<DbUpdateException>(() => saveDuplicateRequest);
 ```
 
 - [ ] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpritePersistenceTests`로 실패를 확인한다. Docker가 없으면 환경 제약으로 기록하고 통과로 계산하지 않는다.
-- [ ] Task 1의 Sprites/ProductionMode와 Task 2의 SpriteInput/SpriteExportInput/RequestId 임시 Ignore가 있으면 모두 제거한다. Jobs에 nullable owned state, SpriteAssets/Frames/Images/Exports/Requests 테이블을 매핑한다. Jobs/Tasks rowversion을 유지하고 소유 관계·FK·cascade 경로를 SQL로 검증한다. JSON의 image ID·Blob key를 검증 없이 사용하지 않는다.
+- [ ] Task 1의 Sprites/ProductionMode와 Task 2의 SpriteInput/SpriteExportInput/RequestId 임시 Ignore가 있으면 모두 제거한다. Jobs에 nullable owned state, SpriteAssets/Frames/Images/Exports/Requests 테이블을 매핑한다. ApprovedBaseImageId와 CompletedExportId도 저장·round-trip한다. Jobs/Tasks rowversion을 유지하고 소유 관계·FK·cascade 경로를 SQL로 검증한다. JSON의 image ID·Blob key를 검증 없이 사용하지 않는다.
 - [ ] owned request 조회는 Jobs에서 projection으로 수행한다. 이미지·export 이력은 job이 소유하며 제작 대상 제거가 과거 snapshot의 결과를 삭제하지 않게 한다.
 - [ ] `dotnet ef --version`을 확인한다. 도구가 없거나 버전이 다르면 실행 환경의 임시 tool-path에 EF 패키지와 같은 `10.0.10`을 설치해 사용한다. 기존 전역 도구나 저장소 의존성을 바꾸지 않는다.
 - [ ] `dotnet ef migrations add AddSpriteProduction --project apps/backend/Noxtend.Infrastructure --startup-project apps/backend/Noxtend.Api`를 실행하고 생성 SQL을 리뷰한다. DesignTimeDbContextFactory를 사용하며 개발 DB에 update를 실행하지 않는다.
