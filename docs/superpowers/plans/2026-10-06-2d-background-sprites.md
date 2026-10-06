@@ -98,7 +98,7 @@ public sealed record SpriteReceipt(Guid JobId, JobStatus Status, int Revision,
 `SpriteInputs.cs`에 고정 입력을, `SpriteManifest.cs`에 파일 좌표를 둔다.
 
 ```csharp
-public sealed record SpriteFrameInput(Guid AssetId, int FrameIndex, int PlanRevision,
+public sealed record SpriteFrameInput(Guid AssetId, SpriteAssetPlan Plan, int FrameIndex, int PlanRevision,
     Guid? BaseImageId, SpriteCanvas GenerationCanvas, SpriteCanvas Canvas, SpriteTransform Transform);
 public sealed record SpriteApprovedAsset(Guid Id, string Name, int Order, int Fps,
     bool Loop, SpriteAnchor Anchor, SpriteRepeat Repeat, SpriteTileLayout Layout,
@@ -177,7 +177,7 @@ Assert.Equal(oldImageIds, job.Sprites.Assets[0].Frames.Select(x => x.CurrentImag
 ```
 
 - [ ] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpriteLifecycleTests`로 신규 동작의 실패를 확인한다.
-- [ ] 상태 메서드와 에러 코드를 구현한다. 계획 변경은 해당 asset PlanRevision, 모든 표시·결과·승인 변경은 ReviewRevision을 증가시킨다. 공통 view/kind/canvas는 수정 계약에 넣지 않는다.
+- [ ] 상태 메서드와 에러 코드를 구현한다. 생성 입력 변경만 해당 asset PlanRevision을 증가시키고 표시·결과·승인 변경은 ReviewRevision을 증가시킨다. FPS/name/order만 바뀌면 기존 프레임과 PlanRevision을 유지한다. SpriteFrameInput.Plan은 생성 접수 시의 immutable snapshot이며 worker는 frameCount/motion/transparency를 현재 편집 상태에서 다시 읽지 않는다. 공통 view/kind/canvas는 수정 계약에 넣지 않는다.
 - [ ] `PlanReadyFollowUpTasks / IsReadyToRun / ReconcileFromTasks`에 모드별 분기만 추가한다. frame input을 반환하는 승인과 실제 task 생성은 Task 8에서 같은 트랜잭션으로 연결한다.
 - [ ] 같은 테스트를 통과시키고 기존 `PartGenerationPlanningTests / JobLifecycleTests`도 실행한다. 도메인 문서를 동기화해 `feat(domain): add sprite review and frame lifecycle`로 커밋한다.
 
@@ -240,6 +240,7 @@ await Assert.ThrowsAsync<DbUpdateException>(() => saveDuplicateRequest);
 
 - [ ] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpritePersistenceTests`로 실패를 확인한다. Docker가 없으면 환경 제약으로 기록하고 통과로 계산하지 않는다.
 - [ ] Jobs에 nullable owned state, SpriteAssets/Frames/Images/Exports/Requests 테이블을 매핑한다. Jobs/Tasks rowversion을 유지하고 소유 관계·FK·cascade 경로를 SQL로 검증한다. JSON의 image ID·Blob key를 검증 없이 사용하지 않는다.
+- [ ] owned request 조회는 Jobs에서 projection으로 수행한다. 이미지·export 이력은 job이 소유하며 제작 대상 제거가 과거 snapshot의 결과를 삭제하지 않게 한다.
 - [ ] `dotnet ef --version`을 확인한다. 도구가 없거나 버전이 다르면 실행 환경의 임시 tool-path에 EF 패키지와 같은 `10.0.10`을 설치해 사용한다. 기존 전역 도구나 저장소 의존성을 바꾸지 않는다.
 - [ ] `dotnet ef migrations add AddSpriteProduction --project apps/backend/Noxtend.Infrastructure --startup-project apps/backend/Noxtend.Api`를 실행하고 생성 SQL을 리뷰한다. DesignTimeDbContextFactory를 사용하며 개발 DB에 update를 실행하지 않는다.
 - [ ] 같은 테스트를 통과시키고 `ReviewConcurrencyTests / JobListFilterTests / MigrationRegistrationTests`를 실행한다. 스키마 문서와 함께 `feat(storage): persist sprite state and request receipts`로 커밋한다.
@@ -366,7 +367,7 @@ Assert.Equal(1, nonRetryableAttemptCount);
 ```
 
 - [ ] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpriteGenerationTests`로 실패를 확인한다.
-- [ ] 원본·고정 base·asset plan·canvas·phase를 별도 변수로 전달한다. 생성 prompt의 허용 변수는 `settings / asset / frame / sourceCanvas / outputCanvas`이며 JSON 데이터로 삽입한다. 3D ViewDirection을 프레임에 쓰지 않는다. SeedSpriteGeneratePrompt를 생성한다.
+- [ ] 원본·고정 base·SpriteFrameInput.Plan snapshot·canvas·phase를 별도 변수로 전달한다. 생성 prompt의 허용 변수는 `settings / asset / frame / sourceCanvas / outputCanvas`이며 JSON 데이터로 삽입한다. 3D ViewDirection을 프레임에 쓰지 않는다. SeedSpriteGeneratePrompt를 생성한다.
 - [ ] 공급자는 기존 Factory·Recording·RateLimitGate를 통과한다. Task 3 이미지 검사·PNG 정규화·Blob 저장→SQL 결과 공개 순서를 지킨다. 미공개 새 Blob만 정리하고 기존 이력을 삭제하지 않는다. FakeImageProvider의 기본 성공·지연 응답은 GenerateSprite 요청일 때 요청 size의 디코딩 가능한 RGBA PNG를 만든다. 기존 12-byte PNG 헤더를 2D 성공 fixture로 쓰지 않고, Returning의 명시적 잘못된 응답은 그대로 유지한다.
 - [ ] 공통 TaskExecution의 commit 직전에 최신 aggregate/task를 reload해 `IsCurrentTask`·canceled를 확인한다. sprite 조건은 Domain에 두며 body/commit 계약을 유지한다. 기존 3D와 병렬 asset 결과 반영을 회귀 검증한다.
 - [ ] GenerateSprite에 기존 GenerationOptions lease와 재시도 한도를 적용하고 ReclaimPlan idle도 해당 lease×2로 정한다. generationWorkers 등록을 재사용하면 3D+2D 합계 동시 실행 수가 늘므로 기존 공급자 RateLimitGate 공유를 테스트한다.
@@ -569,6 +570,6 @@ test('detail url activates its parent group and restores menu focus')
 
 15개 Task를 순서대로 진행한다. 첫 사용 가능 지점은 Task 12의 정적 2D 배경이며 Task 13에서 같은 흐름에 loop를 추가하고 Task 14에서 메뉴·홈 연결을 완성한다. 텍스트 입력·2D 캐릭터/오브젝트·엔진 전용 importer는 후속 작업이다.
 
-**권장: Native.** 같은 애그리게이트·HTTP 계약을 단계적으로 확장하므로 주 담당이 이 세션에서 일관되게 구현하고 마지막에 새로운 reviewer로 전체 차이를 검토하는 방식이 효율적이다. **Subagent-driven**은 Task마다 새 구현 담당과 독립 reviewer를 사용하고 마지막에 전체 변경을 다시 검토한다. 계획 리뷰와 방식 선택 전에 구현을 시작하지 않는다.
+**실행: Subagent-driven.** 사용자가 정한 기본 지침과 구현 실행 요청에 따라 Task마다 새 구현 담당과 독립 reviewer를 사용하고 마지막에 전체 변경을 다시 검토한다. 현재 checkout의 `codex/2d-background-sprites` 브랜치에서 진행하며, Task의 검증·리뷰가 끝나면 다음 작업을 이어간다.
 
 자체 검토에서는 spec 1..13·Global Constraints·Review Focus 5개와 Task의 연결, Create/Modify 구분, 의존 순서, 타입 일관성, red/green 명령의 실행 위치를 확인한다. 설계 변경이 필요한 사실을 찾으면 spec/plan을 함께 고치고 근거를 기록한다.
