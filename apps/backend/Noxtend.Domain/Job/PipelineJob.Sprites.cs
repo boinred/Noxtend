@@ -150,6 +150,26 @@ public sealed partial class PipelineJob
         return Result<SpriteFrameInput>.Ok(SpriteInput(asset, index));
     }
 
+    public IReadOnlyList<PipelineTask> PlanSpriteFrames(IReadOnlyList<SpriteFrameInput> inputs, Guid requestId)
+    {
+        if (requestId == Guid.Empty || !CheckSpriteMutation(Sprites?.ReviewRevision ?? 0).IsSuccess
+            || inputs.Select(i => (i.AssetId, i.FrameIndex)).Distinct().Count() != inputs.Count
+            || inputs.Any(input => !Sprites!.Assets.Any(asset => asset.Plan.Id == input.AssetId
+                && MatchesSpriteInput(asset, input) && asset.Frames[input.FrameIndex].CurrentImageId is null
+                && !_tasks.Any(t => t.Id == asset.Frames[input.FrameIndex].CurrentTaskId && !t.IsTerminal))))
+            throw new InvalidOperationException("현재 비어 있는 슬롯의 고정 입력과 요청 ID가 필요합니다");
+        var tasks = new List<PipelineTask>();
+        foreach (var input in inputs)
+        {
+            var task = PlanTask(TaskKind.GenerateSprite, _tasks.Count,
+                providerConfigId: ImageProviderConfigId, model: ImageModel);
+            BindSpriteFrame(task.Id, input);
+            task.BindRequest(requestId);
+            tasks.Add(task);
+        }
+        return tasks.AsReadOnly();
+    }
+
     public void BindSpriteFrame(Guid taskId, SpriteFrameInput input)
     {
         var guard = CheckSpriteMutation(Sprites?.ReviewRevision ?? 0);

@@ -32,6 +32,7 @@ const STAGES: PromptKind[] = [
   'generate',
   'similarityEvaluate',
   'analyzeSprites',
+  'generateSprite',
 ]
 
 /** 열: 기본(null) → 캐릭터 → 소품 → 배경 */

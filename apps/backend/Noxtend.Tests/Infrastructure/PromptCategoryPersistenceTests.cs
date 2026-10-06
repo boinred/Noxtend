@@ -28,7 +28,7 @@ public sealed class PromptCategoryPersistenceTests(SqlServerFixture sql)
     // 활성 시드는 없다" 를 고정한다. 훗날 시드가 실수로 다른 전용 프롬프트를 켜면 이 단정이 잡는다.
     // 캐릭터 시드 자체의 스코프·활성 유일성은 CharacterPromptSeedMigrationTests 가 지킨다.
     [Fact]
-    public async Task MigratedCategorizedSeeds_AreTheCharacterTripletPlusSixBackgroundSlots()
+    public async Task MigratedCategorizedSeeds_AreTheCharacterTripletPlusSevenBackgroundSlots()
     {
         await using var db = Context();
         await db.Database.MigrateAsync();
@@ -41,8 +41,8 @@ public sealed class PromptCategoryPersistenceTests(SqlServerFixture sql)
             .Select(p => new { p.Kind, p.Category })
             .ToListAsync();
 
-        // Character triplet and the six independent Background slots
-        Assert.Equal(9, categorized.Count);
+        // Character triplet and the seven independent Background slots
+        Assert.Equal(10, categorized.Count);
         Assert.DoesNotContain(categorized, row => row.Category == AssetCategory.Object);
         Assert.Equal(
             [LlmOperationKind.Extract, LlmOperationKind.Decompose, LlmOperationKind.Generate],
@@ -50,7 +50,7 @@ public sealed class PromptCategoryPersistenceTests(SqlServerFixture sql)
                 .Select(row => row.Kind).OrderBy(k => k));
         Assert.Equal(
             [LlmOperationKind.Analyze, LlmOperationKind.Extract, LlmOperationKind.Decompose,
-             LlmOperationKind.Generate, LlmOperationKind.AnalyzeSprites, LlmOperationKind.SimilarityEvaluate],
+             LlmOperationKind.Generate, LlmOperationKind.AnalyzeSprites, LlmOperationKind.GenerateSprite, LlmOperationKind.SimilarityEvaluate],
             categorized.Where(row => row.Category == AssetCategory.Background)
                 .Select(row => row.Kind).OrderBy(kind => kind));
     }

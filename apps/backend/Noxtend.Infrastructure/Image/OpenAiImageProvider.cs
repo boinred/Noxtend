@@ -53,7 +53,7 @@ public sealed partial class OpenAiImageProvider(HttpClient http, string apiKey, 
             // 상태 코드만 흘린다. 본문에는 키 조각이나 조직 식별자가 섞일 수 있다
             throw new ProviderCallFailedException(
                 $"{(int)response.StatusCode}",
-                isTransient: ProviderHttp.IsTransient(response.StatusCode));
+                isTransient: await ProviderHttp.IsOpenAiTransientAsync(response, ct));
         }
 
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));

@@ -85,6 +85,7 @@ public enum TaskKind
     /// </summary>
     Synthesize,
     AnalyzeSprites = 7,
+    GenerateSprite = 8,
 }
 
 /// <summary>공정의 상태.</summary>

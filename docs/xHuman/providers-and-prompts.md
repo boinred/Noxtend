@@ -22,6 +22,12 @@
 
 `SeedPrompts.AnalyzeSprites()`와 `SeedSpriteAnalyzePrompt` migration은 정확한 시점·유형과 대상 schema를 등록한다. 기존 AnalyzeSprites/Background 슬롯이 있으면 운영자 내용을 보존하며 기존 3D·평가 프롬프트는 변경하지 않는다. `FakeLlmProvider`도 같은 schema를 반환하고 관리자 격자·편집·Frontend operation 라벨은 새 분석을 포함한다. 단가가 없는 모델 비용은 기존 ModelPriceBook의 null 규칙을 따른다.
 
+### 2D 배경 이미지 생성
+
+`RunSpriteGenerationTaskHandler`는 `LlmOperationKind.GenerateSprite=6`·Background 전용 활성 프롬프트를 사용한다. `SeedPrompts.GenerateSprite()`와 `SeedSpriteGeneratePrompt` migration은 기존 운영자 슬롯을 보존한다. 허용 변수는 settings·asset·frame·sourceCanvas·outputCanvas이며, asset은 `SpriteFrameInput.Plan` snapshot이다. frame JSON에는 index·count·phase·BaseImageId와 고정 GenerationCanvas·anchor·transform을 전달한다. 이름·FPS를 나중에 편집해도 접수한 입력은 바뀌지 않는다. `ViewDirection`은 사용하지 않는다.
+
+모든 sprite 요청은 Background를 opaque 또는 transparent로 명시하고 기존 Factory·Recording·RateLimitGate를 통과한다. raw 응답은 실제 PNG와 image/png 및 고정 GenerationCanvas 크기가 일치해야 하며, 디코딩·크기·알파 오류는 재시도하지 않는다. 기존 입력 MIME은 원본 참조에 유지하고 출력은 픽셀 검증 후 PNG로 정규화한다. FakeImageProvider의 기본 성공·지연 응답은 GenerateSprite의 요청 크기에 맞는 RGBA PNG를 만들며 명시적인 Returning 오류 fixture는 변환하지 않는다.
+
 ### 이미지 생성
 
 `RunGenerationTaskHandler`가 활성 Generate 프롬프트를 조회하고 `GenerationStage` 변수·참조 이미지로 `ImageRequest`를 만든다. 이미지 어댑터 응답을 `GenerationStage.Validate`로 검증하고 Blob 저장 후 작업 상태에 반영한다. 성공 확정 전에 검증과 저장을 끝내는 순서를 유지한다.
@@ -64,10 +70,12 @@
 - 활성 프롬프트 선택과 카테고리별 기본값 fallback은 `apps/backend/Noxtend.Infrastructure/Llm/TuningPortAdapters.cs`의 `TuningPromptCatalog`에서 확인한다. 프롬프트 버전 id는 호출 맥락과 내역에 연결되므로 요청·응답 처리 과정에서 버리지 않는다.
 - 공급자 출력의 JSON 파싱·도메인 검증은 Application 단계에 둔다. 어댑터는 공급자 프로토콜에서 공통 계약으로 옮기는 데 필요한 파싱만 수행한다.
 - `RewriteDescriptions`는 `RunTaskHandler`가 `IStage.BuildJsonSchema`를 호출해 현재 재작성 대상 이름을 JSON Schema `enum`으로 제한한다. 응답 해석은 정확한 대상 이름을 우선하고, 미확인 이름 하나와 누락 대상 하나가 남을 때만 1:1 보정한다. 중복·누락·모호한 응답은 실패시키며 Domain 검증은 그대로 유지한다. 관련 회귀는 `RewriteDescriptionsStageTests.cs`에서 확인한다.
+- `ProviderHttp`의 OpenAI 응답 분류는 텍스트·이미지 양쪽에서 429의 insufficient_quota type/code와 문서화된 credit_balance_exhausted·organization_spend_limit_exceeded·project_spend_limit_exceeded·organization_usage_limit_exceeded code를 즉시 실패로 분류한다. 일반 rate limit·잘못된/없는 오류 본문은 기존 상태 코드 기준 재시도를 유지하고 원문 message는 예외에 넣지 않는다.
 - 취소 토큰, transient 오류 분류, 재시도 한도는 Provider 예외와 `RunTaskHandler`·`TaskExecution`에서 함께 확인한다. 인증 실패·크레딧 부족·잘못된 설정을 무조건 재시도하지 않는다.
 
 ## 호출 기록·비용·민감 정보
 
+- `EfLlmCallRepository`는 IDbContextFactory가 만든 별도 context를 scoped 수명 동안 소유하고 Dispose한다. AddAsync 후 SaveChangesAsync 계약을 유지하며 작업 리스 ReloadAsync의 추적 초기화와 호출 기록 저장을 분리한다.
 - `RecordingLlmProvider`와 `RecordingImageProvider`는 Factory가 씌우는 데코레이터다. 두 경로는 `ILlmCallRecorder`와 `TuningLlmCallRecorder`를 통해 같은 호출 저장소에 기록된다. 기록 실패는 호출 자체를 실패시키지 않고 경고 로그로 남긴다.
 - 텍스트 호출 기록에는 렌더된 프롬프트·응답 문자열이 포함될 수 있다. 텍스트 요청에 첨부한 이미지는 이름·형식·크기·SHA-256만 기록한다. 이미지 생성 호출은 프롬프트·크기·참조 개수와 응답 형식·크기만 남기며 입력·출력 이미지 바이트는 저장하지 않는다. 텍스트 입력도 개인정보·비밀값 포함 여부를 확인한다.
 - API 키, 인증 헤더, 원본 외부 요청 본문, 이미지 bytes/base64를 로그나 호출 기록에 추가하지 않는다. 실패 기록은 원문 예외 전체 대신 현재의 정규화 규칙을 따른다.

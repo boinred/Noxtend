@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Noxtend.Application.Job;
 using Noxtend.Domain.Job;
+using Noxtend.Domain.Common;
 using Noxtend.Domain.Ports;
 
 namespace Noxtend.Application.Pipeline;
@@ -72,54 +73,83 @@ public sealed class TaskExecution(
             return RunTaskOutcome.Skipped;
         }
 
+        if (!job.IsCurrentTask(task)) return RunTaskOutcome.Skipped;
         task.Claim(clock.Now, policy.Lease);
+        var attempt = task.AttemptCount;
         job.MarkRunning();
-        await jobs.SaveChangesAsync(ct);
+        try { await jobs.SaveChangesAsync(ct); }
+        catch (ConcurrencyConflictException) { return RunTaskOutcome.Skipped; }
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var renewal = RenewLeaseLoopAsync(job.Id, taskId, policy, cts);
-
+        var ownershipVersion = task.RowVersion?.ToArray();
+        var renewal = RenewLeaseLoopAsync(job.Id, taskId, attempt, ownershipVersion, policy, cts);
+        Action<PipelineJob>? commit = null;
+        TaskFailure? failure = null;
+        var canceled = false;
         try
         {
-            var commit = await body(job, task, cts.Token);
-
-            // 취소 확인은 반영 직전에 한 번 더. 갱신 주기 사이에 취소가 들어왔을 수 있다
+            commit = await body(job, task, cts.Token);
             cts.Token.ThrowIfCancellationRequested();
-
-            // 성공 확정이 결과 반영보다 먼저다. Canceled 에서 호출하면 예외이므로
-            // (§2.2 안전장치) 이 순서라야 취소된 작업에 결과가 쓰이지 않는다.
-            // `commit` 은 순수 대입이라 여기서 던지지 않는다
-            task.Succeed(clock.Now);
-            commit(job);
         }
-        catch (OperationCanceledException)
-        {
-            // 취소는 실패가 아니다. 결과를 저장하지 않고 취소로 남긴다
-            task.Cancel(clock.Now);
-        }
+        catch (OperationCanceledException) { canceled = true; }
         catch (Exception ex)
         {
             LogFailure(taskId, task.Model, ex);
-
-            // 공급자 원문을 그대로 싣지 않는다 — 키가 메시지에 섞일 수 있다 (§4.2 #13).
-            // 분류에 실패하면 예외 타입 이름만 남긴다
-            var failure = classify(ex) ?? TaskFailure.Fail(ex.GetType().Name);
-            Apply(task, failure, policy);
+            failure = classify(ex) ?? TaskFailure.Fail(ex.GetType().Name);
         }
         finally
         {
+            // 최종 조회와 리스 루프의 동일 DbContext 동시 접근 차단
             await cts.CancelAsync();
-            await renewal;
+            ownershipVersion = await renewal;
         }
 
-        await orchestrator.OnTaskCompletedAsync(job, ct);
-
-        return task.Status switch
+        // 공급자 재호출 없이 최신 aggregate에 결과만 다시 반영
+        for (var conflict = 0; ; conflict++)
         {
-            Domain.Job.TaskStatus.Succeeded => RunTaskOutcome.Succeeded,
-            Domain.Job.TaskStatus.Canceled => RunTaskOutcome.Canceled,
-            _ => RunTaskOutcome.Failed,
-        };
+            var current = await jobs.ReloadAsync(job.Id, ct);
+            var owned = current?.Tasks.FirstOrDefault(t => t.Id == taskId);
+            if (current?.Status == JobStatus.Canceled || owned?.Status == Domain.Job.TaskStatus.Canceled)
+                return RunTaskOutcome.Canceled;
+            if (current is null || current.IsTerminal || owned is null
+                || !owned.IsOwnedBy(attempt, clock.Now, ownershipVersion) || !current.IsCurrentTask(owned))
+                return RunTaskOutcome.Skipped;
+            TimeSpan? retryDelay = null;
+            try
+            {
+                if (canceled) owned.Cancel(clock.Now);
+                else if (failure is { } failed) retryDelay = Apply(owned, failed, policy);
+                else
+                {
+                    owned.Succeed(clock.Now);
+                    commit!(current);
+                }
+                await jobs.SaveChangesAsync(ct);
+            }
+            catch (ConcurrencyConflictException) when (conflict < 4) { continue; }
+
+            if (retryDelay is { } delay) ScheduleRetry(current.Id, delay);
+            var outcome = owned.Status switch
+            {
+                Domain.Job.TaskStatus.Succeeded => RunTaskOutcome.Succeeded,
+                Domain.Job.TaskStatus.Canceled => RunTaskOutcome.Canceled,
+                _ => RunTaskOutcome.Failed,
+            };
+            // 공개 이후 충돌은 결과 재반영 없이 상태 조정만 재시도
+            for (var reconcile = 0; ; reconcile++)
+            {
+                try
+                {
+                    await orchestrator.OnTaskCompletedAsync(current, ct);
+                    return outcome;
+                }
+                catch (ConcurrencyConflictException) when (reconcile < 4)
+                {
+                    current = await jobs.ReloadAsync(job.Id, ct);
+                    if (current is null) return outcome;
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -144,20 +174,20 @@ public sealed class TaskExecution(
     /// 실패가 경로에 따라 다르게 처리된다. 한도를 넘으면 확정 실패다 — 프롬프트가
     /// 잘못된 경우 무한히 돌면 비용만 태운다 (Plan R-7).
     /// </summary>
-    private void Apply(PipelineTask task, TaskFailure failure, TaskExecutionPolicy policy)
+    private TimeSpan? Apply(PipelineTask task, TaskFailure failure, TaskExecutionPolicy policy)
     {
         // 취소가 먼저 도착했다 — 사용자의 결정이 나중에 도착한 오류보다 우선한다.
         // 취소 직후 공급자가 별개의 예외를 던지는 경합이 실제로 있다
         if (task.IsTerminal)
         {
-            return;
+            return null;
         }
 
         if (failure.Disposition == FailureDisposition.Fail
             || task.AttemptCount >= policy.MaxAttempts)
         {
             task.Fail(failure.Reason, clock.Now);
-            return;
+            return null;
         }
 
         // 대기로 되돌리면 오케스트레이터가 다시 적재한다 (§2.2).
@@ -168,17 +198,16 @@ public sealed class TaskExecution(
         var delay = RetryBackoff.NextDelay(task.AttemptCount);
         task.ReleaseForRetry(clock.Now + delay);
 
-        // 독립 리뷰 지적: 여기서 멈추면 이 공정을 정확히 이 시각에 재확인해줄 장치가
-        // 없어서 스위퍼 주기(기본 60초)에 종속된다 — 승인된 5초/30초가 최대 60초가 될 수
-        // 있었다. jobId 만 들고 예약하고, "무엇을 할지"는 아래 콜백이 그대로 갖고 있는다
-        var jobId = task.JobId;
+        return delay;
+    }
+
+    private void ScheduleRetry(Guid jobId, TimeSpan delay)
+    {
         scheduler.Schedule(delay, async ct =>
         {
-            var job = await jobs.GetAsync(jobId, ct);
+            var job = await jobs.ReloadAsync(jobId, ct);
             if (job is not null && !job.IsTerminal)
-            {
                 await orchestrator.OnTaskCompletedAsync(job, ct);
-            }
         });
     }
 
@@ -189,38 +218,40 @@ public sealed class TaskExecution(
     /// 리스를 갱신해야 하므로 상태 확인을 얹으면 된다. 취소 지연은 갱신 주기와 같고,
     /// 10분짜리 작업에서 15초는 문제가 되지 않는다.
     /// </summary>
-    private async Task RenewLeaseLoopAsync(
-        Guid jobId, Guid taskId, TaskExecutionPolicy policy, CancellationTokenSource cts)
+    private async Task<byte[]?> RenewLeaseLoopAsync(
+        Guid jobId, Guid taskId, int attempt, byte[]? ownershipVersion, TaskExecutionPolicy policy, CancellationTokenSource cts)
     {
         try
         {
             while (!cts.IsCancellationRequested)
             {
                 await Task.Delay(policy.LeaseRenew, cts.Token);
-
-                var current = await jobs.GetAsync(jobId, cts.Token);
+                // 루프 종료가 진행 중 SQL을 취소하지 않도록 완료 후 최종 조회와 합류
+                var current = await jobs.ReloadAsync(jobId, CancellationToken.None);
                 var task = current?.Tasks.FirstOrDefault(t => t.Id == taskId);
-
-                if (current is null || task is null)
+                if (current is null || current.IsTerminal || task is null
+                    || !task.IsOwnedBy(attempt, clock.Now, ownershipVersion) || !current.IsCurrentTask(task))
                 {
-                    continue;
-                }
-
-                if (current.IsTerminal || task.IsTerminal)
-                {
-                    // 취소가 감지됐다. 토큰을 끊으면 HttpClient 가 공급자 호출을 중단한다
                     await cts.CancelAsync();
-                    return;
+                    return ownershipVersion;
                 }
-
                 task.RenewLease(clock.Now, policy.Lease);
-                await jobs.SaveChangesAsync(cts.Token);
+                try
+                {
+                    await jobs.SaveChangesAsync(CancellationToken.None);
+                    ownershipVersion = task.RowVersion?.ToArray();
+                }
+                catch (ConcurrencyConflictException) { }
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cts.IsCancellationRequested) { }
+        catch (Exception ex)
         {
-            // 정상 종료 경로 — 공정이 끝나면 호출자가 cts 를 끊는다
+            logger.LogWarning(ex, "공정 {TaskId} 리스 소유권 확인 실패", taskId);
+            await cts.CancelAsync();
+            throw;
         }
+        return ownershipVersion;
     }
 }
 

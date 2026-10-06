@@ -191,6 +191,11 @@ public sealed class PipelineTask
         MeshInputs = inputs;
     }
 
+    // 수동 재시도의 시도 번호 재사용도 이전 SQL 소유 버전으로 구분
+    public bool IsOwnedBy(int attempt, DateTimeOffset now, byte[]? ownershipVersion)
+        => Status == TaskStatus.Running && AttemptCount == attempt && LeaseExpiresAt > now
+            && (ownershipVersion is null || RowVersion is not null && RowVersion.SequenceEqual(ownershipVersion));
+
     public bool IsTerminal =>
         Status is TaskStatus.Succeeded or TaskStatus.Failed or TaskStatus.Canceled;
 

@@ -461,6 +461,7 @@ export async function installFakeApi(page: Page, options: FakeApiOptions = {}) {
   const ALLOWED_VARIABLES: Record<string, string[]> = {
     analyze: [],
     analyzeSprites: ['settings', 'sourceCanvas'],
+    generateSprite: ['settings', 'asset', 'frame', 'sourceCanvas', 'outputCanvas'],
     // gender·partHints 는 캐릭터 고유 변수다 (character-studio §D-03). 종류는 추출, 개수는 분해로 흐른다
     extract: ['scene', 'gender', 'partHints'],
     decompose: ['scene', 'parts', 'gender', 'partHints'],
@@ -508,6 +509,20 @@ export async function installFakeApi(page: Page, options: FakeApiOptions = {}) {
     note: '초기 버전',
     isActive: true,
     allowedVariables: ALLOWED_VARIABLES.analyzeSprites!,
+    createdAt: new Date(Date.UTC(2026, 9, 6)).toISOString(),
+  })
+
+  prompts.push({
+    id: 'prompt-seed-sprite-generation',
+    kind: 'generateSprite',
+    category: 'background',
+    version: 1,
+    system: '2D 배경 제작 대상을 생성하라',
+    user: '{{settings}} {{asset}} {{frame}} {{sourceCanvas}} {{outputCanvas}}',
+    jsonSchema: '{}',
+    note: '초기 버전',
+    isActive: true,
+    allowedVariables: ALLOWED_VARIABLES.generateSprite!,
     createdAt: new Date(Date.UTC(2026, 9, 6)).toISOString(),
   })
 
@@ -1586,25 +1601,27 @@ export async function installFakeApi(page: Page, options: FakeApiOptions = {}) {
       const activeExact = (kind: string, category: string | null) =>
         prompts.find((p) => p.kind === kind && p.category === category && p.isActive)
 
-      const rows = [...PROMPT_STAGES, 'similarityEvaluate', 'analyzeSprites'].map((kind) => ({
-        kind,
-        cells: [null, ...PROMPT_CATEGORIES].map((category) => {
-          const dedicated = activeExact(kind, category)
-          if (dedicated) {
-            return {
-              category,
-              status: 'dedicated',
-              version: dedicated.version,
-              versionId: dedicated.id,
+      const rows = [...PROMPT_STAGES, 'similarityEvaluate', 'analyzeSprites', 'generateSprite'].map(
+        (kind) => ({
+          kind,
+          cells: [null, ...PROMPT_CATEGORIES].map((category) => {
+            const dedicated = activeExact(kind, category)
+            if (dedicated) {
+              return {
+                category,
+                status: 'dedicated',
+                version: dedicated.version,
+                versionId: dedicated.id,
+              }
             }
-          }
-          // 기본 열은 폴백이 없다 — 전용이 없으면 실행 불가
-          const fallback = category === null ? undefined : activeExact(kind, null)
-          return fallback
-            ? { category, status: 'fallback', version: fallback.version, versionId: fallback.id }
-            : { category, status: 'unavailable', version: null, versionId: null }
+            // 기본 열은 폴백이 없다 — 전용이 없으면 실행 불가
+            const fallback = category === null ? undefined : activeExact(kind, null)
+            return fallback
+              ? { category, status: 'fallback', version: fallback.version, versionId: fallback.id }
+              : { category, status: 'unavailable', version: null, versionId: null }
+          }),
         }),
-      }))
+      )
 
       return ok(route, { rows })
     }

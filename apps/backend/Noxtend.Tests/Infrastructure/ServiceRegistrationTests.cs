@@ -27,6 +27,7 @@ public sealed class ServiceRegistrationTests
         using var scope = provider.CreateScope();
 
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IJobRepository>());
+        Assert.IsAssignableFrom<IDisposable>(scope.ServiceProvider.GetRequiredService<Noxtend.Tuning.Domain.Ports.ILlmCallRepository>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<NoxtendDbContext>());
     }
 

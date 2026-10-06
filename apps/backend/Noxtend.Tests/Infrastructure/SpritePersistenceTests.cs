@@ -314,28 +314,31 @@ public sealed class SpritePersistenceTests(SqlServerFixture sql)
         public Task SaveChangesAsync(CancellationToken ct) => inner.SaveChangesAsync(ct);
     }
 
-    [Fact]
-    public async Task SpritePromptMigration_AddsOnlyBackgroundAndPreservesOperatorSlot()
+    [Theory]
+    [InlineData(Noxtend.Domain.Llm.LlmOperationKind.AnalyzeSprites, "_SeedSpriteAnalyzePrompt")]
+    [InlineData(Noxtend.Domain.Llm.LlmOperationKind.GenerateSprite, "_SeedSpriteGeneratePrompt")]
+    public async Task SpritePromptMigration_AddsOnlyBackgroundAndPreservesOperatorSlot(Noxtend.Domain.Llm.LlmOperationKind kind, string suffix)
     {
         await using var db = Context();
-        var previous = db.Database.GetMigrations().TakeWhile(m => !m.EndsWith("_SeedSpriteAnalyzePrompt")).Last();
+        var target = db.Database.GetMigrations().Single(m => m.EndsWith(suffix));
+        var previous = db.Database.GetMigrations().TakeWhile(m => m != target).Last();
         await db.GetService<IMigrator>().MigrateAsync(previous);
         var before = await db.PromptVersions.CountAsync();
-        await db.Database.MigrateAsync();
-        var seeded = await db.PromptVersions.SingleAsync(p => p.Kind == Noxtend.Domain.Llm.LlmOperationKind.AnalyzeSprites);
+        await db.GetService<IMigrator>().MigrateAsync(target);
+        var seeded = await db.PromptVersions.SingleAsync(p => p.Kind == kind);
         Assert.Equal(AssetCategory.Background, seeded.Category);
         Assert.True(seeded.IsActive);
         Assert.Equal(before + 1, await db.PromptVersions.CountAsync());
         await db.GetService<IMigrator>().MigrateAsync(previous);
         db.ChangeTracker.Clear();
         var custom = Noxtend.Tuning.Domain.Prompt.PromptVersion.Create(
-            Noxtend.Domain.Llm.LlmOperationKind.AnalyzeSprites, AssetCategory.Background, 1,
+            kind, AssetCategory.Background, 1,
             "operator", "", "{}", null, Now);
         db.PromptVersions.Add(custom);
         await db.SaveChangesAsync();
-        await db.Database.MigrateAsync();
+        await db.GetService<IMigrator>().MigrateAsync(target);
         db.ChangeTracker.Clear();
-        var preserved = await db.PromptVersions.SingleAsync(p => p.Kind == Noxtend.Domain.Llm.LlmOperationKind.AnalyzeSprites);
+        var preserved = await db.PromptVersions.SingleAsync(p => p.Kind == kind);
         Assert.Equal(custom.Id, preserved.Id);
         Assert.Equal("operator", preserved.System);
     }

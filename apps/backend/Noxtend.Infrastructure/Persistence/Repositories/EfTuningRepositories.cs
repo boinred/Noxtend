@@ -59,8 +59,12 @@ public sealed class EfPromptVersionRepository(NoxtendDbContext db) : IPromptVers
     public Task SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
 }
 
-public sealed class EfLlmCallRepository(NoxtendDbContext db) : ILlmCallRepository
+public sealed class EfLlmCallRepository(IDbContextFactory<NoxtendDbContext> contexts) : ILlmCallRepository, IDisposable
 {
+    // 워커 리스 조회의 추적 초기화와 호출 내역 저장의 소유권 분리
+    private readonly NoxtendDbContext db = contexts.CreateDbContext();
+
+    public void Dispose() => db.Dispose();
     public async Task AddAsync(LlmCall call, CancellationToken ct)
         => await db.LlmCalls.AddAsync(call, ct);
 

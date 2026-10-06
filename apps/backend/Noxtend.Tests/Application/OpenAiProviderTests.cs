@@ -9,6 +9,48 @@ namespace Noxtend.Tests.Application;
 
 public sealed class OpenAiProviderTests
 {
+    public static IEnumerable<object[]> ErrorResponses()
+    {
+        var permanent = new[] { "insufficient_quota", "credit_balance_exhausted", "organization_spend_limit_exceeded",
+            "project_spend_limit_exceeded", "organization_usage_limit_exceeded" };
+        foreach (var image in new[] { false, true })
+        {
+            foreach (var code in permanent)
+                yield return [image, 429, "{\"error\":{\"code\":\"" + code + "\",\"message\":\"secret-key\"}}", false];
+            yield return [image, 429, "{\"error\":{\"type\":\"insufficient_quota\",\"code\":null}}", false];
+            foreach (var payload in new[] { "{\"error\":{\"code\":\"rate_limit_exceeded\"}}", "{\"error\":{\"code\":\"slow_down\"}}",
+                "not json secret-key", "{}", "null", "{\"error\":{\"code\":42}}", "{\"error\":\"secret-key\"}" })
+                yield return [image, 429, payload, true];
+            yield return [image, 401, "secret-key", false];
+            yield return [image, 500, "secret-key", true];
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(ErrorResponses))]
+    public async Task BillingQuota_IsTerminal_WhileRateLimitsKeepStatusFallback(bool image, int status, string payload, bool transient)
+    {
+        using var http = new HttpClient(new ErrorHandler(status, payload));
+        ProviderCallFailedException error;
+        if (image)
+        {
+            var provider = new Noxtend.Infrastructure.Image.OpenAiImageProvider(http, "key", "gpt-image-2");
+            error = await Assert.ThrowsAsync<ProviderCallFailedException>(() => provider.GenerateAsync(
+                new(new(Guid.NewGuid(), Guid.NewGuid(), null, Guid.NewGuid(), Guid.NewGuid(), "gpt-image-2"), "prompt", [], "1024x1024"), default));
+        }
+        else
+            error = await Assert.ThrowsAsync<ProviderCallFailedException>(() => new OpenAiProvider(http, "key", "gpt-test").CompleteAsync(Request(), default));
+        Assert.Equal(transient, error.IsTransient);
+        Assert.Equal(status.ToString(CultureInfo.InvariantCulture), error.Message);
+        Assert.DoesNotContain("secret-key", error.ToString());
+    }
+
+    private sealed class ErrorHandler(int status, string payload) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+            => Task.FromResult(new HttpResponseMessage((HttpStatusCode)status) { Content = new StringContent(payload) });
+    }
+
     // text-generation-rate-limiting §구현변경-3 — OpenAiImageProvider 와 같은 헤더 이름·포맷
     [Fact]
     public async Task RecordsRateLimitHeaders_FromSuccessResponse()

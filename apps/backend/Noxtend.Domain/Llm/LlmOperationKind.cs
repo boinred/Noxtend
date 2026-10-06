@@ -22,6 +22,7 @@ public enum LlmOperationKind
 
     Generate = 4,
     AnalyzeSprites = 5,
+    GenerateSprite = 6,
     SimilarityEvaluate = 100,
 }
 
@@ -37,6 +38,7 @@ public static class LlmOperation
         TaskKind.Extract => LlmOperationKind.Extract,
         TaskKind.Decompose => LlmOperationKind.Decompose,
         TaskKind.RewriteDescriptions => LlmOperationKind.RewriteDescriptions,
+        TaskKind.GenerateSprite => LlmOperationKind.GenerateSprite,
         TaskKind.AnalyzeSprites => LlmOperationKind.AnalyzeSprites,
         TaskKind.Generate => LlmOperationKind.Generate,
         _ => throw new ArgumentOutOfRangeException(

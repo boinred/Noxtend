@@ -47,9 +47,15 @@ LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계�
 
 `SpriteRequests`를 원본 조회·복사 전에 전역 조회하므로 원본 삭제 후 같은 정규화 요청은 기존 receipt를 반환한다. 다른 fingerprint는 충돌이며 접수 경쟁은 SQL 유니크 제약으로 판정한다. job·AnalyzeSprites task·receipt와 결과 복사 시 새 StoredImage는 같은 SaveChanges에 저장한다. 경쟁에서 진 요청이 만든 독립 Blob만 제거하며 재사용 업로드는 삭제하지 않는다. 최초 접수 저장 전 실패는 자신의 복사본만 정리한다. SaveChanges 호출 후 비경합 오류·취소는 요청 취소와 분리한 전역 receipt 조회로 own job의 커밋 여부를 확인한다. 커밋됐거나 조회에 실패해 불명확하면 복사본을 보존하며, 조회·정리 실패는 경고로 남기고 최초 저장 예외를 유지한다. 커밋 이후 orchestration 오류에는 이 정리를 적용하지 않는다. 공급자 모델명은 Trim 후 SHA-256 fingerprint에 포함한다.
 
-`RunSpriteAnalysisTaskHandler`는 기존 TaskExecution·JobOptions 리스·rate limit·LLM 호출 기록 경로를 사용한다. `SpritePlanParser`는 선택 시점·유형, 정확한 응답 필드, 1~12개 대상, ROI·순서·투명·루프 제약을 검사하고 대상 ID를 서버에서 부여한다. 분석 성공은 PlanReview·PendingReview에서 멈추며 이미지 생성 공정을 만들지 않는다. TaskKind.AnalyzeSprites=7만 worker로 추가하고 GenerateSprite·PackSprites handler는 후속 범위다.
+`RunSpriteAnalysisTaskHandler`는 기존 TaskExecution·JobOptions 리스·rate limit·LLM 호출 기록 경로를 사용한다. `SpritePlanParser`는 선택 시점·유형, 정확한 응답 필드, 1~12개 대상, ROI·순서·투명·루프 제약을 검사하고 대상 ID를 서버에서 부여한다. 분석 성공은 PlanReview·PendingReview에서 멈추며 이미지 생성 공정을 만들지 않는다. TaskKind.AnalyzeSprites=7은 분석 worker로 등록한다.
 
-관련 검증은 `Noxtend.Tests/Application/SpriteAnalysisTests.cs`, `Infrastructure/SpritePersistenceTests.cs`, `Domain/SpriteRulesTests.cs`, `SpriteLifecycleTests.cs`다. HTTP 연결과 실행기 리스 시도 소유권의 최종 최신 재조회 보강은 후속 범위다.
+`PipelineJob.PlanSpriteFrames`는 승인으로 반환된 고정 입력을 `TaskKind.GenerateSprite=8` 공정과 슬롯에 연결하고 RequestId를 기록한다. `RunSpriteGenerationTaskHandler`는 기준 프레임에 Original만, 이후 프레임에 Original과 고정 SpriteBase를 전달한다. 기준 생성 완료는 BaseReview에서 멈추며 검수 승인 이후에만 후속 프레임을 계획한다. 위상은 index/frameCount이고 마지막 프레임을 별도로 복제하지 않는다. 실제 PNG·MIME·GenerationCanvas 크기·32 MiB·픽셀·알파 검증과 고정 PNG 정규화를 거친 뒤 Blob 저장, SQL 공개 순으로 처리한다. 공개되지 않은 이번 Blob만 정리하며 저장 후 응답 유실이나 조정 실패에서도 실제 SQL 이미지 참조를 다시 확인한다. 조회가 실패해 공개 여부를 모르면 Blob을 보존하고 경고를 남긴다.
+
+`TaskExecution`은 리스 갱신 때도 `ReloadAsync`로 실제 상태를 읽고, 마지막에는 갱신 루프를 중지·await한 뒤 다시 조회한다. 루프의 Delay만 취소하며 이미 시작한 renewal SQL은 기존 command timeout 내 완료를 기다리므로 정상 body 종료가 진행 중 split query를 취소하지 않는다. `PipelineTask.IsOwnedBy`의 Running·claimed AttemptCount·미만료 lease·마지막으로 자신이 저장한 Tasks.RowVersion과 `IsCurrentTask`를 함께 확인해 취소·회수·교체된 시도의 성공과 실패 반영을 차단한다. Tasks.RowVersion은 claim 저장 직후 복사하고 자신이 저장한 renewal 성공 뒤에만 교체하므로 수동 재시도의 AttemptCount 재사용도 이전 실행과 구분한다. rowversion 충돌은 공급자 호출을 반복하지 않고 결과 반영과 저장만 제한적으로 재시도한다. 결과 공개 이후 충돌은 상태 조정만 재시도한다. `GenerateSprite`는 기존 GenerationOptions의 lease·workers와 JobOptions.MaxAttempts를 사용하고 Redis reclaim idle은 생성 lease의 두 배다. 3D와 2D 이미지 worker는 각각 설정 수만큼 등록되므로 합계가 늘지만 공급자 ID별 RateLimitGate 상태를 공유한다.
+
+`SpriteGenerationTests.cs`의 Fake·픽셀 검증과 같은 파일의 SQL 컬렉션 테스트는 기준 승인, 고정 위상·입력, stale 슬롯, 마지막 갱신/최종 조회 뒤 취소, 실제 회수 시도, 병렬 결과 rowversion 재시도, 호출 기록 겹침, 저장 후 응답 유실을 검증한다.
+
+관련 검증은 `Noxtend.Tests/Application/SpriteAnalysisTests.cs`, `Infrastructure/SpritePersistenceTests.cs`, `Domain/SpriteRulesTests.cs`, `SpriteLifecycleTests.cs`다. HTTP 연결은 후속 범위다.
 
 `SpritePipelineConfiguration`은 Jobs의 nullable owned state와 `SpriteAssets`·`SpriteImages`·`SpriteExports`·`SpriteRequests`를 매핑한다. `SpriteFrames`는 asset 소유이며 `(AssetId, Index)`가 PK다. `SpriteAsset.Id`는 생성 시 `Plan.Id`로 고정하고, 계획의 프레임 수가 바뀌면 기존 슬롯 객체를 초기화하고 초과 슬롯만 제거한다. 프레임 조회는 `Index`순이다. 이미지·export의 과거 ID는 교차 FK 없이 보존하며 대상 삭제가 이력을 삭제하지 않는다. 작업 삭제는 소유 트리 전체를 cascade로 지운다. PNG·ZIP 키는 기존 `DeletedJobBlobs.Images`에 중복 없이 수집해 `IBlobStorage` 정리 경로로 전달한다.
 

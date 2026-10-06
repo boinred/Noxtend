@@ -131,3 +131,20 @@ test('2D 분석은 배경 전용이며 설정·원본 캔버스 변수를 편집
   await page.getByTestId('prompt-save').click()
   await expect(page.getByTestId('prompt-version')).toHaveCount(2)
 })
+
+test('2D 생성은 배경 전용이며 고정 프레임 변수를 편집한다', async ({ page }) => {
+  await installFakeApi(page)
+  await page.goto('/admin/prompts')
+  const row = page.locator('[data-testid="prompt-row"][data-kind="generateSprite"]')
+  await expect(row.getByTestId('prompt-cell-dedicated')).toHaveCount(1)
+  await expect(row.getByTestId('prompt-cell-na')).toHaveCount(3)
+  await page.goto('/admin/prompts/generateSprite')
+  await expect(page.getByTestId('prompt-category-tab')).toHaveCount(1)
+  await expect(page.getByTestId('prompt-version')).toHaveCount(1)
+  await expect(page.getByTestId('prompt-user-input')).toHaveValue(
+    '{{settings}} {{asset}} {{frame}} {{sourceCanvas}} {{outputCanvas}}',
+  )
+  await page.getByTestId('prompt-system-input').fill('설정 {{settings}} 원본 {{sourceCanvas}}')
+  await page.getByTestId('prompt-save').click()
+  await expect(page.getByTestId('prompt-version')).toHaveCount(2)
+})
