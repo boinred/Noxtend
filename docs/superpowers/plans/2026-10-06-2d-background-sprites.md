@@ -342,11 +342,11 @@ Assert.Equal(0, imageCallCount);
 
 ## Task 8: 기준·후속 프레임 생성과 오래된 결과 차단
 
-**Files:** Create `B/Noxtend.Application/Sprites/RunSpriteGenerationTaskHandler.cs`, `B/Noxtend.Tests/Application/SpriteGenerationTests.cs`. Modify Task 7의 enum/operation/prompt/DI/worker/fixture, `B/Noxtend.Infrastructure/Image/FakeImageProvider.cs`, `B/Noxtend.Domain/Job/{PipelineJob.Sprites.cs,PipelineTask.cs}`, `B/Noxtend.Application/Pipeline/TaskExecution.cs`, `B/Noxtend.Api/Workers/ReclaimPlan.cs`, `docs/xHuman/{backend.md,providers-and-prompts.md}`. EF 생성 파일: `SeedSpriteGeneratePrompt` migration.
+**Files:** Create `B/Noxtend.Application/Sprites/RunSpriteGenerationTaskHandler.cs`, `B/Noxtend.Tests/Application/SpriteGenerationTests.cs`. Modify Task 7의 enum/operation/prompt/DI/worker/fixture, `B/Noxtend.Infrastructure/Image/FakeImageProvider.cs`, `B/Noxtend.Domain/Job/{PipelineJob.Sprites.cs,PipelineTask.cs}`, `B/Noxtend.Application/Pipeline/TaskExecution.cs`, `B/Noxtend.Infrastructure/Persistence/Repositories/EfTuningRepositories.cs`의 호출 기록 Context 소유, `B/Noxtend.Tests/Infrastructure/{ServiceRegistrationTests.cs,SpritePersistenceTests.cs}`의 DI·대상 migration 검증, `B/Noxtend.Api/Workers/ReclaimPlan.cs`, `B/Noxtend.Infrastructure/ProviderHttp.cs`와 OpenAI 텍스트·이미지 어댑터의 quota 분류, 관련 `B/Noxtend.Tests/Application/OpenAiProviderTests.cs`의 텍스트·이미지 공통 quota 검증과 기존 `SeedPromptVariableTests.cs`, `docs/xHuman/{backend.md,providers-and-prompts.md}`. EF 생성 파일: `SeedSpriteGeneratePrompt` migration.
 
 **Interfaces:** `TaskKind.GenerateSprite=8`, `LlmOperationKind.GenerateSprite=6`. `PipelineJob.PlanSpriteFrames(IReadOnlyList<SpriteFrameInput> inputs,Guid requestId) -> IReadOnlyList<PipelineTask>`가 슬롯과 공정을 연결한다. worker는 기존 ITaskHandler·ImageRequest·TaskExecution.RunAsync 계약을 유지한다. frame0은 Original, index>=1은 Original+SpriteBase를 참조한다.
 
-- [ ] `SpriteGenerationTests`에 아래 Fake provider·SQL 경쟁 테스트를 작성한다. 완료를 제어할 수 있는 Fake로 요청 시작→상태 변경→완료 순서를 고정한다.
+- [x] `SpriteGenerationTests`에 아래 Fake provider·SQL 경쟁 테스트를 작성한다. 완료를 제어할 수 있는 Fake로 요청 시작→상태 변경→완료 순서를 고정한다.
 
 ```csharp
 [Fact] public Task BaseGeneration_DoesNotStartLoopFramesBeforeApproval();
@@ -367,16 +367,16 @@ Assert.DoesNotContain(imageBase64, recorded.RequestPayload);
 Assert.Equal(1, nonRetryableAttemptCount);
 ```
 
-- [ ] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpriteGenerationTests`로 실패를 확인한다.
-- [ ] 원본·고정 base·SpriteFrameInput.Plan snapshot·canvas·phase를 별도 변수로 전달한다. 생성 prompt의 허용 변수는 `settings / asset / frame / sourceCanvas / outputCanvas`이며 JSON 데이터로 삽입한다. 3D ViewDirection을 프레임에 쓰지 않는다. SeedSpriteGeneratePrompt를 생성한다.
-- [ ] 공급자는 기존 Factory·Recording·RateLimitGate를 통과한다. raw 응답의 실제 PNG 형식·MIME과 크기가 고정 GenerationCanvas와 일치하는지 확인하고 불일치는 비재시도 오류로 처리한다. Task 3 이미지 검사·PNG 정규화·Blob 저장→SQL 결과 공개 순서를 지킨다. 미공개 새 Blob만 정리하고 기존 이력을 삭제하지 않는다. FakeImageProvider의 기본 성공·지연 응답은 GenerateSprite 요청일 때 요청 size의 디코딩 가능한 RGBA PNG를 만든다. 기존 12-byte PNG 헤더를 2D 성공 fixture로 쓰지 않고, Returning의 명시적 잘못된 응답은 그대로 유지한다.
-- [ ] 공통 TaskExecution의 commit 직전에 최신 aggregate/task를 reload해 `IsCurrentTask`·canceled를 확인한다. sprite 조건은 Domain에 두며 body/commit 계약을 유지한다. 기존 3D와 병렬 asset 결과 반영을 회귀 검증한다.
-- [ ] GenerateSprite에 기존 GenerationOptions lease와 재시도 한도를 적용하고 ReclaimPlan idle도 해당 lease×2로 정한다. generationWorkers 등록을 재사용하면 3D+2D 합계 동시 실행 수가 늘므로 기존 공급자 RateLimitGate 공유를 테스트한다.
-- [ ] 같은 테스트와 `RunGenerationTaskHandlerTests / JobLifecycleTests / ReclaimPlanTests / ImageProviderUsageTests`를 통과시키고 문서와 `feat(sprites): generate reviewed bases and animation frames`로 커밋한다.
+- [x] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpriteGenerationTests`로 실패를 확인한다.
+- [x] 원본·고정 base·SpriteFrameInput.Plan snapshot·canvas·phase를 별도 변수로 전달한다. 생성 prompt의 허용 변수는 `settings / asset / frame / sourceCanvas / outputCanvas`이며 JSON 데이터로 삽입한다. 3D ViewDirection을 프레임에 쓰지 않는다. SeedSpriteGeneratePrompt를 생성한다.
+- [x] 공급자는 기존 Factory·Recording·RateLimitGate를 통과한다. raw 응답의 실제 PNG 형식·MIME과 크기가 고정 GenerationCanvas와 일치하는지 확인하고 불일치는 비재시도 오류로 처리한다. Task 3 이미지 검사·PNG 정규화·Blob 저장→SQL 결과 공개 순서를 지킨다. 미공개 새 Blob만 정리하고 기존 이력을 삭제하지 않는다. FakeImageProvider의 기본 성공·지연 응답은 GenerateSprite 요청일 때 요청 size의 디코딩 가능한 RGBA PNG를 만든다. 기존 12-byte PNG 헤더를 2D 성공 fixture로 쓰지 않고, Returning의 명시적 잘못된 응답은 그대로 유지한다.
+- [x] 공통 TaskExecution의 commit 직전에 최신 aggregate/task를 reload해 `IsCurrentTask`·canceled·시도 소유권을 확인한다. Claim 저장 후 기존 Task.RowVersion을 기억하고 자기 renewal 저장 성공에서만 갱신하여, 수동 retry가 AttemptCount를 초기화해도 옛 응답을 거부한다. 루프 중지는 timer만 취소하고 진행 중인 SQL renewal은 끝까지 await한 후 최종 조회한다. sprite 조건은 Domain에 두며 body/commit 계약을 유지한다. 기존 3D 수동 재시도·병렬 asset 결과 반영·recording과 renewal의 SQL 경합을 회귀 검증한다.
+- [x] GenerateSprite에 기존 GenerationOptions lease와 재시도 한도를 적용하고 ReclaimPlan idle도 해당 lease×2로 정한다. generationWorkers 등록을 재사용하면 3D+2D 합계 동시 실행 수가 늘므로 기존 공급자 RateLimitGate 공유를 테스트한다.
+- [x] 같은 테스트와 `RunGenerationTaskHandlerTests / JobLifecycleTests / ReclaimPlanTests / ImageProviderUsageTests`를 통과시키고 문서와 `feat(sprites): generate reviewed bases and animation frames`로 커밋한다.
 
 ## Task 9: 중복 접수·검수 명령·pack worker
 
-**Files:** Create `B/Noxtend.Application/Sprites/{SpriteCommandsHandler.cs,RunSpritePackTaskHandler.cs}`, `B/Noxtend.Tests/Application/SpriteCommandTests.cs`, `B/Noxtend.Tests/Infrastructure/SpriteRequestConcurrencyTests.cs`. Modify `SpriteCommands.cs`, Domain state/partial/TaskKind, DI/worker/fixture, `B/Noxtend.Application/Pipeline/{RetryTaskHandler.cs,DeleteJobHandler.cs}`, EF/InMemory 삭제 key 수집, `docs/xHuman/backend.md`.
+**Files:** Create `B/Noxtend.Application/Sprites/{SpriteCommandsHandler.cs,RunSpritePackTaskHandler.cs}`, `B/Noxtend.Tests/Application/SpriteCommandTests.cs`, `B/Noxtend.Tests/Infrastructure/SpriteRequestConcurrencyTests.cs`. Modify `SpriteCommands.cs`, `B/Noxtend.Domain/Common/Result.cs`의 request 충돌 상수, `StartSpriteJobHandler.cs`와 `SpriteAnalysisTests.cs`의 같은 ID·다른 본문 충돌 계약, `F/src/domain/job/{types.ts,backendParity.test.ts}`의 PackSprites label·wire, Domain state/partial/TaskKind, DI/worker/fixture, `B/Noxtend.Application/Pipeline/{RetryTaskHandler.cs,DeleteJobHandler.cs}`, EF/InMemory 삭제 key 수집, `docs/xHuman/backend.md`.
 
 **Interfaces:** `SpriteCommandContext(Guid JobId,Guid RequestId,int ExpectedRevision)`. handler는 `UpdatePlanAsync(context,IReadOnlyList<SpriteAssetPlan> plans,ct)`, `ApprovePlanAsync(context,ct)`, `ApproveBasesAsync(context,IReadOnlyList<Guid> assetIds,ct)`, `RegenerateAsync(context,Guid assetId,int index,ct)`, `ApproveAssetAsync(context,Guid assetId,ct)`, `ExportAsync(context,IReadOnlyList<Guid> assetIds,ct)`를 제공하며 모두 `Task<Result<SpriteReceipt>>`다. `TaskKind.PackSprites=9`는 LLM operation으로 매핑하지 않는다. worker는 Task 5 writer를 사용한다.
 
@@ -405,7 +405,7 @@ Assert.Equal(0, packImageCallCount);
 ```
 
 - [ ] `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName~SpriteCommandTests|FullyQualifiedName~SpriteRequestConcurrencyTests'`로 실패를 확인한다.
-- [ ] request 조회→fingerprint 확인→새 요청만 revision/state 검사→state/task/receipt 함께 Save→dispatch 순서를 구현한다. unique/rowversion 경쟁은 reload 후 기존 receipt를 반환하거나 409로 처리한다. plan/base approval fan-out은 같은 transaction에 저장한다.
+- [ ] request 조회→fingerprint 확인→새 요청만 revision/state 검사→state/task/receipt 함께 Save→dispatch 순서를 구현한다. 진행 중인 분석이 늦게 계획을 덮어쓰지 않도록 분석 대기·실행 중 계획 편집을 거부하고, 실패 분석 retry는 더 새로운 계획이 없는 현재 분석에 한정한다. unique/rowversion 경쟁은 reload 후 기존 receipt를 반환하거나 409로 처리한다. plan/base approval fan-out은 같은 transaction에 저장한다.
 - [ ] 프레임 재생성은 새 task/result로, failed retry는 기존 규칙으로 처리한다. 종료 작업의 명시적 재생성/재시도/export는 Pending으로 되돌리고 CompletedAt을 비운다. canceled는 재개를 거부하며 무관한 asset 승인은 유지한다.
 - [ ] export는 서버에서 현재 Approval의 image IDs·metadata를 고정한다. pack worker는 임시 파일→상한 ZIP→Blob→snapshot 검사 순서로 공개한다. 임시 파일은 finally에서 삭제한다. 취소 후 새 export를 공개하지 않고 오래된 snapshot은 이력으로만 보존하며 pack 실패에도 PNG를 유지한다.
 - [ ] 전체 요청 대상의 승인·package 완료만 succeeded다. 명시적인 subset package 완료 또는 쓸 이미지가 있는 pack 확정 실패는 partiallySucceeded다. 생성 실패만으로 부분 성공 처리하지 않는다. 2D PNG/ZIP key도 기존 IBlobStorage 삭제 목록에 넣는다.
@@ -413,7 +413,7 @@ Assert.Equal(0, packImageCallCount);
 
 ## Task 10: HTTP 계약·상세·파일 응답
 
-**Files:** Create `B/Noxtend.Api/{Contracts/SpriteContracts.cs,Controllers/SpriteJobsController.cs}`, `B/Noxtend.Tests/Api/SpriteApiTests.cs`. Modify `B/Noxtend.Api/{Controllers/JobsController.cs,Contracts/JobResponse.cs}`, `B/Noxtend.Tests/Api/JobResponseTests.cs`, `docs/xHuman/backend.md`.
+**Files:** Create `B/Noxtend.Api/{Contracts/SpriteContracts.cs,Controllers/SpriteJobsController.cs}`, `B/Noxtend.Tests/Api/SpriteApiTests.cs`. Modify `B/Noxtend.Api/{Controllers/JobsController.cs,Contracts/{JobResponse.cs,ApiResults.cs}}`, `B/Noxtend.Tests/Api/JobResponseTests.cs`, `docs/xHuman/backend.md`.
 
 **Interfaces:** spec의 신규 sprite 경로와 기존 상세/목록 확장을 구현한다. mutation은 Task 7/9 command로 변환하고 accepted `{id,status,revision,taskIds}`를 기존 JSON 봉투로 반환한다. 상세에는 `productionMode: threeD|twoD`와 nullable `sprite`, 목록에는 mode와 phase/count 요약을 추가한다. productionMode query는 선택 사항이며 잘못된 값은 400이다. items와 total은 같은 조건을 사용한다.
 
