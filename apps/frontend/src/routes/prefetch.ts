@@ -38,6 +38,7 @@ export function prefetchCharacterStudio(): void {
 export function prefetchForNav(key: string): (() => void) | undefined {
   if (key === 'background') return prefetchBackgroundStudio
   if (key === 'character') return prefetchCharacterStudio
+  if (key === 'spriteBackground') return prefetchSpriteStudio
   return undefined
 }
 

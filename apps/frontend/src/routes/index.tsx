@@ -129,6 +129,8 @@ export function AppRoutes() {
           }
         />
 
+        <Route path={ROUTES.spriteCharacter} element={<ComingSoonScreen category="character" />} />
+        <Route path={ROUTES.spriteObject} element={<ComingSoonScreen category="object" />} />
         <Route
           path={ROUTES.spriteBackground}
           element={

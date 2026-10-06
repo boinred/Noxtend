@@ -23,9 +23,10 @@ import { prefetchForNav } from '@/routes/prefetch'
 export interface SidebarItemProps {
   item: NavItem
   collapsed: boolean
+  testId?: string
 }
 
-export function SidebarItem({ item, collapsed }: SidebarItemProps) {
+export function SidebarItem({ item, collapsed, testId }: SidebarItemProps) {
   // 지연 로드된 화면이면 손이 닿는 순간 청크를 받아둔다
   const prefetch = prefetchForNav(item.key)
 
@@ -33,7 +34,8 @@ export function SidebarItem({ item, collapsed }: SidebarItemProps) {
     <li className={SIDEBAR_ITEM_ROW_CLASS}>
       <NavLink
         to={item.path}
-        end
+        end={item.key === 'home'}
+        aria-label={item.label}
         onMouseEnter={prefetch}
         onFocus={prefetch}
         className={({ isActive }) =>
@@ -43,7 +45,7 @@ export function SidebarItem({ item, collapsed }: SidebarItemProps) {
             isActive && SIDEBAR_ITEM_ACTIVE_CLASS,
           )
         }
-        data-testid={`nav-${item.key}`}
+        data-testid={testId ?? `nav-${item.key}`}
       >
         <span className={SIDEBAR_ITEM_ICON_CLASS}>
           <Icon name={item.icon} size={16} />

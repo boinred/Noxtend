@@ -9,6 +9,9 @@
  * **실패한 행이 성공한 행과 나란히 있다** (Plan D-3). 비싼 성공분을 버리지 않으려면
  * 부분 실패가 결과 화면에 그대로 보여야 하고, 실패한 것만 다시 돌릴 수 있어야 한다.
  */
+import { Link } from 'react-router-dom'
+import { spriteBackgroundWithSourcePath } from '@/routes/paths'
+import { prefetchSpriteStudio } from '@/routes/prefetch'
 import { useEffect, useRef, useState } from 'react'
 import { TopLayerBoundary } from '@/lib/top-layer-boundary'
 import { Button } from '@/components/ui/button'
@@ -386,6 +389,7 @@ export function PartGallery({
 
       {preview ? (
         <PartImageCarousel
+          jobId={job.id}
           card={preview.card}
           initialDirection={preview.initialDirection}
           onRetry={onRetry}
@@ -1077,12 +1081,14 @@ function PartVisual({
 
 /** 정면·우측·후면·좌측 고정 순서의 원본 이미지 Carousel. */
 function PartImageCarousel({
+  jobId,
   card,
   initialDirection,
   onRetry,
   retryingTaskId,
   onClose,
 }: {
+  jobId: string
   card: PartCard
   initialDirection: ViewDirection
   onRetry: (taskId: string) => void
@@ -1154,6 +1160,18 @@ function PartImageCarousel({
               <span aria-hidden="true">×</span>
             </Button>
           </div>
+
+          {currentView.imageId ? (
+            <Link
+              to={spriteBackgroundWithSourcePath(jobId, currentView.imageId)}
+              className={styles.noticeLink}
+              data-testid="part-image-to-sprite"
+              onMouseEnter={prefetchSpriteStudio}
+              onFocus={prefetchSpriteStudio}
+            >
+              현재 이미지로 2D 배경 만들기
+            </Link>
+          ) : null}
 
           {/* 현재 방향 원본과 순환 탐색 버튼 */}
           <div className={styles.partCarouselStage}>

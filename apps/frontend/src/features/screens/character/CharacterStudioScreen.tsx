@@ -66,7 +66,14 @@ export function CharacterStudioScreen() {
 function InputView() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const { textProviders, imageProviders, meshProviders, isLoading } = useProviders()
+  const {
+    textProviders,
+    imageProviders,
+    meshProviders,
+    isLoading,
+    error: providersError,
+    refetch: refetchProviders,
+  } = useProviders()
   const upload = useUpload()
   const startJob = useStartJob()
 
@@ -217,6 +224,15 @@ function InputView() {
         </p>
 
         <ImageDropzone file={file} reusedImageId={reusedImageId} onSelect={setFile} />
+        {isLoading ? <p role="status">공급자를 불러오는 중…</p> : null}
+        {providersError ? (
+          <div role="alert" className={styles.notice}>
+            <p>{apiErrorMessage(providersError, '공급자 목록을 불러올 수 없습니다')}</p>
+            <Button variant="outline" onClick={() => void refetchProviders()}>
+              공급자 다시 조회
+            </Button>
+          </div>
+        ) : null}
 
         <div className={styles.field}>
           {/* 성별은 바디의 속성이라 힌트 패널이 바디 그룹 바로 위에 렌더한다 */}
@@ -228,7 +244,7 @@ function InputView() {
           />
         </div>
 
-        {isLoading ? null : (
+        {isLoading || providersError ? null : (
           <div className={styles.settingsRow}>
             <ProviderSelect
               providers={textProviders}
@@ -249,7 +265,9 @@ function InputView() {
           </div>
         )}
 
-        {isLoading || (textProviders.length === 0 && imageProviders.length === 0) ? null : (
+        {isLoading ||
+        providersError ||
+        (textProviders.length === 0 && imageProviders.length === 0) ? null : (
           <div className={styles.settingsRow} data-testid="image-settings">
             <ProviderSelect
               providers={imageProviders}
@@ -361,7 +379,7 @@ function InputView() {
 /** 진행 · 결과 · 실패 — 배경 스튜디오와 같은 컴포넌트를 카테고리만 캐릭터로 바꿔 재사용한다. */
 function JobView({ jobId }: { jobId: string }) {
   const navigate = useNavigate()
-  const { job, isLoading, isNotFound } = useJob(jobId)
+  const { job, isLoading, isNotFound, error: jobError, refetch } = useJob(jobId)
   const cancelJob = useCancelJob()
   const retryTask = useRetryTask(jobId)
   const addMesh = useAddMeshProduction(jobId)
@@ -387,10 +405,14 @@ function JobView({ jobId }: { jobId: string }) {
     )
 
   if (isLoading) {
-    return <PageContainer width="max" testId="character-studio" children={null} />
+    return (
+      <PageContainer width="max" testId="character-studio">
+        <p role="status">작업을 불러오는 중…</p>
+      </PageContainer>
+    )
   }
 
-  if (isNotFound || !job) {
+  if (isNotFound && !job) {
     return (
       <PageContainer width="max" title="캐릭터 스튜디오" testId="character-studio">
         <div className={styles.studioResult} data-testid="studio-content">
@@ -405,11 +427,33 @@ function JobView({ jobId }: { jobId: string }) {
     )
   }
 
+  if (!job) {
+    return (
+      <PageContainer width="max" title="캐릭터 스튜디오" testId="character-studio">
+        <div role="alert" className={styles.notice}>
+          <p>{apiErrorMessage(jobError, '작업을 불러올 수 없습니다. 연결을 확인해 주세요')}</p>
+          <Button variant="outline" onClick={() => void refetch()}>
+            작업 다시 조회
+          </Button>
+        </div>
+      </PageContainer>
+    )
+  }
+
   const failedTask = job.tasks.find((t) => t.status === 'failed')
 
   return (
     <PageContainer width="max" title="캐릭터 스튜디오" testId="character-studio">
       <div className={styles.studioResult} data-testid="studio-content">
+        {jobError ? (
+          <div role="alert" className={styles.notice}>
+            <p>{apiErrorMessage(jobError, '작업을 다시 조회할 수 없습니다')}</p>
+            <p>마지막 조회 결과와 미저장 편집을 유지했습니다.</p>
+            <Button variant="outline" onClick={() => void refetch()}>
+              작업 다시 조회
+            </Button>
+          </div>
+        ) : null}
         <div className="mb-4" data-testid="character-top-pipeline-progress">
           <CharacterPipelineStepper tasks={job.tasks} jobStatus={job.status} />
         </div>

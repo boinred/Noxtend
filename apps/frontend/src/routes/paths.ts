@@ -10,6 +10,8 @@ export const ROUTES = {
   character: '/character',
   object: '/object',
   background: '/background',
+  spriteCharacter: '/2d/character',
+  spriteObject: '/2d/object',
   spriteBackground: '/2d/background',
   spriteBackgroundJob: '/2d/background/:jobId',
   /**
@@ -57,7 +59,16 @@ export function characterJobPath(jobId: string): string {
  * 홈 목록은 카테고리 무관하게 작업을 받으므로, 링크를 배경 경로로 고정하면 캐릭터 작업이
  * 배경 스튜디오로 열린다. 오브젝트는 아직 전용 화면이 없어 배경으로 폴백한다.
  */
-export function jobPath(category: string, jobId: string): string {
+export function jobPath(
+  category: string,
+  jobId: string,
+  productionMode: 'threeD' | 'twoD' = 'threeD',
+): string {
+  if (productionMode === 'twoD') {
+    if (category === 'character') return ROUTES.spriteCharacter
+    if (category === 'object') return ROUTES.spriteObject
+    return spriteBackgroundJobPath(jobId)
+  }
   return category === 'character' ? characterJobPath(jobId) : backgroundJobPath(jobId)
 }
 
