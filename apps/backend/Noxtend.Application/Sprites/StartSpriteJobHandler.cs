@@ -50,10 +50,12 @@ public sealed class StartSpriteJobHandler(
         if (await prompts.GetActiveAsync(LlmOperationKind.AnalyzeSprites, AssetCategory.Background, ct) is null)
             return Fail(ErrorCode.PromptNotActive, "2D 분석 활성 프롬프트가 없습니다");
 
+        StoredImage? sourceImage = null;
         string? sourceKey;
         if (upload)
         {
-            sourceKey = (await images.GetAsync(command.UploadId!.Value, ct))?.BlobKey;
+            sourceImage = await images.GetAsync(command.UploadId!.Value, ct);
+            sourceKey = sourceImage?.BlobKey;
         }
         else
         {
@@ -88,12 +90,19 @@ public sealed class StartSpriteJobHandler(
         {
             return Fail(ErrorCode.JobUploadNotFound, "원본 이미지 파일이 없습니다");
         }
+        if (sourceImage is not null && !string.Equals(sourceImage.ContentType, info.ContentType, StringComparison.OrdinalIgnoreCase))
+            return Fail(ErrorCode.UploadUnsupportedType, "업로드 MIME과 실제 이미지 형식이 일치해야 합니다");
         var sourceCanvas = new SpriteCanvas(info.Width, info.Height);
         var generation = SpriteRules.GenerationCanvas(SpriteRules.OutputCanvas(command.Settings, sourceCanvas), capability.Sizes);
-        content.Position = 0;
-        var copiedKey = await blobs.SaveAsync(content, info.ContentType, ct);
-        var copied = StoredImage.Create(copiedKey, "sprite-input", info.ContentType, content.Length, clock.Now);
-        var created = PipelineJob.CreateSprites(copied.Id, imageProvider.Id, command.ImageModel,
+        string? copiedKey = null;
+        if (sourceImage is null)
+        {
+            // 기존 작업 결과만 원본 작업의 삭제 수명에서 분리
+            content.Position = 0;
+            copiedKey = await blobs.SaveAsync(content, info.ContentType, ct);
+            sourceImage = StoredImage.Create(copiedKey, "sprite-input", info.ContentType, content.Length, clock.Now);
+        }
+        var created = PipelineJob.CreateSprites(sourceImage.Id, imageProvider.Id, command.ImageModel,
             command.Settings, sourceCanvas, generation, clock.Now);
         var job = created.Value!;
         var task = job.PlanTask(TaskKind.AnalyzeSprites, 0, providerConfigId: provider.Id, model: command.Model);
@@ -103,14 +112,14 @@ public sealed class StartSpriteJobHandler(
         try
         {
             // StoredImage·작업·공정·접수 응답의 단일 SaveChanges
-            await images.AddAsync(copied, ct);
+            if (copiedKey is not null) await images.AddAsync(sourceImage, ct);
             await jobs.AddAsync(job, ct);
             await jobs.SaveChangesAsync(ct);
         }
         catch (ConcurrencyConflictException)
         {
             // SQL 경쟁에서 진 요청이 생성한 독립 복사본만 제거
-            await blobs.DeleteAsync(copiedKey, CancellationToken.None);
+            if (copiedKey is not null) await blobs.DeleteAsync(copiedKey, CancellationToken.None);
             var winner = await jobs.GetSpriteRequestAsync(command.RequestId, ct);
             return winner is null ? Fail(ErrorCode.SpriteRevisionConflict, "접수 상태가 변경되었습니다") : Receipt(winner, fingerprint);
         }

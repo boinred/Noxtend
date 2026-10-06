@@ -23,14 +23,35 @@ public sealed class SpritePersistenceTests(SqlServerFixture sql)
     private readonly string connectionString = sql.FreshDatabase(nameof(SpritePersistenceTests));
     private static readonly DateTimeOffset Now = new(2026, 10, 6, 0, 0, 0, TimeSpan.Zero);
 
-    [Fact]
-    public async Task ConcurrentAdmission_PersistsOneReceiptAndInputAndDeletesOnlyLosingCopy()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConcurrentAdmission_ReusesUploadOrDeletesOnlyLosingGeneratedCopy(bool generated)
     {
         var fixture = new PipelineFixture();
         var command = await SpriteAnalysisTests.Prepare(fixture);
         await using var setup = Context();
         await setup.Database.MigrateAsync();
-        setup.StoredImages.Add((await fixture.Images.GetAsync(command.UploadId!.Value, default))!);
+        var upload = (await fixture.Images.GetAsync(command.UploadId!.Value, default))!;
+        setup.StoredImages.Add(upload);
+        string? generatedKey = null;
+        if (generated)
+        {
+            var source = PipelineJob.CreateSprites(upload.Id, command.ImageProviderConfigId, command.ImageModel,
+                command.Settings, new(24, 16), new(1536, 1024), fixture.Clock.Now).Value!;
+            source.ReplaceSpritePlan(SpritePlanParser.Parse(SpriteAnalysisTests.PlanJson, command.Settings, new(24, 16)).Value!, 0);
+            var input = source.ApproveSpritePlan(source.Sprites!.ReviewRevision).Value![0];
+            var task = source.PlanTask(TaskKind.Generate, 0);
+            source.BindSpriteFrame(task.Id, input);
+            task.Claim(fixture.Clock.Now, TimeSpan.FromMinutes(2));
+            task.Succeed(fixture.Clock.Now);
+            await using var original = await fixture.Blobs.OpenReadAsync(upload.BlobKey, default);
+            generatedKey = await fixture.Blobs.SaveAsync(original, "image/png", default);
+            var image = SpriteImage.Create(task.Id, input, generatedKey, fixture.Clock.Now);
+            Assert.True(source.TryAttachSpriteImage(image));
+            setup.Jobs.Add(source);
+            command = command with { UploadId = null, SourceJobId = source.Id, SourceGeneratedImageId = image.Id };
+        }
         await setup.SaveChangesAsync();
         var blobs = new AdmissionBarrierBlob(fixture.Blobs);
         async Task<Noxtend.Domain.Common.Result<SpriteReceipt>> Submit()
@@ -46,21 +67,81 @@ public sealed class SpritePersistenceTests(SqlServerFixture sql)
         Assert.All(receipts, receipt => Assert.True(receipt.IsSuccess, receipt.ErrorMessage));
         Assert.Equal(receipts[0].Value!.JobId, receipts[1].Value!.JobId);
         setup.ChangeTracker.Clear();
-        Assert.Equal(1, await setup.Jobs.CountAsync());
+        Assert.Equal(generated ? 2 : 1, await setup.Jobs.CountAsync());
         Assert.Equal(1, await setup.Jobs.SelectMany(job => job.Sprites!.Requests).CountAsync());
-        Assert.Equal(2, await setup.StoredImages.CountAsync());
-        Assert.Equal(2, fixture.Blobs.Count);
-        Assert.Single(blobs.Deleted);
+        Assert.Equal(generated ? 2 : 1, await setup.StoredImages.CountAsync());
+        Assert.Equal(generated ? 3 : 1, fixture.Blobs.Count);
+        if (generated) Assert.Single(blobs.Deleted);
+        else Assert.Empty(blobs.Deleted);
         var winner = (await new EfJobRepository(setup).GetAsync(receipts[0].Value!.JobId, default))!;
         Assert.Single(winner.Tasks);
         Assert.Equal(command.RequestId, winner.Tasks[0].RequestId);
+        if (generated) Assert.NotEqual(upload.Id, winner.SourceImageId);
+        else Assert.Equal(upload.Id, winner.SourceImageId);
         var copy = await setup.StoredImages.SingleAsync(image => image.Id == winner.SourceImageId);
         Assert.DoesNotContain(copy.BlobKey, blobs.Deleted);
         await using var copyStream = await fixture.Blobs.OpenReadAsync(copy.BlobKey, default);
         Assert.Equal(24, (await new SkiaImageTranscoder().InspectSpriteAsync(copyStream, 12 * 1024 * 1024, 16_777_216, default)).Width);
-        await using var original = await fixture.Blobs.OpenReadAsync(
-            (await fixture.Images.GetAsync(command.UploadId.Value, default))!.BlobKey, default);
-        Assert.True(original.Length > 0);
+        await using var originalInput = await fixture.Blobs.OpenReadAsync(upload.BlobKey, default);
+        Assert.True(originalInput.Length > 0);
+        if (generatedKey is not null)
+        {
+            Assert.DoesNotContain(generatedKey, blobs.Deleted);
+            await using var sourceResult = await fixture.Blobs.OpenReadAsync(generatedKey, default);
+            Assert.True(sourceResult.Length > 0);
+        }
+        var replay = await new StartSpriteJobHandler(new EfJobRepository(setup), new EfStoredImageRepository(setup), blobs,
+            fixture.Providers, fixture.Catalog, fixture.Prompts, new SkiaImageTranscoder(),
+            new JobOrchestrator(fixture.Queue, new EfJobRepository(setup), fixture.Clock), fixture.Clock).HandleAsync(command, default);
+        Assert.Equal(winner.Id, replay.Value!.JobId);
+        Assert.Equal(generated ? 3 : 1, fixture.Blobs.Count);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task UploadDeletion_RemovesInputOnlyAfterLastSpriteJob(int count)
+    {
+        var fixture = new PipelineFixture();
+        var command = await SpriteAnalysisTests.Prepare(fixture);
+        await using var db = Context();
+        await db.Database.MigrateAsync();
+        var upload = (await fixture.Images.GetAsync(command.UploadId!.Value, default))!;
+        db.StoredImages.Add(upload);
+        await db.SaveChangesAsync();
+        var jobs = new EfJobRepository(db);
+        var handler = new StartSpriteJobHandler(jobs, new EfStoredImageRepository(db), fixture.Blobs,
+            fixture.Providers, fixture.Catalog, fixture.Prompts, new SkiaImageTranscoder(),
+            new JobOrchestrator(fixture.Queue, jobs, fixture.Clock), fixture.Clock);
+        var ids = new List<Guid>();
+        for (var i = 0; i < count; i++)
+        {
+            var result = await handler.HandleAsync(command with { RequestId = Guid.NewGuid() }, default);
+            Assert.True(result.IsSuccess, result.ErrorMessage);
+            ids.Add(result.Value!.JobId);
+        }
+        Assert.Equal(1, await db.StoredImages.CountAsync());
+        Assert.Equal(1, fixture.Blobs.Count);
+        var delete = new DeleteJobHandler(jobs, fixture.Blobs, fixture.MeshArtifacts,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<DeleteJobHandler>.Instance);
+        for (var i = 0; i < count; i++)
+        {
+            var job = (await jobs.GetAsync(ids[i], default))!;
+            job.Cancel(fixture.Clock.Now);
+            await jobs.SaveChangesAsync(default);
+            Assert.True((await delete.HandleAsync(job.Id, default)).IsSuccess);
+            db.ChangeTracker.Clear();
+            var remaining = i + 1 < count;
+            Assert.Equal(remaining ? 1 : 0, await db.StoredImages.CountAsync());
+            Assert.Equal(remaining ? 1 : 0, fixture.Blobs.Count);
+            if (remaining)
+            {
+                var survivor = (await jobs.GetAsync(ids[i + 1], default))!;
+                Assert.Equal(upload.Id, survivor.SourceImageId);
+                await using var readable = await fixture.Blobs.OpenReadAsync(upload.BlobKey, default);
+                Assert.True(readable.Length > 0);
+            }
+        }
     }
 
     [Fact]
@@ -92,16 +173,15 @@ public sealed class SpritePersistenceTests(SqlServerFixture sql)
     private sealed class AdmissionBarrierBlob(IBlobStorage inner) : IBlobStorage
     {
         private readonly TaskCompletionSource ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private int saved;
+        private int opened;
         public System.Collections.Concurrent.ConcurrentBag<string> Deleted { get; } = [];
-        public async Task<string> SaveAsync(Stream content, string contentType, CancellationToken ct)
+        public Task<string> SaveAsync(Stream content, string contentType, CancellationToken ct) => inner.SaveAsync(content, contentType, ct);
+        public async Task<Stream> OpenReadAsync(string key, CancellationToken ct)
         {
-            var key = await inner.SaveAsync(content, contentType, ct);
-            if (Interlocked.Increment(ref saved) == 2) ready.SetResult();
+            if (Interlocked.Increment(ref opened) == 2) ready.SetResult();
             await ready.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
-            return key;
+            return await inner.OpenReadAsync(key, ct);
         }
-        public Task<Stream> OpenReadAsync(string key, CancellationToken ct) => inner.OpenReadAsync(key, ct);
         public Task DeleteAsync(string key, CancellationToken ct)
         {
             Deleted.Add(key);

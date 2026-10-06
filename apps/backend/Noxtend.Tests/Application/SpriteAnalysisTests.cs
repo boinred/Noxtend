@@ -199,12 +199,32 @@ public sealed class SpriteAnalysisTests
             bytes = [.. bytes[..2], .. exif, .. bytes[2..]];
         }
         using var stream = new MemoryStream(bytes);
-        var uploaded = await f.Upload.HandleAsync(stream, "misleading.png", "image/png", bytes.Length, Ct);
+        var uploaded = await f.Upload.HandleAsync(stream, "source", mime, bytes.Length, Ct);
         var receipt = await f.StartSprites.HandleAsync(command with { UploadId = uploaded.Value!.Id }, Ct);
         Assert.True(receipt.IsSuccess, receipt.ErrorMessage);
         var job = (await f.Jobs.GetAsync(receipt.Value!.JobId, Ct))!;
+        Assert.Equal(uploaded.Value.Id, job.SourceImageId);
         Assert.Equal(rotate ? new SpriteCanvas(16, 24) : new(24, 16), job.Sprites!.SourceCanvas);
         Assert.Equal(mime, (await f.Images.GetAsync(job.SourceImageId, Ct))!.ContentType);
+    }
+
+    [Fact]
+    public async Task UploadMimeMismatch_IsRejectedWithoutPlanningOrCopying()
+    {
+        var f = new PipelineFixture();
+        var command = await Prepare(f);
+        using var bitmap = new SKBitmap(24, 16);
+        bitmap.Erase(SKColors.Red);
+        using var encoded = bitmap.Encode(SKEncodedImageFormat.Jpeg, 100);
+        using var stream = new MemoryStream(encoded.ToArray());
+        var uploaded = await f.Upload.HandleAsync(stream, "misleading.png", "image/png", stream.Length, Ct);
+        var before = f.Blobs.Count;
+        var result = await f.StartSprites.HandleAsync(command with { UploadId = uploaded.Value!.Id }, Ct);
+        Assert.Equal(ErrorCode.UploadUnsupportedType, result.ErrorCode);
+        Assert.Equal(before, f.Blobs.Count);
+        Assert.Empty(await f.Jobs.ListAsync(JobListFilter.Active, null, 100, Ct));
+        Assert.Null(await f.Jobs.GetSpriteRequestAsync(command.RequestId, Ct));
+        Assert.Equal("image/png", (await f.Images.GetAsync(uploaded.Value.Id, Ct))!.ContentType);
     }
 
     [Fact]
