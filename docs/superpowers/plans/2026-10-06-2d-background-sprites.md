@@ -116,7 +116,7 @@ public sealed record SpriteManifestFrame(Guid ImageId, int Index, string Path,
     string SheetPath, int Page, SpriteRect Rect);
 public sealed record SpriteManifestAsset(SpriteApprovedAsset Asset, string BasePath,
     IReadOnlyList<SpriteManifestFrame> Frames);
-public sealed record SpriteManifest(int SchemaVersion, Guid JobId, SpriteExportInput Input,
+public sealed record SpriteManifest(int SchemaVersion, Guid JobId, ProductionMode ProductionMode, SpriteExportInput Input,
     string CoordinateOrigin, string CoordinateUnits, IReadOnlyList<SpriteManifestAsset> Assets);
 ```
 
@@ -145,7 +145,7 @@ Manifest JSON은 camelCase, `coordinateOrigin="topLeft"`, `coordinateUnits="pixe
 ```
 
 - [ ] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpriteRulesTests` 실행; 처음은 신규 심볼 미정의로 실패해야 한다.
-- [ ] 기존 PipelineJob을 partial로 바꾸고 위 타입·검증만 구현한다. 유한값·`X+W<=1`·`Y+H<=1`을 검사하며 기존 3D Bounds의 오차 허용을 바꾸지 않는다.
+- [ ] 기존 PipelineJob을 partial로 바꾸고 위 타입·검증만 구현한다. 유한값·`X+W<=1`·`Y+H<=1`을 검사하며 기존 3D Bounds의 오차 허용을 바꾸지 않는다. `Transform(SpriteCanvas generation, SpriteCanvas output) -> SpriteTransform`은 순수 계산이므로 여기서 구현해 CreateSprites가 고정 변환을 저장하게 한다. SpriteImage/Export/AcceptedRequest와 그 factory는 Task 2의 입력·manifest 타입과 함께 구현하며 Task 1에는 초기 state 필드만 둔다.
 - [ ] 같은 명령을 재실행해 통과시킨다. `LegacyCreate_WithoutMesh_RemainsThreeD`도 추가하여 기존 생성 경로를 검증한다.
 - [ ] backend 문서에 모드와 초기 상한을 동기화하고 이번 파일만 `feat(domain): add sprite production settings`로 커밋한다.
 
