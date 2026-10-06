@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Noxtend.Application.Job;
 using Noxtend.Domain.Common;
 using Noxtend.Domain.Job;
@@ -13,7 +14,7 @@ namespace Noxtend.Application.Sprites;
 public sealed class StartSpriteJobHandler(
     IJobRepository jobs, IStoredImageRepository images, IBlobStorage blobs,
     IProviderConfigRepository providers, IModelCatalog catalog, IPromptCatalog prompts,
-    IImageTranscoder transcoder, JobOrchestrator orchestrator, IClock clock)
+    IImageTranscoder transcoder, JobOrchestrator orchestrator, IClock clock, ILogger<StartSpriteJobHandler> logger)
 {
     private const long MaxBytes = 12 * 1024 * 1024;
 
@@ -109,22 +110,59 @@ public sealed class StartSpriteJobHandler(
         task.BindRequest(command.RequestId);
         var receipt = new SpriteReceipt(job.Id, job.Status, job.Sprites!.ReviewRevision, [task.Id]);
         job.AcceptSpriteRequest(SpriteAcceptedRequest.Create(command.RequestId, job.Id, SpriteRequestKind.Create, fingerprint, receipt));
+        var saveAttempted = false;
         try
         {
             // StoredImage·작업·공정·접수 응답의 단일 SaveChanges
             if (copiedKey is not null) await images.AddAsync(sourceImage, ct);
             await jobs.AddAsync(job, ct);
+            saveAttempted = true;
             await jobs.SaveChangesAsync(ct);
         }
         catch (ConcurrencyConflictException)
         {
             // SQL 경쟁에서 진 요청이 생성한 독립 복사본만 제거
-            if (copiedKey is not null) await blobs.DeleteAsync(copiedKey, CancellationToken.None);
+            if (copiedKey is not null) await DeleteCopyAsync(copiedKey, job.Id);
             var winner = await jobs.GetSpriteRequestAsync(command.RequestId, ct);
             return winner is null ? Fail(ErrorCode.SpriteRevisionConflict, "접수 상태가 변경되었습니다") : Receipt(winner, fingerprint);
         }
+        catch (Exception)
+        {
+            if (copiedKey is not null)
+            {
+                var unreferenced = !saveAttempted;
+                if (saveAttempted)
+                {
+                    try
+                    {
+                        // 취소·응답 유실과 분리한 실제 커밋 확인
+                        var persisted = await jobs.GetSpriteRequestAsync(command.RequestId, CancellationToken.None);
+                        unreferenced = persisted?.JobId != job.Id;
+                    }
+                    catch (Exception lookupError)
+                    {
+                        logger.LogWarning(lookupError,
+                            "Could not verify sprite admission {JobId}; retaining input {BlobKey}", job.Id, copiedKey);
+                    }
+                }
+                if (unreferenced) await DeleteCopyAsync(copiedKey, job.Id);
+            }
+            throw;
+        }
         await orchestrator.StartAsync(job, ct);
         return Result<SpriteReceipt>.Ok(receipt);
+    }
+
+    private async Task DeleteCopyAsync(string key, Guid jobId)
+    {
+        try
+        {
+            await blobs.DeleteAsync(key, CancellationToken.None);
+        }
+        catch (Exception cleanupError)
+        {
+            logger.LogWarning(cleanupError, "Orphaned sprite input after failed admission {JobId}: {BlobKey}", jobId, key);
+        }
     }
 
     private static Result<SpriteReceipt> Receipt(SpriteAcceptedRequest request, string fingerprint)

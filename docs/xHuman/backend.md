@@ -45,7 +45,7 @@ LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계�
 
 `StartSpriteJobHandler`는 uploadId 또는 sourceJobId·sourceGeneratedImageId 쌍을 받아 기존 업로드와 두 제작 모드의 소유 결과를 확인한다. 기존 결과는 `GeneratedImages`와 `Sprites.Images`에서 해당 작업 소속을 조회한다. 분석 모델·활성 프롬프트와 이미지 모델의 확인된 투명·생성 크기 지원을 검증하고 원본을 12 MiB·16,777,216픽셀 안에서 디코딩한다. 업로드는 저장된 MIME이 실제 codec MIME과 대소문자 무시 비교로 일치해야 하며 불일치는 UploadUnsupportedType으로 거부한다. 검증된 업로드의 StoredImage·Blob을 재사용하고, 기존 작업 결과만 실제 MIME으로 새 StoredImage·독립 Blob에 복사한다. EXIF 방향 크기와 합법적 GenerationCanvas·Transform을 접수 시 고정한다. 공유 업로드는 기존 삭제 경로를 따라 마지막 SourceImageId 참조 작업이 삭제될 때 row·Blob을 제거한다.
 
-`SpriteRequests`를 원본 조회·복사 전에 전역 조회하므로 원본 삭제 후 같은 정규화 요청은 기존 receipt를 반환한다. 다른 fingerprint는 충돌이며 접수 경쟁은 SQL 유니크 제약으로 판정한다. job·AnalyzeSprites task·receipt와 결과 복사 시 새 StoredImage는 같은 SaveChanges에 저장한다. 경쟁에서 진 요청이 만든 독립 Blob만 제거하며 재사용 업로드는 삭제하지 않는다. 공급자 모델명은 Trim 후 SHA-256 fingerprint에 포함한다.
+`SpriteRequests`를 원본 조회·복사 전에 전역 조회하므로 원본 삭제 후 같은 정규화 요청은 기존 receipt를 반환한다. 다른 fingerprint는 충돌이며 접수 경쟁은 SQL 유니크 제약으로 판정한다. job·AnalyzeSprites task·receipt와 결과 복사 시 새 StoredImage는 같은 SaveChanges에 저장한다. 경쟁에서 진 요청이 만든 독립 Blob만 제거하며 재사용 업로드는 삭제하지 않는다. 최초 접수 저장 전 실패는 자신의 복사본만 정리한다. SaveChanges 호출 후 비경합 오류·취소는 요청 취소와 분리한 전역 receipt 조회로 own job의 커밋 여부를 확인한다. 커밋됐거나 조회에 실패해 불명확하면 복사본을 보존하며, 조회·정리 실패는 경고로 남기고 최초 저장 예외를 유지한다. 커밋 이후 orchestration 오류에는 이 정리를 적용하지 않는다. 공급자 모델명은 Trim 후 SHA-256 fingerprint에 포함한다.
 
 `RunSpriteAnalysisTaskHandler`는 기존 TaskExecution·JobOptions 리스·rate limit·LLM 호출 기록 경로를 사용한다. `SpritePlanParser`는 선택 시점·유형, 정확한 응답 필드, 1~12개 대상, ROI·순서·투명·루프 제약을 검사하고 대상 ID를 서버에서 부여한다. 분석 성공은 PlanReview·PendingReview에서 멈추며 이미지 생성 공정을 만들지 않는다. TaskKind.AnalyzeSprites=7만 worker로 추가하고 GenerateSprite·PackSprites handler는 후속 범위다.
 

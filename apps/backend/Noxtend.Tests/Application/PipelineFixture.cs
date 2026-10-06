@@ -69,7 +69,7 @@ public sealed class PipelineFixture
             RateLimitGate,
             NullLogger<RunGenerationTaskHandler>.Instance);
         StartSprites = new StartSpriteJobHandler(Jobs, Images, Blobs, Providers, Catalog, Prompts,
-            new SkiaImageTranscoder(), Orchestrator, Clock);
+            new SkiaImageTranscoder(), Orchestrator, Clock, NullLogger<StartSpriteJobHandler>.Instance);
         RunSpriteAnalysis = new RunSpriteAnalysisTaskHandler(Images, Blobs, new StubProviderFactory(Llm),
             Prompts, Execution, Options, RateLimitGate);
         Cancel = new CancelJobHandler(Jobs, Clock);

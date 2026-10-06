@@ -1,4 +1,9 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
+using System.Data.Common;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Noxtend.Domain.Upload;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -60,7 +65,7 @@ public sealed class SpritePersistenceTests(SqlServerFixture sql)
             var jobs = new EfJobRepository(db);
             var handler = new StartSpriteJobHandler(jobs, new EfStoredImageRepository(db), blobs,
                 fixture.Providers, fixture.Catalog, fixture.Prompts, new SkiaImageTranscoder(),
-                new JobOrchestrator(fixture.Queue, jobs, fixture.Clock), fixture.Clock);
+                new JobOrchestrator(fixture.Queue, jobs, fixture.Clock), fixture.Clock, NullLogger<StartSpriteJobHandler>.Instance);
             return await handler.HandleAsync(command, default);
         }
         var receipts = await Task.WhenAll(Submit(), Submit()).WaitAsync(TimeSpan.FromSeconds(45));
@@ -92,7 +97,7 @@ public sealed class SpritePersistenceTests(SqlServerFixture sql)
         }
         var replay = await new StartSpriteJobHandler(new EfJobRepository(setup), new EfStoredImageRepository(setup), blobs,
             fixture.Providers, fixture.Catalog, fixture.Prompts, new SkiaImageTranscoder(),
-            new JobOrchestrator(fixture.Queue, new EfJobRepository(setup), fixture.Clock), fixture.Clock).HandleAsync(command, default);
+            new JobOrchestrator(fixture.Queue, new EfJobRepository(setup), fixture.Clock), fixture.Clock, NullLogger<StartSpriteJobHandler>.Instance).HandleAsync(command, default);
         Assert.Equal(winner.Id, replay.Value!.JobId);
         Assert.Equal(generated ? 3 : 1, fixture.Blobs.Count);
     }
@@ -112,7 +117,7 @@ public sealed class SpritePersistenceTests(SqlServerFixture sql)
         var jobs = new EfJobRepository(db);
         var handler = new StartSpriteJobHandler(jobs, new EfStoredImageRepository(db), fixture.Blobs,
             fixture.Providers, fixture.Catalog, fixture.Prompts, new SkiaImageTranscoder(),
-            new JobOrchestrator(fixture.Queue, jobs, fixture.Clock), fixture.Clock);
+            new JobOrchestrator(fixture.Queue, jobs, fixture.Clock), fixture.Clock, NullLogger<StartSpriteJobHandler>.Instance);
         var ids = new List<Guid>();
         for (var i = 0; i < count; i++)
         {
@@ -142,6 +147,171 @@ public sealed class SpritePersistenceTests(SqlServerFixture sql)
                 Assert.True(readable.Length > 0);
             }
         }
+    }
+
+    [Theory]
+    [InlineData(true, false, true, false, false)]
+    [InlineData(false, false, true, false, false)]
+    [InlineData(false, false, false, false, false)]
+    [InlineData(false, true, false, false, false)]
+    [InlineData(false, false, false, true, false)]
+    [InlineData(false, true, false, true, false)]
+    [InlineData(false, false, false, false, true)]
+    public async Task AdmissionPersistenceFailure_CleansOnlyConfirmedUncommittedCopy(
+        bool failAdd, bool committed, bool canceled, bool lookupFails, bool cleanupFails)
+    {
+        var fixture = new PipelineFixture();
+        var command = await SpriteAnalysisTests.Prepare(fixture);
+        await using var setup = Context();
+        await setup.Database.MigrateAsync();
+        var upload = (await fixture.Images.GetAsync(command.UploadId!.Value, default))!;
+        setup.StoredImages.Add(upload);
+        var source = PipelineJob.CreateSprites(upload.Id, command.ImageProviderConfigId, command.ImageModel,
+            command.Settings, new(24, 16), new(1536, 1024), fixture.Clock.Now).Value!;
+        source.ReplaceSpritePlan(SpritePlanParser.Parse(SpriteAnalysisTests.PlanJson, command.Settings, new(24, 16)).Value!, 0);
+        var input = source.ApproveSpritePlan(source.Sprites!.ReviewRevision).Value![0];
+        var task = source.PlanTask(TaskKind.Generate, 0);
+        source.BindSpriteFrame(task.Id, input);
+        task.Claim(fixture.Clock.Now, TimeSpan.FromMinutes(2));
+        task.Succeed(fixture.Clock.Now);
+        await using var original = await fixture.Blobs.OpenReadAsync(upload.BlobKey, default);
+        var sourceKey = await fixture.Blobs.SaveAsync(original, "image/png", default);
+        var image = SpriteImage.Create(task.Id, input, sourceKey, fixture.Clock.Now);
+        Assert.True(source.TryAttachSpriteImage(image));
+        setup.Jobs.Add(source);
+        await setup.SaveChangesAsync();
+        command = command with { UploadId = null, SourceJobId = source.Id, SourceGeneratedImageId = image.Id };
+        using var cancellation = new CancellationTokenSource();
+        Exception failure = canceled ? new OperationCanceledException(cancellation.Token) : new IOException("injected persistence failure");
+        var interceptor = new AdmissionSaveFailure(failure, committed, cancellation, canceled);
+        var lookup = new AdmissionLookupFailure(interceptor, lookupFails);
+        await using var db = new NoxtendDbContext(new DbContextOptionsBuilder<NoxtendDbContext>()
+            .UseSqlServer(connectionString).AddInterceptors(interceptor, lookup).Options);
+        var jobs = new EfJobRepository(db);
+        IStoredImageRepository images = new EfStoredImageRepository(db);
+        if (failAdd) images = new CanceledImageAdd(images, cancellation, failure);
+        var logger = new AdmissionLogger();
+        var blobs = new AdmissionCleanupBlob(fixture.Blobs, cleanupFails);
+        var handler = new StartSpriteJobHandler(jobs, images, blobs, fixture.Providers,
+            fixture.Catalog, fixture.Prompts, new SkiaImageTranscoder(),
+            new JobOrchestrator(fixture.Queue, jobs, fixture.Clock), fixture.Clock, logger);
+        var thrown = await Record.ExceptionAsync(() => handler.HandleAsync(command, cancellation.Token));
+        Assert.Same(failure, thrown);
+        Assert.Equal(!failAdd, interceptor.Reached);
+        Assert.Equal(failAdd ? 0 : 1, lookup.RecoveryReads);
+        Assert.Equal(committed ? 2 : 1, await setup.Jobs.CountAsync());
+        Assert.Equal(committed ? 2 : 1, await setup.StoredImages.CountAsync());
+        var receipt = await new EfJobRepository(setup).GetSpriteRequestAsync(command.RequestId, default);
+        Assert.Equal(committed, receipt is not null);
+        Assert.Equal(committed || lookupFails || cleanupFails ? 3 : 2, fixture.Blobs.Count);
+        Assert.Equal(1, blobs.Saves);
+        Assert.Equal(committed || lookupFails ? 0 : 1, blobs.Deletes);
+        if (lookupFails || cleanupFails)
+        {
+            var logged = Assert.Single(logger.Errors);
+            Assert.Equal(lookupFails ? "injected receipt lookup failure" : "injected cleanup failure", logged.Message);
+        }
+        else Assert.Empty(logger.Errors);
+        await using var preservedUpload = await fixture.Blobs.OpenReadAsync(upload.BlobKey, default);
+        await using var preservedSource = await fixture.Blobs.OpenReadAsync(sourceKey, default);
+        Assert.True(preservedUpload.Length > 0);
+        Assert.True(preservedSource.Length > 0);
+        if (committed)
+        {
+            var saved = (await new EfJobRepository(setup).GetAsync(receipt!.JobId, default))!;
+            var copy = await setup.StoredImages.SingleAsync(i => i.Id == saved.SourceImageId);
+            await using var readable = await fixture.Blobs.OpenReadAsync(copy.BlobKey, default);
+            Assert.Equal(24, (await new SkiaImageTranscoder().InspectSpriteAsync(readable, 12 * 1024 * 1024, 16_777_216, default)).Width);
+            var replayJobs = new EfJobRepository(setup);
+            var replay = await new StartSpriteJobHandler(replayJobs, new EfStoredImageRepository(setup), blobs,
+                fixture.Providers, fixture.Catalog, fixture.Prompts, new SkiaImageTranscoder(),
+                new JobOrchestrator(fixture.Queue, replayJobs, fixture.Clock), fixture.Clock, NullLogger<StartSpriteJobHandler>.Instance).HandleAsync(command, default);
+            Assert.Equal(receipt.Receipt.JobId, replay.Value!.JobId);
+            Assert.Equal(receipt.Receipt.TaskIds, replay.Value.TaskIds);
+            Assert.Equal(3, fixture.Blobs.Count);
+            Assert.Equal(1, blobs.Saves);
+            Assert.Single(saved.Tasks);
+        }
+    }
+
+    private sealed class AdmissionCleanupBlob(IBlobStorage inner, bool fail) : IBlobStorage
+    {
+        public int Deletes { get; private set; }
+        public int Saves { get; private set; }
+        public Task<string> SaveAsync(Stream content, string contentType, CancellationToken ct)
+        {
+            Saves++;
+            return inner.SaveAsync(content, contentType, ct);
+        }
+        public Task<Stream> OpenReadAsync(string key, CancellationToken ct) => inner.OpenReadAsync(key, ct);
+        public Task DeleteAsync(string key, CancellationToken ct)
+        {
+            Assert.Equal(CancellationToken.None, ct);
+            Deletes++;
+            if (fail) throw new IOException("injected cleanup failure");
+            return inner.DeleteAsync(key, ct);
+        }
+    }
+
+    private sealed class AdmissionLogger : ILogger<StartSpriteJobHandler>
+    {
+        public List<Exception> Errors { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            Assert.Equal(LogLevel.Warning, logLevel);
+            Errors.Add(Assert.IsAssignableFrom<Exception>(exception));
+        }
+    }
+
+    private sealed class AdmissionSaveFailure(Exception failure, bool committed, CancellationTokenSource cancellation, bool canceled)
+        : SaveChangesInterceptor
+    {
+        public bool Reached { get; private set; }
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
+            InterceptionResult<int> result, CancellationToken ct = default)
+        {
+            if (committed) return ValueTask.FromResult(result);
+            Reached = true;
+            if (canceled) cancellation.Cancel();
+            throw failure;
+        }
+        public override ValueTask<int> SavedChangesAsync(SaveChangesCompletedEventData eventData,
+            int result, CancellationToken ct = default)
+        {
+            Reached = true;
+            throw failure;
+        }
+    }
+
+    private sealed class AdmissionLookupFailure(AdmissionSaveFailure save, bool fail) : DbCommandInterceptor
+    {
+        public int RecoveryReads { get; private set; }
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken ct = default)
+        {
+            if (save.Reached && command.CommandText.Contains("SpriteRequests", StringComparison.Ordinal))
+            {
+                Assert.Equal(CancellationToken.None, ct);
+                RecoveryReads++;
+                if (fail) throw new IOException("injected receipt lookup failure");
+            }
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    private sealed class CanceledImageAdd(IStoredImageRepository inner, CancellationTokenSource cancellation, Exception failure)
+        : IStoredImageRepository
+    {
+        public Task AddAsync(StoredImage image, CancellationToken ct)
+        {
+            cancellation.Cancel();
+            throw failure;
+        }
+        public Task<StoredImage?> GetAsync(Guid id, CancellationToken ct) => inner.GetAsync(id, ct);
+        public Task SaveChangesAsync(CancellationToken ct) => inner.SaveChangesAsync(ct);
     }
 
     [Fact]
