@@ -279,11 +279,11 @@ Assert.DoesNotContain(entries, x => x.Contains("../") || Path.IsPathRooted(x));
 
 ## Task 6: 모델별 크기·투명 요청·호출 기록
 
-**Files:** Modify `B/Noxtend.Domain/Ports/{IImageProvider.cs,IModelCatalog.cs}`, `B/Noxtend.Infrastructure/Image/{ImageModels.cs,OpenAiImageProvider.cs,GoogleImageProvider.cs,RecordingImageProvider.cs}`, `B/Noxtend.Api/Contracts/ProviderResponse.cs`, `B/Noxtend.Tests/Application/{OpenAiImageRequestTests.cs,ImageProviderUsageTests.cs,ImageModelCatalogTests.cs}`, `docs/xHuman/providers-and-prompts.md`. Create `B/Noxtend.Tests/Application/SpriteProviderRequestTests.cs`.
+**Files:** Modify `B/Noxtend.Domain/Sprites/SpriteRules.cs`, `B/Noxtend.Domain/Ports/{IImageProvider.cs,IModelCatalog.cs}`, `B/Noxtend.Infrastructure/Image/{ImageModels.cs,OpenAiImageProvider.cs,GoogleImageProvider.cs,RecordingImageProvider.cs}`, `B/Noxtend.Api/Contracts/ProviderResponse.cs`, `B/Noxtend.Tests/Application/{OpenAiImageRequestTests.cs,ImageModelCatalogTests.cs}`, `B/Noxtend.Tests/Infrastructure/{SeedModelPricesTests.cs,ModelPriceMigrationTests.cs}`, `docs/xHuman/providers-and-prompts.md`. Create `B/Noxtend.Tests/Application/SpriteProviderRequestTests.cs`.
 
 **Interfaces:** `SpriteRules.GenerationCanvas(SpriteCanvas output, IReadOnlyList<SpriteCanvas> supported) -> SpriteCanvas`는 가장 가까운 비율의 합법적 size를 고르고, `Transform(SpriteCanvas generation, SpriteCanvas output) -> SpriteTransform`은 공통 contain 변환을 반환한다. `ImageRequest` 끝에 `ImageBackground? Background = null`, `ImageCallContext` 끝에 `TaskKind Kind = TaskKind.Generate`를 추가한다. 기존 PartId는 `Guid?`로 바꿔 sprite에서 null을 사용한다. `ImageBackground { Opaque, Transparent }`, `ReferenceRole.SpriteBase=2`를 추가한다. `ProviderModel`과 wire model에 optional `SpriteImageCapabilities? Sprite`를 추가한다. capability는 `SpriteImageCapabilities(bool SupportsTransparency, IReadOnlyList<SpriteCanvas> Sizes)` record로 정의한다. sprite 상관관계는 Tasks의 asset/index와 TaskId로 조회하며 LlmCalls에 중복 열을 추가하지 않는다.
 
-- [ ] 기존 captured HTTP handler로 legacy와 sprite의 request body·multipart를 검증한다.
+- [x] 기존 captured HTTP handler로 legacy와 sprite의 request body·multipart를 검증한다.
 
 ```csharp
 [Fact] public Task SpriteRequest_SendsExplicitPngBackgroundAndSize();
@@ -292,7 +292,7 @@ Assert.DoesNotContain(entries, x => x.Contains("../") || Path.IsPathRooted(x));
 [Fact] public Task Recording_LegacyContextKeepsGenerateOperation();
 ```
 
-Assertions: 투명 sprite는 `background=transparent`·`output_format=png`, 지정 size는 JSON/edit 양쪽에 전달; 불투명 PNG는 투명으로 판정하지 않음; 기존 quality=medium 유지; 기록에는 version/model/task 포함, bytes/key 제외.
+Assertions: 투명 sprite는 `background=transparent`·`output_format=png`, 지정 size는 JSON/edit 양쪽에 전달; 불투명 PNG는 투명으로 판정하지 않음; 기존 quality=medium 유지; catalog의 GPT image 모델은 response_format 없이 output_format=png로 요청하며 기존 3D의 quality·size·base64 응답 동작은 보존; 기록에는 version/model/task 포함, bytes/key 제외.
 
 ```csharp
 Assert.Equal("transparent", background);
@@ -302,10 +302,10 @@ Assert.Equal("medium", quality);
 Assert.Equal(0, rejectedProviderCallCount);
 ```
 
-- [ ] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpriteProviderRequestTests`로 실패를 확인한다.
-- [ ] [OpenAI 공식 이미지 가이드](https://developers.openai.com/api/docs/guides/image-generation)에서 투명 배경 요청이 명시된 `gpt-image-2.5-sunburst`를 기존 catalog에 추가하고 실제 remote model 목록과 교차한다. 기존 gpt-image-2는 유지한다. 초기 2D 생성 size는 `1024x1024 / 1536x1024 / 1024x1536 / 1536x768 / 768x1536 / 1536x864 / 864x1536`로 제한하고 최종 캔버스와의 비율 차이는 고정 contain으로 처리한다.
-- [ ] 기존 `ImageModels.FakeModels`에도 동일한 크기·투명 capability를 명시해 Fake 접수를 가능하게 한다. capability가 없는 Google/다른 모델은 2D 후보에서 '지원 미확인'으로 선택을 막는다. 기존 Google 3D 기본값을 유지하고, 명시된 미지원 배경/size를 조용히 1:1로 대체하지 않는다. 추가 모델 지원은 공식 계약 확인과 captured request 테스트를 함께 넣는 후속 변경으로 제한한다.
-- [ ] 같은 테스트와 `OpenAiImageRequestTests / ImageProviderUsageTests / ImageModelCatalogTests`를 통과시키고 문서와 `feat(providers): support explicit sprite image requests`로 커밋한다.
+- [x] `dotnet test apps/backend/Noxtend.slnx --filter FullyQualifiedName~SpriteProviderRequestTests`로 실패를 확인한다.
+- [x] [OpenAI 공식 이미지 가이드](https://developers.openai.com/api/docs/guides/image-generation)에서 투명 배경 요청이 명시된 `gpt-image-2.5-sunburst`를 기존 catalog에 추가하고 실제 remote model 목록과 교차한다. 기존 gpt-image-2는 유지한다. 초기 2D 생성 size는 `1024x1024 / 1536x1024 / 1024x1536 / 1536x768 / 768x1536 / 1536x864 / 864x1536`로 제한하고 최종 캔버스와의 비율 차이는 고정 contain으로 처리한다.
+- [x] 기존 `ImageModels.FakeModels`에도 동일한 크기·투명 capability를 명시해 Fake 접수를 가능하게 한다. capability가 없는 Google/다른 모델은 2D 후보에서 '지원 미확인'으로 선택을 막는다. 기존 Google 3D 기본값을 유지하고, 명시된 미지원 배경/size를 조용히 1:1로 대체하지 않는다. 추가 모델 지원은 공식 계약 확인과 captured request 테스트를 함께 넣는 후속 변경으로 제한한다.
+- [x] 같은 테스트와 `OpenAiImageRequestTests / ImageProviderUsageTests / ImageModelCatalogTests`를 통과시키고 문서와 `feat(providers): support explicit sprite image requests`로 커밋한다.
 
 ## Task 7: 2D 접수·분석 worker·독립 입력 복사
 
