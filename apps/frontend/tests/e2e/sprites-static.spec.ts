@@ -245,6 +245,45 @@ test('detail HTTP failure is retryable and an actual 404 stays missing', async (
   await expect(page.getByRole('button', { name: '작업 다시 조회' })).toHaveCount(0)
 })
 
+test('cached detail failure preserves dirty name and ROI through successful retry', async ({
+  page,
+}) => {
+  const records: NonNullable<SpriteFakeOptions['records']> = []
+  await installFakeApi(page, { sprites: { records } })
+  await start(page)
+  await expect(page.getByRole('heading', { name: '제작 계획 검수' })).toBeVisible()
+  await page.getByLabel('대상 이름 1', { exact: true }).fill('아직 저장하지 않은 이름')
+  await page.getByLabel('ROI w 1', { exact: true }).fill('0.6')
+  let failing = true
+  await page.route(`**/api/jobs/${SPRITE_IDS.job}`, (route) =>
+    failing
+      ? route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          json: { data: null, error: { code: 'FAKE_ERROR', message: '상세 재조회 연결 실패' } },
+        })
+      : route.fallback(),
+  )
+  await page.getByRole('button', { name: '서버 상태 새로고침' }).click()
+  await expect(page.getByText('상세 재조회 연결 실패', { exact: false })).toBeVisible()
+  await expect(page.getByLabel('대상 이름 1', { exact: true })).toHaveValue(
+    '아직 저장하지 않은 이름',
+  )
+  await expect(page.getByLabel('ROI w 1', { exact: true })).toHaveValue('0.6')
+  await expect(page.getByRole('button', { name: '계획 저장', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '계획 승인 · 기준 이미지 생성' })).toBeDisabled()
+  failing = false
+  await page.getByRole('button', { name: '작업 다시 조회', exact: true }).click()
+  await expect(page.getByText('상세 재조회 연결 실패', { exact: false })).toHaveCount(0)
+  await expect(page.getByLabel('대상 이름 1', { exact: true })).toHaveValue(
+    '아직 저장하지 않은 이름',
+  )
+  await expect(page.getByLabel('ROI w 1', { exact: true })).toHaveValue('0.6')
+  await expect(page.getByRole('button', { name: '계획 저장', exact: true })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '계획 승인 · 기준 이미지 생성' })).toBeDisabled()
+  expect(records).toHaveLength(1)
+})
+
 test('lost start and HTTP approval retry keep the exact saved UUID/body', async ({ page }) => {
   const records: NonNullable<SpriteFakeOptions['records']> = []
   await installFakeApi(page, { sprites: { records, lostStartOnce: true, approveErrorOnce: true } })

@@ -9,7 +9,7 @@ export function tileOffsets(
   height: number,
   repeat: SpriteRepeat,
   layout: SpriteTileLayout,
-): { x: number; y: number }[] {
+): readonly { x: number; y: number }[] {
   const offsets = []
   for (const row of repeat === 'x' ? [0] : [-1, 0, 1]) {
     for (const column of repeat === 'y' ? [0] : [-1, 0, 1]) {

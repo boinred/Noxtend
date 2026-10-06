@@ -47,12 +47,12 @@ export function SpriteStudioScreen() {
     >
       {!jobId ? (
         <SpriteInput />
-      ) : query.isNotFound ? (
+      ) : query.isNotFound && !job ? (
         <div role="alert" className={styles.panel}>
           <p>작업을 찾을 수 없습니다.</p>
           <Link to={ROUTES.spriteBackground}>새 2D 작업 시작</Link>
         </div>
-      ) : query.isError ? (
+      ) : query.isError && !job ? (
         <div role="alert" className={styles.panel}>
           <p className={styles.error}>
             {apiErrorMessage(query.error, '작업을 불러올 수 없습니다. 연결을 확인해 주세요')}
@@ -79,7 +79,7 @@ export function SpriteStudioScreen() {
               {!isTerminal(job.status) ? (
                 <Button
                   variant="destructive"
-                  disabled={cancel.isPending}
+                  disabled={cancel.isPending || query.isError}
                   onClick={() => cancel.mutate(job.id)}
                 >
                   작업 취소
@@ -90,6 +90,19 @@ export function SpriteStudioScreen() {
               <p className={styles.hint}>
                 취소된 작업입니다. 이미 저장된 PNG와 ZIP은 내려받을 수 있습니다.
               </p>
+            ) : null}
+            {query.isError ? (
+              <div role="alert">
+                <p className={styles.error}>
+                  {apiErrorMessage(query.error, '작업을 다시 조회할 수 없습니다')}
+                </p>
+                <p className={styles.hint}>
+                  마지막 조회 결과와 미저장 편집을 유지했습니다. 다시 조회한 뒤 작업을 이어가세요.
+                </p>
+                <Button variant="outline" onClick={() => void query.refetch()}>
+                  작업 다시 조회
+                </Button>
+              </div>
             ) : null}
             {job.failureReason ? (
               <p role="alert" className={styles.error}>
@@ -108,7 +121,7 @@ export function SpriteStudioScreen() {
                 {task.status === 'failed' && !canceled ? (
                   <Button
                     variant="outline"
-                    disabled={retry.isPending}
+                    disabled={retry.isPending || query.isError}
                     onClick={() => retry.mutate(task.id)}
                   >
                     실패 공정 재시도
@@ -135,7 +148,7 @@ export function SpriteStudioScreen() {
               sourceImageId={job.sourceImageId}
               sprite={sprite}
               model={job.models.image?.model ?? '모델 미확인'}
-              disabled={active}
+              disabled={active || query.isError}
             />
           ) : null}
           {sprite.phase !== 'analyzing' && sprite.phase !== 'planReview' ? (
@@ -146,14 +159,14 @@ export function SpriteStudioScreen() {
                 jobId={job.id}
                 sprite={sprite}
                 tasks={job.tasks}
-                disabled={canceled || packing}
+                disabled={canceled || packing || query.isError}
               />
               <SpriteExport
                 key={job.id}
                 jobId={job.id}
                 sprite={sprite}
                 approvedAssetIds={sprite.assets.filter((a) => a.approval !== null).map((a) => a.id)}
-                disabled={canceled || packing}
+                disabled={canceled || packing || query.isError}
               />
             </>
           ) : null}
