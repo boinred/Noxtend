@@ -123,4 +123,8 @@ dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName!~TripoSmokeTe
 
 ## 실행 기록
 
-(진행하면서 추가)
+- 실행 방식: Subagent-driven. 구현 에이전트 1개(Task 1), 독립 리뷰 에이전트 1개, 수정 범위 재리뷰 1개.
+- Task 1 완료: `c90a625`(시드·migration `20261007063456_BackgroundGeneratePromptV3`·테스트·문서), `fcafb61`(리뷰 Minor 수정: v2 migration 테스트를 v2 시점에 고정, 테스트 주석 정리).
+- 계획 외 변경: 기존 `BackgroundGeneratePromptMigrationTests`가 최신 migration까지 올려 v2 버전 번호를 단언하던 부분을 v2 migration 시점으로 고정했다.
+- 검증: 대상 테스트 통과, `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName!~TripoSmokeTests&FullyQualifiedName!~SimilaritySmokeTests'` 1560 통과·0 실패·0 건너뜀(최종 HEAD).
+- 미해결: 실제 이미지 모델이 방향 규약대로 그리는지는 실 API로 확인하지 않았다. 롤백(Down) 시 운영자가 더 낮은 버전을 재활성화해 둔 경우 활성 행 충돌 가능성은 기존 배경 migration과 같은 패턴으로 유지했다.
