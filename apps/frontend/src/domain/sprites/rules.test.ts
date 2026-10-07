@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { productionModeOf, tileOffsets } from './rules'
+import { productionModeOf, spriteProgressCounts, tileOffsets } from './rules'
 import { readSpriteJob, readSpriteSummary } from './types'
 import { queryKeys } from '@/app/queries/keys'
 
@@ -186,4 +186,32 @@ describe('static tile offsets', () => {
     if (repeat !== 'x') expect(offsets).toContainEqual({ x: -64, y: 32 })
     if (repeat === 'both') expect(offsets).toContainEqual({ x: 0, y: 64 })
   })
+})
+
+it('sprite progress counts current slots, approvals and stored current ZIPs', () => {
+  const sprite = readSpriteJob({ productionMode: 'twoD', sprite: spriteFixture() }).sprite!
+  expect(spriteProgressCounts(sprite, [])).toEqual({
+    analysis: 0,
+    backgrounds: 1,
+    approvedBases: 1,
+    frames: 0,
+    frameTotal: 3,
+    loops: 1,
+    approvedLoops: 1,
+    exported: 0,
+  })
+  sprite.assets[0]!.frames[0]!.currentImageId = null
+  sprite.assets[0]!.approval = null
+  expect(spriteProgressCounts(sprite, [])).toMatchObject({
+    backgrounds: 0,
+    approvedBases: 0,
+    approvedLoops: 0,
+    exported: 0,
+  })
+  sprite.assets[0]!.frames.push({ index: 1, currentTaskId: 'new', currentImageId: 'frame' })
+  expect(spriteProgressCounts(sprite, [])).toMatchObject({ frames: 1, frameTotal: 3 })
+  sprite.assets[0]!.plan.loop = false
+  expect(spriteProgressCounts(sprite, [])).toMatchObject({ loops: 0, frames: 0, frameTotal: 0 })
+  sprite.exports[0]!.isCurrent = true
+  expect(spriteProgressCounts(sprite, [])).toMatchObject({ exported: 1 })
 })
