@@ -3,6 +3,7 @@ using Noxtend.Application.Mesh;
 using Noxtend.Domain.Common;
 using Noxtend.Domain.Job;
 using Noxtend.Domain.Ports;
+using Noxtend.Domain.Sprites;
 using Noxtend.Domain.Provider;
 using Noxtend.Infrastructure.Mesh;
 using PipelineTask = Noxtend.Domain.Job.PipelineTask;
@@ -366,12 +367,12 @@ file sealed class ConflictingSaveJobRepository(IJobRepository inner) : IJobRepos
     public Task<PipelineJob?> ReloadAsync(Guid jobId, CancellationToken ct) => inner.ReloadAsync(jobId, ct);
     public Task<PipelineJob?> GetByTaskAsync(Guid taskId, CancellationToken ct) => inner.GetByTaskAsync(taskId, ct);
 
-    public Task<int> CountAsync(JobListFilter filter, AssetCategory? category, CancellationToken ct) =>
-        inner.CountAsync(filter, category, ct);
+    public Task<int> CountAsync(JobListFilter filter, AssetCategory? category, CancellationToken ct, ProductionMode? productionMode = null) =>
+        inner.CountAsync(filter, category, ct, productionMode);
 
     public Task<IReadOnlyList<PipelineJob>> ListAsync(
-        JobListFilter filter, AssetCategory? category, int limit, CancellationToken ct) =>
-        inner.ListAsync(filter, category, limit, ct);
+        JobListFilter filter, AssetCategory? category, int limit, CancellationToken ct, ProductionMode? productionMode = null) =>
+        inner.ListAsync(filter, category, limit, ct, productionMode);
 
     public Task<IReadOnlyList<PipelineJob>> ListBySourceImageAsync(Guid sourceImageId, CancellationToken ct) =>
         inner.ListBySourceImageAsync(sourceImageId, ct);
@@ -387,6 +388,9 @@ file sealed class ConflictingSaveJobRepository(IJobRepository inner) : IJobRepos
 
     public Task<DeletedJobBlobs?> DeleteIfTerminalAsync(Guid jobId, CancellationToken ct) =>
         inner.DeleteIfTerminalAsync(jobId, ct);
+
+    public Task<SpriteAcceptedRequest?> GetSpriteRequestAsync(Guid requestId, CancellationToken ct) =>
+        inner.GetSpriteRequestAsync(requestId, ct);
 
     public Task SaveChangesAsync(CancellationToken ct) =>
         throw new ConcurrencyConflictException(

@@ -51,9 +51,8 @@ public sealed class TaskWorkerRegistrationTests
 
         var workers = provider.GetServices<IHostedService>().OfType<TaskWorker>().ToList();
 
-        // **워커를 여럿 두는 단계가 둘이다** (사이클 #7·#10). 그 수가 각 단계의 동시성
-        // 상한이고, 나머지는 하나씩이다 — 총합은 "단계 수 - 2 + 생성 + 3D" 다
-        var expected = TaskWorkerRegistration.Stages.Length - 2 + GenerationWorkers + MeshWorkers;
+        // 이미지 두 종류와 3D 공정의 설정별 워커 수
+        var expected = TaskWorkerRegistration.Stages.Length - 3 + 2 * GenerationWorkers + MeshWorkers;
 
         Assert.Equal(expected, workers.Count);
     }
@@ -70,6 +69,14 @@ public sealed class TaskWorkerRegistrationTests
         // TaskWorker 는 await foreach 로 순차 소비하므로 워커 하나 = 동시 1건이다.
         // 이 수가 실제로 등록되지 않으면 NFR-09 의 상한이 설정과 다른 값이 된다
         Assert.Equal(GenerationWorkers, generation);
+    }
+
+    [Fact]
+    public void SpriteGenerationGetsAsManyWorkersAsConfigured()
+    {
+        using var provider = BuildProvider();
+        Assert.Equal(GenerationWorkers, provider.GetServices<IHostedService>()
+            .OfType<TaskWorker>().Count(w => w.Kind == TaskKind.GenerateSprite));
     }
 
     /// <summary>

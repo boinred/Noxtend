@@ -85,7 +85,8 @@ public sealed class JobsController(
         [FromQuery] string status = "active",
         [FromQuery] string? category = null,
         [FromQuery] int limit = 10,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        [FromQuery] string? productionMode = null)
     {
         var filter = status.Equals("terminal", StringComparison.OrdinalIgnoreCase)
             ? JobListFilter.Terminal
@@ -103,7 +104,14 @@ public sealed class JobsController(
             parsedCategory = wanted;
         }
 
-        var page = await list.HandleAsync(filter, parsedCategory, limit, ct);
+        ProductionMode? mode = null;
+        if (productionMode is not null)
+        {
+            if (!Enum.GetNames<ProductionMode>().Any(name => name.Equals(productionMode, StringComparison.OrdinalIgnoreCase)))
+                return ApiResults.Failure<JobListResponse>(ErrorCode.SpriteSettingsInvalid, "알 수 없는 제작 모드입니다");
+            mode = Enum.Parse<ProductionMode>(productionMode, true);
+        }
+        var page = await list.HandleAsync(filter, parsedCategory, limit, ct, mode);
 
         return Ok(ApiResponse<JobListResponse>.Ok(new JobListResponse(
             page.Items.Select(JobSummaryResponse.From).ToList(), page.Total)));
@@ -141,10 +149,13 @@ public sealed class JobsController(
         Guid jobId,
         [FromBody] AddMeshRequest request,
         CancellationToken ct)
-        => ApiResults.From(
+    {
+        if (await RequireThreeDAsync(jobId, ct) is { } rejection) return rejection;
+        return ApiResults.From(
             await addMesh.HandleAsync(jobId, request.MeshProviderConfigId, request.MeshModel, ct),
             JobAcceptedResponse.From,
             StatusCodes.Status202Accepted);
+    }
 
     /// Design Ref: §4.2 #3 — 실패한 파츠 방향 하나만 다시 돌린다 (FR-08).
     ///
@@ -165,7 +176,10 @@ public sealed class JobsController(
     /// </summary>
     [HttpGet("{jobId:guid}/review")]
     public async Task<IActionResult> GetReviewAsync(Guid jobId, CancellationToken ct)
-        => ApiResults.From(await getReview.HandleAsync(jobId, ct), ReviewStateResponse.From);
+    {
+        if (await RequireThreeDAsync(jobId, ct) is { } rejection) return rejection;
+        return ApiResults.From(await getReview.HandleAsync(jobId, ct), ReviewStateResponse.From);
+    }
 
     /// <summary>
     /// 사각형 하나와 겹치는 파츠 이름 (occludedby-recompute §입력→출력 1).
@@ -176,9 +190,12 @@ public sealed class JobsController(
     [HttpPost("{jobId:guid}/review/parts/overlaps")]
     public async Task<IActionResult> FindOverlapsAsync(
         Guid jobId, [FromBody] FindOverlapsRequest request, CancellationToken ct)
-        => ApiResults.From(
+    {
+        if (await RequireThreeDAsync(jobId, ct) is { } rejection) return rejection;
+        return ApiResults.From(
             await findOverlaps.HandleAsync(jobId, request.Bounds.ToDomain(), ct),
             names => new { overlapping = names });
+    }
 
     /// <summary>
     /// 검수 화면에서 사람이 사각형으로 파츠를 추가한다 (§입력→출력 1).
@@ -189,17 +206,23 @@ public sealed class JobsController(
     [HttpPost("{jobId:guid}/review/parts")]
     public async Task<IActionResult> AddReviewPartAsync(
         Guid jobId, [FromBody] AddReviewPartRequest request, CancellationToken ct)
-        => ApiResults.From(
+    {
+        if (await RequireThreeDAsync(jobId, ct) is { } rejection) return rejection;
+        return ApiResults.From(
             await addReviewPart.HandleAsync(
                 jobId, request.Name, request.Category, request.Bounds.ToDomain(),
                 request.Description, request.Occludes, ct),
             added => ReviewPartResponse.From(added.Part, added.Occludes),
             StatusCodes.Status201Created);
+    }
 
     /// <summary>검수 화면에서 잘못 탐지된 파츠를 제외한다 (§입력→출력).</summary>
     [HttpDelete("{jobId:guid}/review/parts/{partId:guid}")]
     public async Task<IActionResult> RemoveReviewPartAsync(Guid jobId, Guid partId, CancellationToken ct)
-        => ApiResults.NoContent(await removeReviewPart.HandleAsync(jobId, partId, ct));
+    {
+        if (await RequireThreeDAsync(jobId, ct) is { } rejection) return rejection;
+        return ApiResults.NoContent(await removeReviewPart.HandleAsync(jobId, partId, ct));
+    }
 
     /// <summary>
     /// 검수 화면에서 상자를 끌어 옮기거나 크기를 바꾼다.
@@ -211,9 +234,12 @@ public sealed class JobsController(
     public async Task<IActionResult> MoveReviewPlacementAsync(
         Guid jobId, Guid partId, int ordinal,
         [FromBody] BoundsDto request, CancellationToken ct)
-        => ApiResults.From(
+    {
+        if (await RequireThreeDAsync(jobId, ct) is { } rejection) return rejection;
+        return ApiResults.From(
             await moveReviewPlacement.HandleAsync(jobId, partId, ordinal, request.ToDomain(), ct),
             ReviewStateResponse.From);
+    }
 
     /// <summary>
     /// 전체 승인 (§목표). 미뤄뒀던 Generate 팬아웃이 이 한 번으로 전부 계획된다.
@@ -221,58 +247,79 @@ public sealed class JobsController(
     /// </summary>
     [HttpPost("{jobId:guid}/review/approve")]
     public async Task<IActionResult> ApproveReviewAsync(Guid jobId, CancellationToken ct)
-        => ApiResults.From(
+    {
+        if (await RequireThreeDAsync(jobId, ct) is { } rejection) return rejection;
+        return ApiResults.From(
             await approveReview.HandleAsync(jobId, ct),
             JobAcceptedResponse.From,
             StatusCodes.Status202Accepted);
+    }
 
     /// <summary>서술 확정 (review-gate-staged 사이클 1). 미뤄뒀던 Generate 팬아웃 계획 — 202.</summary>
     [HttpPost("{jobId:guid}/review/confirm-descriptions")]
     public async Task<IActionResult> ConfirmDescriptionsAsync(Guid jobId, CancellationToken ct)
-        => ApiResults.From(
+    {
+        if (await RequireThreeDAsync(jobId, ct) is { } rejection) return rejection;
+        return ApiResults.From(
             await reviewDescriptions.ConfirmAsync(jobId, ct),
             JobAcceptedResponse.From,
             StatusCodes.Status202Accepted);
+    }
 
     /// <summary>서술 단계에서 상자 단계로 되돌린다. 서술은 유지.</summary>
     [HttpPost("{jobId:guid}/review/return-to-boxes")]
     public async Task<IActionResult> ReturnToBoxesAsync(Guid jobId, CancellationToken ct)
-        => ApiResults.From(await reviewDescriptions.ReturnToBoxesAsync(jobId, ct), ReviewStateResponse.From);
+    {
+        if (await RequireThreeDAsync(jobId, ct) is { } rejection) return rejection;
+        return ApiResults.From(await reviewDescriptions.ReturnToBoxesAsync(jobId, ct), ReviewStateResponse.From);
+    }
 
     /// <summary>서술 단계에서 파츠 서술 하나를 고친다. 응답은 검수 상태 전체.</summary>
     [HttpPut("{jobId:guid}/review/parts/{partId:guid}/description")]
     public async Task<IActionResult> EditReviewDescriptionAsync(
         Guid jobId, Guid partId, [FromBody] EditReviewDescriptionRequest request, CancellationToken ct)
-        => ApiResults.From(
+    {
+        if (await RequireThreeDAsync(jobId, ct) is { } rejection) return rejection;
+        return ApiResults.From(
             await reviewDescriptions.EditDescriptionAsync(jobId, partId, request.Description, ct),
             ReviewStateResponse.From);
+    }
 
     /// <summary>서술 단계에서 장면 팔레트를 통째로 교체한다.</summary>
     [HttpPut("{jobId:guid}/review/palette")]
     public async Task<IActionResult> EditReviewPaletteAsync(
         Guid jobId, [FromBody] EditReviewPaletteRequest request, CancellationToken ct)
-        => ApiResults.From(
+    {
+        if (await RequireThreeDAsync(jobId, ct) is { } rejection) return rejection;
+        return ApiResults.From(
             await reviewDescriptions.EditPaletteAsync(
                 jobId, [.. request.Palette.Select(e => new PaletteEntry(e.Name, e.Hex))], ct),
             ReviewStateResponse.From);
+    }
 
     /// <summary>정면 생성 완료 후 사용자가 선택한 비정면(좌/후/우) 이미지 생성 요청 (selective-view-generation §2).</summary>
     [HttpPost("{jobId:guid}/generate-views")]
     public async Task<IActionResult> GenerateViewsAsync(
         Guid jobId, [FromBody] GenerateSelectedViewsRequest request, CancellationToken ct)
-        => ApiResults.From(
+    {
+        if (await RequireThreeDAsync(jobId, ct) is { } rejection) return rejection;
+        return ApiResults.From(
             await generateViews.HandleAsync(jobId, request.Directions, ct),
             JobAcceptedResponse.From,
             StatusCodes.Status202Accepted);
+    }
 
     /// <summary>정면 불만족 시 특정 파츠 서술 수정 복귀 요청 (selective-view-generation §2).</summary>
     [HttpPost("{jobId:guid}/return-to-descriptions")]
     public async Task<IActionResult> ReturnToDescriptionsAsync(
         Guid jobId, [FromBody] ReturnToDescriptionsRequest request, CancellationToken ct)
-        => ApiResults.From(
+    {
+        if (await RequireThreeDAsync(jobId, ct) is { } rejection) return rejection;
+        return ApiResults.From(
             await returnToDescriptions.HandleAsync(jobId, request.PartId, ct),
             JobAcceptedResponse.From,
             StatusCodes.Status202Accepted);
+    }
 
     /// <summary>
     /// 파츠별 "3D 전송 뷰 자유 선택 + 대칭" (spec 20260917).
@@ -284,6 +331,8 @@ public sealed class JobsController(
     public async Task<IActionResult> ReplanPartMeshAsync(
         Guid jobId, [FromBody] ReplanPartMeshRequest request, CancellationToken ct)
     {
+        if (await RequireThreeDAsync(jobId, ct) is { } rejection) return rejection;
+
         if (!TryParseLeftRightPlan(request.LeftRight, out var leftRight))
         {
             return ApiResults.Failure<JobAcceptedResponse>(
@@ -301,6 +350,15 @@ public sealed class JobsController(
                 jobId, request.PartId, request.MeshProviderConfigId, request.MeshModel, leftRight, back, ct),
             JobAcceptedResponse.From,
             StatusCodes.Status202Accepted);
+    }
+
+    private async Task<IActionResult?> RequireThreeDAsync(Guid jobId, CancellationToken ct)
+    {
+        var result = await get.HandleAsync(jobId, ct);
+        if (!result.IsSuccess) return ApiResults.Failure<object>(result.ErrorCode!, result.ErrorMessage!);
+        return result.Value!.Job.ProductionMode == ProductionMode.TwoD
+            ? ApiResults.Failure<object>(ErrorCode.SpriteWrongMode, "3D 작업이 필요합니다")
+            : null;
     }
 
     // 좌우/전후 선택도 카테고리와 같은 이유로 이름만 받는다 (숫자 문자열 방지)

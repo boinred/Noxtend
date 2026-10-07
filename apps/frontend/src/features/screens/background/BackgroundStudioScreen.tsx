@@ -71,7 +71,14 @@ export function BackgroundStudioScreen() {
 function InputView() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const { textProviders, imageProviders, meshProviders, isLoading } = useProviders()
+  const {
+    textProviders,
+    imageProviders,
+    meshProviders,
+    isLoading,
+    error: providersError,
+    refetch: refetchProviders,
+  } = useProviders()
   const upload = useUpload()
   const startJob = useStartJob()
 
@@ -228,8 +235,17 @@ function InputView() {
         ) : (
           <>
             <ImageDropzone file={file} reusedImageId={reusedImageId} onSelect={setFile} />
+            {isLoading ? <p role="status">공급자를 불러오는 중…</p> : null}
+            {providersError ? (
+              <div role="alert" className={styles.notice}>
+                <p>{apiErrorMessage(providersError, '공급자 목록을 불러올 수 없습니다')}</p>
+                <Button variant="outline" onClick={() => void refetchProviders()}>
+                  공급자 다시 조회
+                </Button>
+              </div>
+            ) : null}
 
-            {isLoading ? null : (
+            {isLoading || providersError ? null : (
               <div className={styles.settingsRow}>
                 <ProviderSelect
                   providers={textProviders}
@@ -256,7 +272,9 @@ function InputView() {
               text-only connection still needs an explicit image-provider notice because
               the missing capability is a different next action.
             */}
-            {isLoading || (textProviders.length === 0 && imageProviders.length === 0) ? null : (
+            {isLoading ||
+            providersError ||
+            (textProviders.length === 0 && imageProviders.length === 0) ? null : (
               <div className={styles.settingsRow} data-testid="image-settings">
                 <ProviderSelect
                   providers={imageProviders}
@@ -376,7 +394,7 @@ const SceneAssemblyView = lazy(() =>
 function JobView({ jobId }: { jobId: string }) {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
-  const { job, isLoading, isNotFound } = useJob(jobId)
+  const { job, isLoading, isNotFound, error: jobError, refetch } = useJob(jobId)
   const cancelJob = useCancelJob()
   const retryTask = useRetryTask(jobId)
   const addMesh = useAddMeshProduction(jobId)
@@ -429,11 +447,15 @@ function JobView({ jobId }: { jobId: string }) {
     )
 
   if (isLoading) {
-    return <PageContainer width="max" testId="background-studio" children={null} />
+    return (
+      <PageContainer width="max" testId="background-studio">
+        <p role="status">작업을 불러오는 중…</p>
+      </PageContainer>
+    )
   }
 
   // 없는 jobId — 북마크가 오래됐거나 작업이 지워졌다 (§5.4 Resume)
-  if (isNotFound || !job) {
+  if (isNotFound && !job) {
     return (
       <PageContainer width="max" title="배경 스튜디오" testId="background-studio">
         <div className={styles.studioResult} data-testid="studio-content">
@@ -448,11 +470,33 @@ function JobView({ jobId }: { jobId: string }) {
     )
   }
 
+  if (!job) {
+    return (
+      <PageContainer width="max" title="배경 스튜디오" testId="background-studio">
+        <div role="alert" className={styles.notice}>
+          <p>{apiErrorMessage(jobError, '작업을 불러올 수 없습니다. 연결을 확인해 주세요')}</p>
+          <Button variant="outline" onClick={() => void refetch()}>
+            작업 다시 조회
+          </Button>
+        </div>
+      </PageContainer>
+    )
+  }
+
   const failedTask = job.tasks.find((t) => t.status === 'failed')
 
   return (
     <PageContainer width="max" title="배경 스튜디오" testId="background-studio">
       <div className={styles.studioResult} data-testid="studio-content">
+        {jobError ? (
+          <div role="alert" className={styles.notice}>
+            <p>{apiErrorMessage(jobError, '작업을 다시 조회할 수 없습니다')}</p>
+            <p>마지막 조회 결과와 미저장 편집을 유지했습니다.</p>
+            <Button variant="outline" onClick={() => void refetch()}>
+              작업 다시 조회
+            </Button>
+          </div>
+        ) : null}
         <div className="mb-4" data-testid="background-top-pipeline-progress">
           <BackgroundPipelineStepper tasks={job.tasks} jobStatus={job.status} />
         </div>

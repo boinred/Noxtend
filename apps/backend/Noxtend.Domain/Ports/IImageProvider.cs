@@ -1,3 +1,5 @@
+using Noxtend.Domain.Job;
+
 namespace Noxtend.Domain.Ports;
 
 /// <summary>
@@ -34,15 +36,18 @@ public interface IImageProvider
 /// 구조적 필드가 없어 참조는 순서 있는 목록으로만 가고, 어느 것이 정면·원본인지는
 /// 프롬프트 문구가 <see cref="ReferenceImage.Role"/> 순서를 따라 말한다.
 /// </param>
-/// <param name="Size">서버 고정값 (§2.3 A-8). 조립 기준이 정해지기 전에는 사용자가 고를 근거가 없다.</param>
+/// <param name="Size">기존 생성은 서버 고정값, sprite는 모델의 확인된 생성 크기.</param>
 public sealed record ImageRequest(
     ImageCallContext Context,
     string Prompt,
     IReadOnlyList<ReferenceImage> Reference,
-    string Size);
+    string Size,
+    ImageBackground? Background = null);
 
 /// <summary>참조 이미지 한 장 + 그것이 무엇인지(§5.1).</summary>
 public sealed record ReferenceImage(ImageContent Content, ReferenceRole Role);
+
+public enum ImageBackground { Opaque, Transparent }
 
 /// <summary>
 /// 참조가 그리려는 파츠와 어떤 관계인가 — 프롬프트 문구를 고르는 근거 (workstream B §4.2).
@@ -54,21 +59,24 @@ public enum ReferenceRole
 
     /// <summary>같은 파츠의 정면 생성 결과 — 비정면 공정이 참조한다.</summary>
     FrontView,
+
+    SpriteBase = 2,
 }
 
 /// <summary>
 /// 이 호출이 어느 작업·공정·파츠·프롬프트 버전에 속하는가.
 ///
-/// <see cref="LlmCallContext"/> 와 다른 점은 <paramref name="PartId"/> 다 — 생성은
-/// 파츠·방향마다 공정 하나이므로 어느 파츠의 어느 방향을 그렸는지가 내역의 일부여야 한다.
+/// 기존 파츠 생성은 <paramref name="PartId"/> 를 유지하고 sprite는 null 이다.
+/// 기록의 상관관계는 <paramref name="TaskId"/> 로 조회한다.
 /// </summary>
 public sealed record ImageCallContext(
     Guid JobId,
     Guid TaskId,
-    Guid PartId,
+    Guid? PartId,
     Guid PromptVersionId,
     Guid ProviderConfigId,
-    string Model);
+    string Model,
+    TaskKind Kind = TaskKind.Generate);
 
 /// <summary>
 /// 이미지 공급자 응답.

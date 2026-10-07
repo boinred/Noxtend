@@ -26,6 +26,8 @@ public sealed class SeedPromptVariableTests
     /// </summary>
     [Theory]
     [InlineData(TaskKind.RewriteDescriptions)]
+    [InlineData(TaskKind.AnalyzeSprites)]
+    [InlineData(TaskKind.GenerateSprite)]
     public void SeedUsesEveryVariableTheStageProduces(TaskKind kind)
     {
         var (system, user, _, _) = PromptFor(kind);
@@ -43,6 +45,8 @@ public sealed class SeedPromptVariableTests
     /// </summary>
     [Theory]
     [InlineData(TaskKind.RewriteDescriptions)]
+    [InlineData(TaskKind.AnalyzeSprites)]
+    [InlineData(TaskKind.GenerateSprite)]
     [InlineData(TaskKind.Analyze)]
     [InlineData(TaskKind.Extract)]
     [InlineData(TaskKind.Decompose)]
@@ -95,6 +99,8 @@ public sealed class SeedPromptVariableTests
     /// </summary>
     [Theory]
     [InlineData(TaskKind.RewriteDescriptions)]
+    [InlineData(TaskKind.AnalyzeSprites)]
+    [InlineData(TaskKind.GenerateSprite)]
     [InlineData(TaskKind.Analyze)]
     [InlineData(TaskKind.Extract)]
     [InlineData(TaskKind.Decompose)]
@@ -109,6 +115,8 @@ public sealed class SeedPromptVariableTests
     private static (string System, string User, string Schema, string Note) PromptFor(TaskKind kind)
         => kind switch
         {
+            TaskKind.GenerateSprite => SeedPrompts.GenerateSprite(),
+            TaskKind.AnalyzeSprites => SeedPrompts.AnalyzeSprites(),
             TaskKind.RewriteDescriptions => SeedPrompts.RewriteDescriptions(),
             TaskKind.Analyze => SeedPrompts.AnalyzeV2(),
             TaskKind.Extract => SeedPrompts.CharacterExtract(),

@@ -6,6 +6,7 @@
  * 접어도 완전히 숨기지 않는다. 숨기면 캔버스 폭은 되찾지만 이동할 때마다 펼쳐야 한다.
  * 56px 아이콘 레일이 그 절충점이다 (§1.1 목표 2).
  */
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Icon } from '@/features/shell/Icon'
 import { SidebarItem } from '@/features/shell/layout/SidebarItem'
 import {
@@ -21,8 +22,10 @@ import {
   SIDEBAR_NAV_CLASS,
   SIDEBAR_TOGGLE_CLASS,
 } from '@/features/shell/layout/sidebarStyles'
-import { NAV_ITEMS, NAV_ITEMS_FOOTER } from '@/routes/navItems'
+import { NAV_ITEMS, NAV_GROUPS, NAV_ITEMS_FOOTER } from '@/routes/navItems'
 import { cn } from '@/lib/utils'
+
+const MobileStudioMenu = lazy(() => import('./MobileStudioMenu'))
 
 export interface SidebarProps {
   collapsed: boolean
@@ -30,6 +33,13 @@ export interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 720px)').matches)
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 720px)')
+    const update = () => setMobile(media.matches)
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
   return (
     <aside
       className={SIDEBAR_CLASS}
@@ -42,11 +52,63 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         <span className={SIDEBAR_BRAND_TEXT_CLASS}>Noxtend</span>
       </div>
 
-      <nav className={SIDEBAR_NAV_CLASS}>
+      <nav
+        className={cn(
+          SIDEBAR_NAV_CLASS,
+          'max-[720px]:hidden group-data-[collapsed=true]/sidebar:overflow-visible',
+        )}
+        aria-label="제작 탐색"
+      >
         <ul className={SIDEBAR_LIST_CLASS}>
           {NAV_ITEMS.map((item) => (
             <SidebarItem key={item.key} item={item} collapsed={collapsed} />
           ))}
+        </ul>
+        {NAV_GROUPS.map((group) => (
+          <div key={group.key} role="group" aria-label={`${group.label} 제작`}>
+            <h2
+              className={cn(
+                'mt-4 mb-1 px-[10px] text-xs font-semibold text-muted-foreground',
+                collapsed && 'px-0 text-center',
+              )}
+            >
+              {group.label}
+            </h2>
+            <ul className={SIDEBAR_LIST_CLASS}>
+              {group.items.map((item) => (
+                <SidebarItem key={item.key} item={item} collapsed={collapsed} />
+              ))}
+            </ul>
+          </div>
+        ))}
+      </nav>
+
+      <nav
+        className={cn(SIDEBAR_NAV_CLASS, 'hidden max-[720px]:flex')}
+        aria-label="모바일 제작 탐색"
+      >
+        <ul className={SIDEBAR_LIST_CLASS}>
+          {NAV_ITEMS.map((item) => (
+            <SidebarItem
+              key={item.key}
+              item={item}
+              collapsed={collapsed}
+              testId={`nav-mobile-${item.key}`}
+            />
+          ))}
+          {mobile ? (
+            <Suspense
+              fallback={NAV_GROUPS.map((group) => (
+                <li key={group.key} className="min-w-0 flex-1">
+                  <span className={SIDEBAR_ITEM_CLASS} role="status">
+                    {group.label} 메뉴 불러오는 중…
+                  </span>
+                </li>
+              ))}
+            >
+              <MobileStudioMenu />
+            </Suspense>
+          ) : null}
         </ul>
       </nav>
 

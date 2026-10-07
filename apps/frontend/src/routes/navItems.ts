@@ -20,28 +20,66 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: readonly NavItem[] = [
-  // 홈이 최상단이다 (Plan §1.4 결정 2)
   { key: 'home', label: '홈', icon: 'home', path: ROUTES.home },
+]
+
+export interface NavGroup {
+  key: 'threeD' | 'twoD'
+  label: string
+  items: readonly NavItem[]
+}
+
+export const NAV_GROUPS: readonly NavGroup[] = [
   {
-    // character-studio 사이클에서 준비 중 표시가 사라진다 — 실제 화면이 생겼다
-    key: 'character',
-    label: assetCategoryLabel('character'),
-    icon: 'user',
-    path: ROUTES.character,
+    key: 'threeD',
+    label: '3D',
+    items: [
+      {
+        key: 'character',
+        label: `3D ${assetCategoryLabel('character')}`,
+        icon: 'user',
+        path: ROUTES.character,
+      },
+      {
+        key: 'object',
+        label: `3D ${assetCategoryLabel('object')}`,
+        icon: 'cube',
+        path: ROUTES.object,
+        comingSoon: true,
+      },
+      {
+        key: 'background',
+        label: `3D ${assetCategoryLabel('background')}`,
+        icon: 'globe',
+        path: ROUTES.background,
+      },
+    ],
   },
   {
-    key: 'object',
-    label: assetCategoryLabel('object'),
-    icon: 'cube',
-    path: ROUTES.object,
-    comingSoon: true,
-  },
-  {
-    // background-studio 사이클에서 준비 중 표시가 사라진다 — 실제 화면이 생겼다
-    key: 'background',
-    label: assetCategoryLabel('background'),
-    icon: 'globe',
-    path: ROUTES.background,
+    key: 'twoD',
+    label: '2D',
+    items: [
+      {
+        key: 'spriteCharacter',
+        label: `2D ${assetCategoryLabel('character')}`,
+        icon: 'user',
+        path: ROUTES.spriteCharacter,
+        comingSoon: true,
+      },
+      {
+        key: 'spriteObject',
+        label: `2D ${assetCategoryLabel('object')}`,
+        icon: 'cube',
+        path: ROUTES.spriteObject,
+        comingSoon: true,
+      },
+      {
+        key: 'spriteBackground',
+        label: `2D ${assetCategoryLabel('background')}`,
+        icon: 'image',
+        path: ROUTES.spriteBackground,
+      },
+    ],
   },
 ]
 

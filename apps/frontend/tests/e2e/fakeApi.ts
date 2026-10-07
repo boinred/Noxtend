@@ -11,9 +11,11 @@
  * 대신 계약은 백엔드와 같은 봉투(§4.0)와 같은 응답 모양(§4.2)을 쓴다.
  * 실제 서버와의 일치는 curl 관통과 L1-B 가 담당한다.
  */
+import { installSpriteFakeApi, type SpriteFakeOptions } from './spriteFakeApi'
 import { expect, type Locator, type Page, type Route } from '@playwright/test'
 
 export interface FakeApiOptions {
+  sprites?: SpriteFakeOptions
   /** 등록된 공급자. 빈 배열이면 스튜디오가 `/admin` 안내를 띄운다 (L2 #6) */
   providers?: FakeProvider[]
   /** 작업이 끝나는 상태. 실패 주입에 쓴다 (L2 #10) */
@@ -460,6 +462,8 @@ export async function installFakeApi(page: Page, options: FakeApiOptions = {}) {
   /** 단계별 허용 변수 — 서버의 `PromptTemplate.AllowedVariables` 와 같아야 한다 */
   const ALLOWED_VARIABLES: Record<string, string[]> = {
     analyze: [],
+    analyzeSprites: ['settings', 'sourceCanvas'],
+    generateSprite: ['settings', 'asset', 'frame', 'sourceCanvas', 'outputCanvas'],
     // gender·partHints 는 캐릭터 고유 변수다 (character-studio §D-03). 종류는 추출, 개수는 분해로 흐른다
     extract: ['scene', 'gender', 'partHints'],
     decompose: ['scene', 'parts', 'gender', 'partHints'],
@@ -495,6 +499,34 @@ export async function installFakeApi(page: Page, options: FakeApiOptions = {}) {
     allowedVariables: string[]
     createdAt: string
   }[]
+
+  prompts.push({
+    id: 'prompt-seed-sprites',
+    kind: 'analyzeSprites',
+    category: 'background',
+    version: 1,
+    system: '2D 배경 제작 대상을 분석하라',
+    user: '{{settings}} {{sourceCanvas}}',
+    jsonSchema: '{}',
+    note: '초기 버전',
+    isActive: true,
+    allowedVariables: ALLOWED_VARIABLES.analyzeSprites!,
+    createdAt: new Date(Date.UTC(2026, 9, 6)).toISOString(),
+  })
+
+  prompts.push({
+    id: 'prompt-seed-sprite-generation',
+    kind: 'generateSprite',
+    category: 'background',
+    version: 1,
+    system: '2D 배경 제작 대상을 생성하라',
+    user: '{{settings}} {{asset}} {{frame}} {{sourceCanvas}} {{outputCanvas}}',
+    jsonSchema: '{}',
+    note: '초기 버전',
+    isActive: true,
+    allowedVariables: ALLOWED_VARIABLES.generateSprite!,
+    createdAt: new Date(Date.UTC(2026, 9, 6)).toISOString(),
+  })
 
   // 유사도 평가 슬롯 — 실제 시드처럼 Background 전용 활성이다 (background-similarity-tuning §15.1)
   prompts.push({
@@ -1571,25 +1603,27 @@ export async function installFakeApi(page: Page, options: FakeApiOptions = {}) {
       const activeExact = (kind: string, category: string | null) =>
         prompts.find((p) => p.kind === kind && p.category === category && p.isActive)
 
-      const rows = [...PROMPT_STAGES, 'similarityEvaluate'].map((kind) => ({
-        kind,
-        cells: [null, ...PROMPT_CATEGORIES].map((category) => {
-          const dedicated = activeExact(kind, category)
-          if (dedicated) {
-            return {
-              category,
-              status: 'dedicated',
-              version: dedicated.version,
-              versionId: dedicated.id,
+      const rows = [...PROMPT_STAGES, 'similarityEvaluate', 'analyzeSprites', 'generateSprite'].map(
+        (kind) => ({
+          kind,
+          cells: [null, ...PROMPT_CATEGORIES].map((category) => {
+            const dedicated = activeExact(kind, category)
+            if (dedicated) {
+              return {
+                category,
+                status: 'dedicated',
+                version: dedicated.version,
+                versionId: dedicated.id,
+              }
             }
-          }
-          // 기본 열은 폴백이 없다 — 전용이 없으면 실행 불가
-          const fallback = category === null ? undefined : activeExact(kind, null)
-          return fallback
-            ? { category, status: 'fallback', version: fallback.version, versionId: fallback.id }
-            : { category, status: 'unavailable', version: null, versionId: null }
+            // 기본 열은 폴백이 없다 — 전용이 없으면 실행 불가
+            const fallback = category === null ? undefined : activeExact(kind, null)
+            return fallback
+              ? { category, status: 'fallback', version: fallback.version, versionId: fallback.id }
+              : { category, status: 'unavailable', version: null, versionId: null }
+          }),
         }),
-      }))
+      )
 
       return ok(route, { rows })
     }
@@ -2229,6 +2263,7 @@ export async function installFakeApi(page: Page, options: FakeApiOptions = {}) {
   await page.route('**/api/uploads/*/content', (route) =>
     route.fulfill({ status: 200, contentType: 'image/png', body: PNG_1X1 }),
   )
+  if (options.sprites) await installSpriteFakeApi(page, options.sprites)
 }
 
 /** 유효한 1×1 PNG. 렌더되는 바이트여야 한다 — 임의 버퍼는 그려지지 않는다. */

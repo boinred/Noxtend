@@ -1,4 +1,5 @@
 using Noxtend.Domain.Mesh;
+using Noxtend.Domain.Sprites;
 
 namespace Noxtend.Domain.Job;
 
@@ -10,7 +11,7 @@ namespace Noxtend.Domain.Job;
 /// 사용자가 세는 단위이며, 홈의 "실행 중" / "최근 작업" 이 이것이다.
 /// 하나의 작업이 여러 공정(<see cref="PipelineTask"/>)을 갖는다.
 /// </summary>
-public sealed class PipelineJob
+public sealed partial class PipelineJob
 {
     // Meshy 멀티 이미지 입력 순서와 결과 화면의 고정 방향 순서
     private static readonly ViewDirection[] GenerationViews =
@@ -274,6 +275,8 @@ public sealed class PipelineJob
         {
             return;
         }
+
+        if (ProductionMode == ProductionMode.TwoD) return;
 
         PlanGenerationFanOut();
         PlanMeshFanIn();
@@ -728,6 +731,27 @@ public sealed class PipelineJob
     {
         var task = _tasks.FirstOrDefault(t => t.Id == taskId);
 
+        if (ProductionMode == ProductionMode.TwoD)
+        {
+            if (Status == JobStatus.Canceled || task is not { Status: TaskStatus.Failed }
+                || task.Kind is not (TaskKind.AnalyzeSprites or TaskKind.GenerateSprite or TaskKind.PackSprites)
+                || !IsCurrentTask(task)
+                || (task.SpriteInput is { } input && Sprites!.Assets.Single(a => a.Plan.Id == input.AssetId)
+                    .Frames[input.FrameIndex].CurrentImageId is not null)
+                || (task.Kind == TaskKind.PackSprites && task.Id != _tasks
+                    .Where(t => t.Kind == TaskKind.PackSprites).MaxBy(t => t.Ordinal)?.Id)) return false;
+            var reopening = IsTerminal;
+            task.ResetForManualRetry();
+            if (task.SpriteExportInput is { } exportInput) Sprites!.ResetExportCompletion(exportInput.ExportId);
+            Status = reopening ? JobStatus.Pending : JobStatus.Running;
+            CompletedAt = null;
+            FailureReason = null;
+            Sprites!.SetPhase(task.Kind == TaskKind.AnalyzeSprites ? SpritePhase.Analyzing
+                : task.Kind == TaskKind.PackSprites ? SpritePhase.Packaging
+                : task.SpriteInput!.FrameIndex == 0 ? SpritePhase.BaseGeneration : SpritePhase.FrameGeneration);
+            return true;
+        }
+
         // 결과물을 내는 두 단계만 다시 돌릴 수 있다 (§4.7). 3D 재구성이 여기 들어오는
         // 이유는 이미지와 같은 성질이기 때문이다 — 파츠마다 독립이고, 하나를 다시
         // 돌려도 다른 파츠의 결과가 무의미해지지 않는다.
@@ -1000,6 +1024,8 @@ public sealed class PipelineJob
     /// </summary>
     public bool IsReadyToRun(PipelineTask task, DateTimeOffset now)
     {
+        if (ProductionMode == ProductionMode.TwoD && (IsTerminal || !IsCurrentTask(task))) return false;
+
         if (task.Status != TaskStatus.Pending)
         {
             return false;
@@ -1533,6 +1559,12 @@ public sealed class PipelineJob
     /// </summary>
     public void ReconcileFromTasks(DateTimeOffset now)
     {
+        if (ProductionMode == ProductionMode.TwoD)
+        {
+            ReconcileSpriteTasks(now);
+            return;
+        }
+
         if (IsTerminal || _tasks.Count == 0)
         {
             return;

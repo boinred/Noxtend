@@ -90,9 +90,21 @@ public sealed class FakeLlmProvider : ILlmProvider
 
         var json = _override is not null
             ? _override(request.Context.Kind)
-            : Canned(request.Context.Kind);
+            : Canned(request);
 
         return new LlmResult(json, InputTokens: 1200, OutputTokens: 340);
+    }
+
+    private static string SpriteJson(LlmRequest request)
+    {
+        var prompt = request.System + "\n" + request.User;
+        var view = prompt.Contains("\"view\":\"topDown\"", StringComparison.Ordinal) ? "topDown"
+            : prompt.Contains("\"view\":\"isometric\"", StringComparison.Ordinal) ? "isometric" : "sideView";
+        var outputKind = prompt.Contains("\"outputKind\":\"tiles\"", StringComparison.Ordinal) ? "tiles" : "layers";
+        return JsonSerializer.Serialize(new { view, outputKind, assets = new[] {
+            new { name = "배경", order = 0, sourceBounds = new { x = 0, y = 0, w = 1, h = 1 },
+                requiresTransparency = outputKind == "tiles" && view == "isometric",
+                loop = false, frameCount = 8, fps = 8, motionNotes = "" } } });
     }
 
     /// <summary>
@@ -101,8 +113,9 @@ public sealed class FakeLlmProvider : ILlmProvider
     /// 파츠 참조가 추출 순서와 일관되어야 한다 — 분해는 Pxx 를 도메인 파츠에 연결하므로
     /// Fake 도 실제 모델 계약과 같은 참조 형식을 써야 정상 경로가 돈다.
     /// </summary>
-    private string Canned(LlmOperationKind kind) => kind switch
+    private string Canned(LlmRequest request) => request.Context.Kind switch
     {
+        LlmOperationKind.AnalyzeSprites => SpriteJson(request),
         LlmOperationKind.Analyze => AnalyzeJson(),
         LlmOperationKind.Extract => JsonSerializer.Serialize(new { parts = _partNames }),
         LlmOperationKind.Decompose => DecomposeJson(),

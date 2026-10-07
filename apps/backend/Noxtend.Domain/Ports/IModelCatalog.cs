@@ -1,3 +1,5 @@
+using Noxtend.Domain.Sprites;
+
 namespace Noxtend.Domain.Ports;
 
 /// <summary>
@@ -58,4 +60,6 @@ public interface IModelCatalog
 /// <paramref name="Id"/> 는 API 에 넘기는 값이고 <paramref name="DisplayName"/> 은 사람이 읽는 이름이다
 /// (`claude-opus-5` 와 "Claude Opus 5"). 화면은 이름을 보여주고 id 를 보낸다.
 /// </summary>
-public sealed record ProviderModel(string Id, string DisplayName);
+public sealed record ProviderModel(string Id, string DisplayName, SpriteImageCapabilities? Sprite = null);
+
+public sealed record SpriteImageCapabilities(bool SupportsTransparency, IReadOnlyList<SpriteCanvas> Sizes);

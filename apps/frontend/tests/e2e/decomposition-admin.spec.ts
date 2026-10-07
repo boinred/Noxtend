@@ -68,13 +68,28 @@ test.describe('관리자 탐색 (§2.3-6)', () => {
 })
 
 test.describe('프롬프트 관리 (§4.2 #16~19)', () => {
-  test('#A3 네 단계의 격자에 기본 활성이 전용으로 보인다', async ({ page }) => {
+  test('#A3 모든 분석·생성 격자의 활성 슬롯이 전용으로 보인다', async ({ page }) => {
     await installFakeApi(page)
     await page.goto('/admin/prompts')
 
-    // 파이프라인 다섯 단계(재서술 포함) + 유사도 평가 행. 전용 = 기본 열 5 + 평가의 Background 1
-    await expect(page.getByTestId('prompt-row')).toHaveCount(6)
-    await expect(page.getByTestId('prompt-cell-dedicated')).toHaveCount(6)
+    // 기본 슬롯 5개와 배경 전용 분석·생성·평가 슬롯
+    const rows = page.getByTestId('prompt-row')
+    await expect(rows).toHaveCount(8)
+    expect(
+      await rows.evaluateAll((elements) =>
+        elements.map((element) => element.getAttribute('data-kind')).sort(),
+      ),
+    ).toEqual([
+      'analyze',
+      'analyzeSprites',
+      'decompose',
+      'extract',
+      'generate',
+      'generateSprite',
+      'rewriteDescriptions',
+      'similarityEvaluate',
+    ])
+    await expect(page.getByTestId('prompt-cell-dedicated')).toHaveCount(8)
 
     // 편집 화면이 쓸 수 있는 변수를 보여준다 — 격자가 아니라 여기서
     await page.goto('/admin/prompts/decompose')

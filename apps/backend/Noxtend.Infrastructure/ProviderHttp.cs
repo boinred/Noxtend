@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using Noxtend.Domain.Ports;
 
 namespace Noxtend.Infrastructure;
@@ -17,6 +18,28 @@ internal static class ProviderHttp
     /// </summary>
     public static bool IsTransient(HttpStatusCode status)
         => (int)status >= 500 || status == HttpStatusCode.TooManyRequests;
+
+    public static async Task<bool> IsOpenAiTransientAsync(HttpResponseMessage response, CancellationToken ct)
+    {
+        if (response.StatusCode != HttpStatusCode.TooManyRequests) return IsTransient(response.StatusCode);
+        try
+        {
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+            if (body.RootElement.ValueKind == JsonValueKind.Object
+                && body.RootElement.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object)
+            {
+                var type = error.TryGetProperty("type", out var typeValue) && typeValue.ValueKind == JsonValueKind.String
+                    ? typeValue.GetString() : null;
+                var code = error.TryGetProperty("code", out var codeValue) && codeValue.ValueKind == JsonValueKind.String
+                    ? codeValue.GetString() : null;
+                if (type == "insufficient_quota" || code is "insufficient_quota" or "credit_balance_exhausted"
+                    or "organization_spend_limit_exceeded" or "project_spend_limit_exceeded" or "organization_usage_limit_exceeded")
+                    return false;
+            }
+        }
+        catch (JsonException) { }
+        return true;
+    }
 
     public static async Task<HttpResponseMessage> SendAsync(
         HttpClient http,

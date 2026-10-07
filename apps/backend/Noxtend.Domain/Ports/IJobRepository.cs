@@ -1,4 +1,5 @@
 using Noxtend.Domain.Job;
+using Noxtend.Domain.Sprites;
 
 namespace Noxtend.Domain.Ports;
 
@@ -29,14 +30,15 @@ public interface IJobRepository
     /// 열한 번째가 올라와 "지웠는데 수가 그대로" 로 보인다. 전체를 따로 세어
     /// 그 어긋남을 화면에서 설명한다.
     /// </summary>
-    Task<int> CountAsync(JobListFilter filter, AssetCategory? category, CancellationToken ct);
+    Task<int> CountAsync(JobListFilter filter, AssetCategory? category, CancellationToken ct, ProductionMode? productionMode = null);
 
     /// <summary>Design Ref: §4.2 #7 — 홈 두 섹션. 진행 중 / 종료 중 하나.</summary>
     Task<IReadOnlyList<PipelineJob>> ListAsync(
         JobListFilter filter,
         AssetCategory? category,
         int limit,
-        CancellationToken ct);
+        CancellationToken ct,
+        ProductionMode? productionMode = null);
 
     /// <summary>
     /// 같은 소스 이미지로 돌린 작업들 — 최신순.
@@ -77,6 +79,8 @@ public interface IJobRepository
     /// 사라진다.** 조건을 삭제문에 실어 한 번에 판정한다.
     /// </summary>
     Task<DeletedJobBlobs?> DeleteIfTerminalAsync(Guid jobId, CancellationToken ct);
+
+    Task<SpriteAcceptedRequest?> GetSpriteRequestAsync(Guid requestId, CancellationToken ct);
 
     Task SaveChangesAsync(CancellationToken ct);
 }

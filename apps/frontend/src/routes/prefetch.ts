@@ -38,5 +38,14 @@ export function prefetchCharacterStudio(): void {
 export function prefetchForNav(key: string): (() => void) | undefined {
   if (key === 'background') return prefetchBackgroundStudio
   if (key === 'character') return prefetchCharacterStudio
+  if (key === 'spriteBackground') return prefetchSpriteStudio
   return undefined
+}
+
+export function importSpriteStudio() {
+  return import('@/features/screens/sprites/SpriteStudioScreen')
+}
+
+export function prefetchSpriteStudio(): void {
+  void importSpriteStudio().catch(() => {})
 }

@@ -57,6 +57,9 @@ public sealed class StartSimilarityRunHandler(
             return Fail(ErrorCode.JobNotFound, "작업을 찾을 수 없습니다");
         }
 
+        if (job.ProductionMode == ProductionMode.TwoD)
+            return Result<StartedSimilarityRun>.Fail(ErrorCode.SpriteWrongMode, "3D 작업이 필요합니다");
+
         // ─── 자격 (§11.1) — 사유는 버튼 비활성 문구로 그대로 쓰인다 ───
 
         if (job.Category != AssetCategory.Background)

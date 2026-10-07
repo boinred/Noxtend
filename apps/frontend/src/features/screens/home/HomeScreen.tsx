@@ -6,8 +6,7 @@
  * 지금 무슨 일이 돌고 있고, 무엇을 했는지.
  *
  * background-studio 사이클에서 **두 섹션이 실제 목록을 받는다** (FR-10).
- * 빈 상태 경로는 그대로 남는데, 이것이 §8.6 의 회귀 방어 장치다 —
- * `useJobList` 가 API 부재를 빈 배열로 흡수하므로 백엔드 없이도 홈이 깨지지 않는다.
+ * 로딩·조회 실패·정상 빈 목록은 각 섹션에서 구분한다.
  *
  * 자체 헤더가 없다 — `AppLayout` 의 공통 헤더가 대신한다 (§4.3 #6).
  *
@@ -25,7 +24,7 @@ import { WorkStatusSection } from '@/features/screens/home/WorkStatusSection'
 import { ActiveJobSpotlight } from '@/features/screens/home/ActiveJobSpotlight'
 import { useDeleteJob, useJobList } from '@/app/queries/useJobList'
 import { ROUTES } from '@/routes/paths'
-import { prefetchBackgroundStudio } from '@/routes/prefetch'
+import { prefetchBackgroundStudio, prefetchSpriteStudio } from '@/routes/prefetch'
 import { homeScreenStyles as styles } from './homeStyles'
 
 export function HomeScreen() {
@@ -55,7 +54,7 @@ export function HomeScreen() {
     >
       <div className={styles.sections}>
         <div
-          className="grid grid-cols-2 gap-4 max-[720px]:grid-cols-1"
+          className="grid grid-cols-3 gap-4 max-[720px]:grid-cols-1"
           data-testid="home-launch-cards"
         >
           <Link
@@ -69,8 +68,8 @@ export function HomeScreen() {
               <Icon name="image" size={22} />
             </span>
             <span className={styles.launchBody}>
-              <span className={styles.launchEyebrow}>새 작업</span>
-              <span className={styles.launchTitle}>배경 이미지 분석 시작</span>
+              <span className={styles.launchEyebrow}>3D 배경</span>
+              <span className={`${styles.launchTitle} break-keep`}>배경 이미지 분석 시작</span>
               <span className={styles.launchCopy}>
                 이미지를 올리면 장면 구조와 제작 가능한 파츠를 단계별로 분석합니다.
               </span>
@@ -90,10 +89,32 @@ export function HomeScreen() {
               <Icon name="user" size={22} />
             </span>
             <span className={styles.launchBody}>
-              <span className={styles.launchEyebrow}>새 작업</span>
-              <span className={styles.launchTitle}>캐릭터 튜닝·파츠 추출 시작</span>
+              <span className={styles.launchEyebrow}>3D 캐릭터</span>
+              <span className={`${styles.launchTitle} break-keep`}>캐릭터 튜닝·파츠 추출 시작</span>
               <span className={styles.launchCopy}>
                 캐릭터 이미지를 올리면 성별과 파츠 힌트를 반영해 4방향 파츠를 추출합니다.
+              </span>
+            </span>
+            <span className={styles.launchAction}>
+              스튜디오 열기
+              <Icon name="arrow-right" size={16} />
+            </span>
+          </Link>
+          <Link
+            to={ROUTES.spriteBackground}
+            className={styles.launch}
+            data-testid="home-cta-sprite-studio"
+            onMouseEnter={prefetchSpriteStudio}
+            onFocus={prefetchSpriteStudio}
+          >
+            <span className={styles.launchIcon}>
+              <Icon name="image" size={22} />
+            </span>
+            <span className={styles.launchBody}>
+              <span className={styles.launchEyebrow}>2D 배경</span>
+              <span className={`${styles.launchTitle} break-keep`}>레이어·반복 타일 제작 시작</span>
+              <span className={styles.launchCopy}>
+                이미지에서 제작 대상을 골라 PNG와 스프라이트 패키지를 만듭니다.
               </span>
             </span>
             <span className={styles.launchAction}>
@@ -106,6 +127,9 @@ export function HomeScreen() {
         <WorkStatusSection
           testId="section-running"
           title="실행 중"
+          isLoading={active.isLoading}
+          error={active.error}
+          onRetry={() => void active.refetch()}
           icon="play"
           featured={active.jobs[0] ? <ActiveJobSpotlight summary={active.jobs[0]} /> : undefined}
           jobs={active.jobs.slice(1)}
@@ -128,6 +152,9 @@ export function HomeScreen() {
         <WorkStatusSection
           testId="section-recent"
           title="최근 작업"
+          isLoading={terminal.isLoading}
+          error={terminal.error}
+          onRetry={() => void terminal.refetch()}
           icon="clock"
           jobs={terminal.jobs}
           total={terminal.total}

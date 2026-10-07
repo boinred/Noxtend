@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
-using Noxtend.Domain.Job;
 using Noxtend.Domain.Ports;
 
 namespace Noxtend.Infrastructure.Image;
@@ -34,6 +33,9 @@ internal sealed class RecordingImageProvider(
         // 참조 이미지는 담지 않는다 — StoredImage 에 이미 있다
         var payload = $"[prompt]\n{request.Prompt}\n\n[size] {request.Size}"
                     + $"\n[reference] {(request.Reference.Count == 0 ? "없음" : $"{request.Reference.Count}장")}";
+
+        if (request.Background is { } background)
+            payload += $"\n[background] {background}\n[output_format] png";
 
         var context = ToCallContext(request.Context);
 
@@ -78,13 +80,13 @@ internal sealed class RecordingImageProvider(
     /// <summary>
     /// 이미지 호출 맥락을 공통 내역 맥락으로 옮긴다.
     ///
-    /// 단계는 항상 <see cref="TaskKind.Generate"/> 다. <c>PartId</c> 는 싣지 않는다 —
-    /// 공정이 이미 파츠를 가리키므로(<c>PipelineTask.PartId</c>) 화면이 <c>TaskId</c> 로
+    /// 단계는 요청 맥락을 따른다. <c>PartId</c> 는 싣지 않는다 —
+    /// 파츠·sprite asset/index는 공정이 가리키므로 화면이 <c>TaskId</c> 로
     /// 이어 붙이면 된다. 두 곳에 두면 재생성 때 어긋난다.
     /// </summary>
     private static LlmCallContext ToCallContext(ImageCallContext context)
         => LlmCallContext.ForTask(
-            context.JobId, context.TaskId, TaskKind.Generate,
+            context.JobId, context.TaskId, context.Kind,
             context.PromptVersionId, context.ProviderConfigId, context.Model);
 
     /// <summary>

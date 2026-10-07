@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using Noxtend.Domain.Ports;
 using Noxtend.Domain.Provider;
+using Noxtend.Domain.Sprites;
 
 namespace Noxtend.Infrastructure.Image;
 
@@ -10,10 +11,9 @@ namespace Noxtend.Infrastructure.Image;
 ///
 /// Design Ref: §4.2 #7 · Plan D-4
 ///
-/// **공급자 API 를 부르지 않고 손으로 관리한다.** 텍스트 모델은 `GET /v1/models` 로
-/// 셀 수 있지만 이미지 생성 모델은 그 목록 안에서 구분되지 않고 — OpenAI 는 capability 를
-/// 노출하지 않으며 Google 은 생성 모델과 이해 모델이 같은 계열 이름을 쓴다 — 접두사로
-/// 거르면 텍스트 모델이 섞여 들어와 실행 후에야 실패한다.
+/// 이미지 계약을 확인한 허용목록을 공급자의 remote 목록과 교차한다.
+/// OpenAI 는 capability 를 노출하지 않으며 Google 은 생성 모델과 이해 모델이
+/// 같은 계열 이름을 쓰므로 이름 접두사만으로 생성 지원을 판단하지 않는다.
 ///
 /// **허용목록이라 새 모델 출시보다 늦다.** 모르는 모델이 목록에 올라 사용자가 고르고
 /// 비싼 실패를 겪는 것보다, 목록에서 빠져 한 줄 추가를 기다리는 쪽이 낫다.
@@ -25,9 +25,16 @@ internal static class ImageModels
     private const string GoogleModelsEndpoint =
         "https://generativelanguage.googleapis.com/v1beta/models";
 
+    private static readonly SpriteImageCapabilities SpriteCapabilities = new(true,
+    [
+        new(1024, 1024), new(1536, 1024), new(1024, 1536), new(1536, 768),
+        new(768, 1536), new(1536, 864), new(864, 1536),
+    ]);
+
     private static readonly IReadOnlyList<ProviderModel> OpenAi =
     [
         new("gpt-image-2", "GPT Image 2"),
+        new("gpt-image-2.5-sunburst", "GPT Image 2.5 Sunburst", SpriteCapabilities),
     ];
 
     private static readonly IReadOnlyList<ProviderModel> Google =
@@ -46,8 +53,8 @@ internal static class ImageModels
     /// </summary>
     private static readonly IReadOnlyList<ProviderModel> Fake =
     [
-        new("fake-image-a", "Fake Image A"),
-        new("fake-image-b", "Fake Image B"),
+        new("fake-image-a", "Fake Image A", SpriteCapabilities),
+        new("fake-image-b", "Fake Image B", SpriteCapabilities),
     ];
 
     public static IReadOnlyList<ProviderModel> FakeModels => Fake;
@@ -61,6 +68,20 @@ internal static class ImageModels
         // "키가 틀렸다" 가 아니라 "이 공급자로는 그릴 수 없다" 이기 때문이다
         _ => [],
     };
+
+    public static void ValidateSpriteRequest(ProviderKind kind, string model, ImageRequest request)
+    {
+        if (request.Background is null)
+            return;
+
+        var capability = For(kind).FirstOrDefault(item => item.Id == model)?.Sprite;
+        if (capability is null || !Enum.IsDefined(request.Background.Value)
+            || (request.Background == ImageBackground.Transparent && !capability.SupportsTransparency)
+            || !capability.Sizes.Any(size => request.Size == $"{size.Width}x{size.Height}"))
+        {
+            throw new ProviderCallFailedException("모델의 sprite 배경·크기 지원이 확인되지 않았습니다");
+        }
+    }
 
     public static async Task<IReadOnlyList<ProviderModel>> ListOpenAiAsync(
         HttpClient http,

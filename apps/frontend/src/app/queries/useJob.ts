@@ -15,6 +15,7 @@ import {
   returnToDescriptions,
   startJob,
 } from '@/infra/api/jobApi'
+import { ApiError } from '@/infra/api/client'
 import { isTerminal, nextPollDelayMs } from '@/domain/job/types'
 import { queryKeys } from './keys'
 import type { Job, ViewDirection } from '@/domain/job/types'
@@ -27,6 +28,9 @@ export interface UseJobResult {
   job: Job | undefined
   isLoading: boolean
   isNotFound: boolean
+  error: Error | null
+  isError: boolean
+  refetch: () => Promise<unknown>
 }
 
 /**
@@ -41,10 +45,13 @@ export function useJob(jobId: string | undefined): UseJobResult {
     queryFn: ({ signal }) => getJob(jobId!, signal),
     enabled: Boolean(jobId),
     refetchInterval: (query) => {
-      const status = query.state.data?.status
-      // 종료됐거나 아직 못 받았으면 폴링을 멈춘다.
-      // 못 받은 경우까지 멈추는 이유는 404 를 무한히 두드리지 않기 위해서다
-      if (!status || isTerminal(status)) return false
+      const job = query.state.data
+      // 실행 중 공정이 없는 종료 작업과 미조회 작업의 폴링 중단
+      if (!job || job.status === 'canceled') return false
+      const hasActiveTasks = job.tasks.some(
+        (task) => task.status === 'pending' || task.status === 'running',
+      )
+      if (isTerminal(job.status) && !hasActiveTasks) return false
 
       return nextPollDelayMs(query.state.dataUpdateCount - 1)
     },
@@ -55,7 +62,10 @@ export function useJob(jobId: string | undefined): UseJobResult {
   return {
     job: query.data,
     isLoading: query.isLoading,
-    isNotFound: query.isError,
+    isNotFound: query.error instanceof ApiError && query.error.status === 404,
+    error: query.error,
+    isError: query.isError,
+    refetch: query.refetch,
   }
 }
 

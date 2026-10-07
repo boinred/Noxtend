@@ -12,6 +12,9 @@
  * 뒤로 가지만(D-14a · NFR-11), 그 전까지는 누구나 들어온다. 그래서 여기 두는 것은
  * 노출돼도 무해한 것뿐이어야 한다. 키·비밀값은 구조적으로 여기 오지 않는다 (§7 S-1).
  */
+import { Button } from '@/components/ui/button'
+import { apiErrorMessage } from '@/app/queries/errors'
+import { jobCategoryLabel, jobSummaryCount } from '../categoryLabels'
 import { useState } from 'react'
 import {
   Select,
@@ -31,7 +34,7 @@ import type { LlmCall } from '@/domain/tuning/types'
 
 export function CallsScreen() {
   // 최근 끝난 작업들 — 내역은 끝난 뒤에 보는 것이다
-  const { jobs } = useJobList('terminal')
+  const { jobs, isLoading: jobsLoading, error: jobsError, refetch } = useJobList('terminal')
   const [selected, setSelected] = useState<string | null>(null)
 
   const jobId = selected ?? jobs[0]?.id ?? null
@@ -46,10 +49,21 @@ export function CallsScreen() {
     >
       <AdminTabs />
 
+      {jobsError ? (
+        <div role="alert">
+          <p>{apiErrorMessage(jobsError, '작업 목록을 불러올 수 없습니다')}</p>
+          <Button variant="outline" onClick={() => void refetch()}>
+            목록 다시 조회
+          </Button>
+        </div>
+      ) : null}
+      {jobsLoading ? <p role="status">작업 목록을 불러오는 중…</p> : null}
       {jobs.length === 0 ? (
-        <p className={styles.empty} data-testid="calls-empty">
-          끝난 작업이 없습니다.
-        </p>
+        !jobsLoading && !jobsError ? (
+          <p className={styles.empty} data-testid="calls-empty">
+            끝난 작업이 없습니다.
+          </p>
+        ) : null
       ) : (
         <>
           <div className={styles.field}>
@@ -63,7 +77,8 @@ export function CallsScreen() {
               <SelectContent>
                 {jobs.map((job) => (
                   <SelectItem key={job.id} value={job.id}>
-                    {job.id.slice(0, 8)} · 파츠 {job.partCount} · {job.status}
+                    {job.id.slice(0, 8)} · {jobCategoryLabel(job)} · {jobSummaryCount(job)} ·{' '}
+                    {job.status}
                   </SelectItem>
                 ))}
               </SelectContent>

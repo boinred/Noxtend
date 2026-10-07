@@ -10,6 +10,10 @@ export const ROUTES = {
   character: '/character',
   object: '/object',
   background: '/background',
+  spriteCharacter: '/2d/character',
+  spriteObject: '/2d/object',
+  spriteBackground: '/2d/background',
+  spriteBackgroundJob: '/2d/background/:jobId',
   /**
    * Design Ref: §5.2 · FR-13 — **URL 이 작업의 주소가 된다.**
    *
@@ -55,7 +59,16 @@ export function characterJobPath(jobId: string): string {
  * 홈 목록은 카테고리 무관하게 작업을 받으므로, 링크를 배경 경로로 고정하면 캐릭터 작업이
  * 배경 스튜디오로 열린다. 오브젝트는 아직 전용 화면이 없어 배경으로 폴백한다.
  */
-export function jobPath(category: string, jobId: string): string {
+export function jobPath(
+  category: string,
+  jobId: string,
+  productionMode: 'threeD' | 'twoD' = 'threeD',
+): string {
+  if (productionMode === 'twoD') {
+    if (category === 'character') return ROUTES.spriteCharacter
+    if (category === 'object') return ROUTES.spriteObject
+    return spriteBackgroundJobPath(jobId)
+  }
   return category === 'character' ? characterJobPath(jobId) : backgroundJobPath(jobId)
 }
 
@@ -256,3 +269,30 @@ export type RouteKey = keyof typeof ROUTES
 export type RoutePath = (typeof ROUTES)[RouteKey]
 
 export const ROUTE_PATHS: readonly string[] = Object.values(ROUTES)
+
+export function spriteBackgroundJobPath(jobId: string): string {
+  return `${ROUTES.spriteBackground}/${encodeURIComponent(jobId)}`
+}
+
+export function spriteBackgroundWithSourcePath(
+  sourceJobId: string,
+  sourceGeneratedImageId: string,
+): string {
+  return `${ROUTES.spriteBackground}?${new URLSearchParams({ sourceJobId, sourceGeneratedImageId })}`
+}
+
+export function readSpriteSource(
+  params: URLSearchParams,
+): { sourceJobId: string; sourceGeneratedImageId: string } | null {
+  const sourceJobId = params.get('sourceJobId')
+  const sourceGeneratedImageId = params.get('sourceGeneratedImageId')
+  const guid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  return sourceJobId &&
+    sourceGeneratedImageId &&
+    guid.test(sourceJobId) &&
+    guid.test(sourceGeneratedImageId) &&
+    sourceJobId !== '00000000-0000-0000-0000-000000000000' &&
+    sourceGeneratedImageId !== '00000000-0000-0000-0000-000000000000'
+    ? { sourceJobId, sourceGeneratedImageId }
+    : null
+}

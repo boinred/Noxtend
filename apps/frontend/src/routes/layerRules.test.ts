@@ -44,16 +44,26 @@ function violations(fromDir: string, forbidden: RegExp): string[] {
 }
 
 describe('§9.2 계층 의존 규칙', () => {
-  it('domain 은 외부 라이브러리를 참조하지 않는다', () => {
+  it('domain 은 동일 계층의 타입만 참조한다', () => {
     for (const domain of ['domain/job', 'domain/provider']) {
       const dir = join(SRC, domain)
       for (const file of sourceFiles(dir)) {
         const source = readFileSync(file, 'utf8')
-        // 어떤 import 도 없어야 한다 — 타입조차 밖에서 끌어오지 않는다
+        const declarations = [...source.matchAll(/^import[\s\S]*?(?:from\s+)?['"]([^'"]+)['"]/gm)]
+        const invalid = declarations.filter(([declaration, specifier]) => {
+          const target = specifier!.startsWith('@/domain/')
+            ? join(SRC, specifier!.slice(2))
+            : resolve(dirname(file), specifier!)
+          return (
+            !declaration.startsWith('import type ') ||
+            !(specifier!.startsWith('.') || specifier!.startsWith('@/domain/')) ||
+            !target.startsWith(`${join(SRC, 'domain')}/`)
+          )
+        })
         expect(
-          [...source.matchAll(/^import\s/gm)].length,
-          `${file.replace(`${SRC}/`, '')} 에 import 가 있다`,
-        ).toBe(0)
+          invalid,
+          `${file.replace(`${SRC}/`, '')} 에 Domain 외부 또는 runtime import`,
+        ).toEqual([])
       }
     }
   })

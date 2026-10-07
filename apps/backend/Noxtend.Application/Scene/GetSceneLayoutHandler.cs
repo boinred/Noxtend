@@ -62,6 +62,9 @@ public sealed class GetSceneLayoutHandler(
             return Result<SceneLayoutView>.Fail(ErrorCode.JobNotFound, "작업을 찾을 수 없습니다");
         }
 
+        if (job.ProductionMode == ProductionMode.TwoD)
+            return Result<SceneLayoutView>.Fail(ErrorCode.SpriteWrongMode, "3D 작업이 필요합니다");
+
         // **서명과 같은 재료를 쓴다.** "파츠별 최신 GLB" 규칙을 여기서 다시 쓰면 동률에서
         // 갈린다 — 도메인은 내림차순 첫째를, 여기서 오름차순 마지막을 고르면 `CreatedAt` 이
         // 같은 재시도 두 건에서 서명은 A 를, 화면은 B 를 가리키고 스스로 낫지 않는다

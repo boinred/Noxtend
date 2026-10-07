@@ -19,7 +19,7 @@ export const SIDEBAR_BRAND_TEXT_CLASS = cn(
 
 export const SIDEBAR_NAV_CLASS = cn(
   'min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 py-[10px]',
-  'max-[720px]:flex max-[720px]:min-w-0 max-[720px]:flex-[4_1_0] max-[720px]:overflow-visible max-[720px]:px-[3px] max-[720px]:py-[5px]',
+  'max-[720px]:flex max-[720px]:min-w-0 max-[720px]:flex-[3_1_0] max-[720px]:overflow-visible max-[720px]:px-[3px] max-[720px]:py-[5px]',
 )
 
 export const SIDEBAR_FOOTER_CLASS = cn(

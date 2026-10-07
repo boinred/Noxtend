@@ -1,3 +1,5 @@
+using Noxtend.Domain.Sprites;
+
 namespace Noxtend.Domain.Job;
 
 /// <summary>
@@ -95,6 +97,19 @@ public sealed class PipelineTask
     /// </summary>
     public MeshInputSet? MeshInputs { get; private set; }
 
+    public SpriteFrameInput? SpriteInput { get; private set; }
+    public SpriteExportInput? SpriteExportInput { get; private set; }
+    public Guid? RequestId { get; private set; }
+
+    internal void BindSpriteInput(SpriteFrameInput input) => SpriteInput = input;
+    public void BindSpriteExport(SpriteExportInput input)
+    {
+        if (Status != TaskStatus.Pending || SpriteInput is not null || SpriteExportInput is not null)
+            throw new InvalidOperationException("대기 중인 미연결 공정만 내보내기에 연결할 수 있습니다");
+        SpriteExportInput = input;
+    }
+    public void BindRequest(Guid requestId) => RequestId = requestId;
+
     public TaskStatus Status { get; private set; }
     public int AttemptCount { get; private set; }
 
@@ -175,6 +190,11 @@ public sealed class PipelineTask
         PartId = partId;
         MeshInputs = inputs;
     }
+
+    // 수동 재시도의 시도 번호 재사용도 이전 SQL 소유 버전으로 구분
+    public bool IsOwnedBy(int attempt, DateTimeOffset now, byte[]? ownershipVersion)
+        => Status == TaskStatus.Running && AttemptCount == attempt && LeaseExpiresAt > now
+            && (ownershipVersion is null || RowVersion is not null && RowVersion.SequenceEqual(ownershipVersion));
 
     public bool IsTerminal =>
         Status is TaskStatus.Succeeded or TaskStatus.Failed or TaskStatus.Canceled;

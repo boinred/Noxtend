@@ -1,3 +1,5 @@
+import type { SpriteCanvas } from '../sprites/types'
+
 /**
  * Design Ref: §4.2 #9 — 공급자 설정. 순수 TS.
  *
@@ -44,7 +46,13 @@ export interface ProviderInput {
  * 서버가 이미 걸러서 준다 — 추출이 요구하는 이미지 입력·구조화 출력을 갖춘 모델만 온다.
  * `id` 를 보내고 `displayName` 을 보여준다.
  */
+export interface SpriteImageCapabilities {
+  supportsTransparency: boolean
+  sizes: SpriteCanvas[]
+}
+
 export interface ProviderModel {
+  sprite?: SpriteImageCapabilities | null
   id: string
   displayName: string
 }

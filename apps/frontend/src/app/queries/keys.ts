@@ -4,11 +4,13 @@
  * 무효화가 키를 문자열로 재구성하는 순간, 한 곳을 고치면 다른 곳이 조용히 안 맞는다.
  */
 import type { JobListFilter } from '@/infra/api/jobApi'
+import type { ProductionMode } from '@/domain/sprites/types'
 import type { AssetCategory } from '@/domain/job/types'
 
 export const queryKeys = {
   job: (jobId: string) => ['job', jobId] as const,
-  jobList: (filter: JobListFilter) => ['jobs', filter] as const,
+  jobList: (filter: JobListFilter, limit = 10, productionMode?: ProductionMode) =>
+    ['jobs', filter, limit, productionMode] as const,
   /** 두 섹션을 한꺼번에 무효화할 때 쓴다 — 작업이 끝나면 active 와 terminal 이 함께 바뀐다 */
   jobLists: () => ['jobs'] as const,
   /** 완성 GLB 수를 키에 싣는다 — 3D 가 도착하면 키가 바뀌어 낡은 명세를 다시 받는다 */

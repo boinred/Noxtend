@@ -17,7 +17,7 @@
 | Bicep 문법 | 설치된 `bicep build deploy/azure/main.bicep --stdout` | 로컬 컴파일, Azure 리소스 미생성. 도구가 없으면 설치와 리소스 검증을 구분 |
 | Kubernetes 확인 | context·namespace·대상 매니페스트 확인 후 `kubectl apply --dry-run=client --validate=false -f <파일>` | apply하지 않지만 discovery 등 클러스터 조회가 필요할 수 있음. 정책·동작·보안 검증을 대신하지 않음 |
 | 이미지 검증 | `docker build -t noxtend-api:local apps/backend` | 로컬 이미지 생성·베이스 이미지 다운로드 가능, 클러스터 배포는 아님 |
-| 로컬 기동 | `deploy/local-up.sh [--skip-build] [--forward]` | 실제 Secret/PVC/Deployment 적용 및 API 재시작. `--skip-build`도 상태 변경이며 이미지 갱신을 생략함. `--forward`는 포트 포워딩을 유지하며 스크립트가 종료되지 않음 |
+| 로컬 기동 | `deploy/local-up.sh [--skip-build] [--forward \| -d \| --detach]` | 실제 Secret/PVC/Deployment 적용 및 API 재시작. `--skip-build`도 상태 변경이며 이미지 갱신을 생략함. `--forward`는 터미널 유지, `-d`/`--detach`는 확인 후 포트 포워딩만 백그라운드에 남김 |
 | Azure 변경 예측 | `az deployment group what-if` | Azure 조회와 인증 필요. 실제 리소스 생성과 별개이며 사전 권한·대상 확인 필요 |
 | Azure 배포 | `deploy/azure/deploy.sh` | 공인 IP 조회, 유료 리소스 생성·변경, ACR 빌드, API 재시작, 기본적으로 프론트엔드 배포까지 수행 |
 
@@ -35,7 +35,8 @@
 ## 승인된 기동 확인·복구
 
 - rollout·로그의 migration 결과, health, Frontend API 주소/CORS, 실제 이미지·환경을 확인한다. 필요한 최소 기능은 Fake로 확인하며 미실행 항목을 보고한다.
-- 로컬 포트 포워딩은 스크립트 종료 시 사라진다. 사용자가 계속 쓸 경우 `--forward` 또는 `kubectl -n noxtend port-forward svc/api 18080:8080`을 사용자 터미널에서 유지한다. 에이전트의 시간 제한 있는 백그라운드 실행에 맡기지 않는다.
+- 기본 포트 포워딩은 스크립트 종료 시 사라진다. 사용자 터미널에서 `-d`/`--detach`로 백그라운드에 남기거나 `--forward` 또는 `kubectl -n noxtend port-forward svc/api 18080:8080`으로 유지한다. `-d`는 PID·로그 경로·종료 명령을 출력하며 API 파드 재시작 후 자동 재연결하지 않는다. 에이전트의 시간 제한 있는 백그라운드 실행에 맡기지 않는다.
+- 스크립트 회귀는 `python3 deploy/test_local_up.py`로 확인한다. 임시 디렉터리의 가짜 Docker·kubectl·curl을 사용하며 실제 배포·AI 호출 없이 detach 수명·SIGHUP·포트 충돌·실패 정리를 검증한다.
 - 복구 전 기존 이미지·환경과 DB·Blob·Data Protection 키 호환성을 확인한다. 식별 가능한 이미지 태그/digest·적용 migration을 배포 이력에 기록한다.
 
 정적 검증 범위와 완료 보고는 [verification.md](verification.md)를 따른다.

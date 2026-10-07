@@ -30,6 +30,9 @@ public static class TaskWorkerRegistration
     /// </summary>
     private static readonly Dictionary<TaskKind, Func<IServiceProvider, ITaskHandler>> Handlers = new()
     {
+        [TaskKind.PackSprites] = sp => sp.GetRequiredService<Noxtend.Application.Sprites.RunSpritePackTaskHandler>(),
+        [TaskKind.GenerateSprite] = sp => sp.GetRequiredService<Noxtend.Application.Sprites.RunSpriteGenerationTaskHandler>(),
+        [TaskKind.AnalyzeSprites] = sp => sp.GetRequiredService<Noxtend.Application.Sprites.RunSpriteAnalysisTaskHandler>(),
         [TaskKind.Analyze] = sp => sp.GetRequiredService<RunTaskHandler>(),
         [TaskKind.Extract] = sp => sp.GetRequiredService<RunTaskHandler>(),
         [TaskKind.Decompose] = sp => sp.GetRequiredService<RunTaskHandler>(),
@@ -68,7 +71,7 @@ public static class TaskWorkerRegistration
         {
             var count = kind switch
             {
-                TaskKind.Generate => generationWorkers,
+                TaskKind.Generate or TaskKind.GenerateSprite => generationWorkers,
                 TaskKind.Reconstruct => meshWorkers,
                 _ => 1,
             };

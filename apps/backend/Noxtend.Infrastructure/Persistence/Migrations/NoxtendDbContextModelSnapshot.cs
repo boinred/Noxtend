@@ -63,6 +63,13 @@ namespace Noxtend.Infrastructure.Persistence.Migrations
                     b.Property<string>("PartHints")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("ProductionMode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)")
+                        .HasDefaultValue("ThreeD");
+
                     b.Property<bool>("RequiresReview")
                         .HasColumnType("bit");
 
@@ -965,10 +972,21 @@ namespace Noxtend.Infrastructure.Persistence.Migrations
                             b1.Property<Guid?>("ProviderConfigId")
                                 .HasColumnType("uniqueidentifier");
 
+                            b1.Property<Guid?>("RequestId")
+                                .HasColumnType("uniqueidentifier");
+
                             b1.Property<byte[]>("RowVersion")
                                 .IsConcurrencyToken()
                                 .ValueGeneratedOnAddOrUpdate()
                                 .HasColumnType("rowversion");
+
+                            b1.Property<string>("SpriteExportInput")
+                                .HasColumnType("nvarchar(max)")
+                                .HasColumnName("SpriteExportInputJson");
+
+                            b1.Property<string>("SpriteInput")
+                                .HasColumnType("nvarchar(max)")
+                                .HasColumnName("SpriteInputJson");
 
                             b1.Property<DateTimeOffset?>("StartedAt")
                                 .HasColumnType("datetimeoffset");
@@ -1002,11 +1020,268 @@ namespace Noxtend.Infrastructure.Persistence.Migrations
                                 .HasForeignKey("JobId");
                         });
 
+                    b.OwnsOne("Noxtend.Domain.Sprites.SpritePipelineState", "Sprites", b1 =>
+                        {
+                            b1.Property<Guid>("PipelineJobId")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<Guid?>("CompletedExportId")
+                                .HasColumnType("uniqueidentifier")
+                                .HasColumnName("SpriteCompletedExportId");
+
+                            b1.Property<string>("GenerationCanvas")
+                                .IsRequired()
+                                .HasColumnType("nvarchar(max)")
+                                .HasColumnName("SpriteGenerationCanvasJson");
+
+                            b1.Property<string>("OutputCanvas")
+                                .IsRequired()
+                                .HasColumnType("nvarchar(max)")
+                                .HasColumnName("SpriteOutputCanvasJson");
+
+                            b1.Property<string>("Phase")
+                                .IsRequired()
+                                .HasMaxLength(32)
+                                .HasColumnType("nvarchar(32)")
+                                .HasColumnName("SpritePhase");
+
+                            b1.Property<int>("ReviewRevision")
+                                .HasColumnType("int")
+                                .HasColumnName("SpriteReviewRevision");
+
+                            b1.Property<byte[]>("RowVersion")
+                                .IsConcurrencyToken()
+                                .ValueGeneratedOnAddOrUpdate()
+                                .HasColumnType("rowversion")
+                                .HasColumnName("RowVersion");
+
+                            b1.Property<string>("Settings")
+                                .IsRequired()
+                                .HasColumnType("nvarchar(max)")
+                                .HasColumnName("SpriteSettingsJson");
+
+                            b1.Property<string>("SourceCanvas")
+                                .IsRequired()
+                                .HasColumnType("nvarchar(max)")
+                                .HasColumnName("SpriteSourceCanvasJson");
+
+                            b1.Property<string>("Transform")
+                                .IsRequired()
+                                .HasColumnType("nvarchar(max)")
+                                .HasColumnName("SpriteTransformJson");
+
+                            b1.HasKey("PipelineJobId");
+
+                            b1.ToTable("Jobs");
+
+                            b1.WithOwner()
+                                .HasForeignKey("PipelineJobId");
+
+                            b1.OwnsMany("Noxtend.Domain.Sprites.SpriteAcceptedRequest", "Requests", b2 =>
+                                {
+                                    b2.Property<Guid>("RequestId")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<string>("Fingerprint")
+                                        .IsRequired()
+                                        .HasMaxLength(64)
+                                        .HasColumnType("nvarchar(64)");
+
+                                    b2.Property<Guid>("JobId")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<string>("Kind")
+                                        .IsRequired()
+                                        .HasMaxLength(32)
+                                        .HasColumnType("nvarchar(32)");
+
+                                    b2.Property<string>("Receipt")
+                                        .IsRequired()
+                                        .HasColumnType("nvarchar(max)")
+                                        .HasColumnName("ReceiptJson");
+
+                                    b2.HasKey("RequestId");
+
+                                    b2.HasIndex("JobId");
+
+                                    b2.ToTable("SpriteRequests", (string)null);
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("JobId");
+                                });
+
+                            b1.OwnsMany("Noxtend.Domain.Sprites.SpriteAsset", "Assets", b2 =>
+                                {
+                                    b2.Property<Guid>("Id")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<string>("Anchor")
+                                        .IsRequired()
+                                        .HasColumnType("nvarchar(max)")
+                                        .HasColumnName("AnchorJson");
+
+                                    b2.Property<string>("Approval")
+                                        .HasColumnType("nvarchar(max)")
+                                        .HasColumnName("ApprovalJson");
+
+                                    b2.Property<Guid?>("ApprovedBaseImageId")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<Guid>("JobId")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<string>("Plan")
+                                        .IsRequired()
+                                        .HasColumnType("nvarchar(max)")
+                                        .HasColumnName("PlanJson");
+
+                                    b2.Property<int>("PlanRevision")
+                                        .HasColumnType("int");
+
+                                    b2.HasKey("Id");
+
+                                    b2.HasIndex("JobId");
+
+                                    b2.ToTable("SpriteAssets", (string)null);
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("JobId");
+
+                                    b2.OwnsMany("Noxtend.Domain.Sprites.SpriteFrame", "Frames", b3 =>
+                                        {
+                                            b3.Property<Guid>("AssetId")
+                                                .HasColumnType("uniqueidentifier");
+
+                                            b3.Property<int>("Index")
+                                                .HasColumnType("int");
+
+                                            b3.Property<Guid?>("CurrentImageId")
+                                                .HasColumnType("uniqueidentifier");
+
+                                            b3.Property<Guid?>("CurrentTaskId")
+                                                .HasColumnType("uniqueidentifier");
+
+                                            b3.HasKey("AssetId", "Index");
+
+                                            b3.ToTable("SpriteFrames", (string)null);
+
+                                            b3.WithOwner()
+                                                .HasForeignKey("AssetId");
+                                        });
+
+                                    b2.Navigation("Frames");
+                                });
+
+                            b1.OwnsMany("Noxtend.Domain.Sprites.SpriteExport", "Exports", b2 =>
+                                {
+                                    b2.Property<Guid>("Id")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<string>("BlobKey")
+                                        .IsRequired()
+                                        .HasMaxLength(512)
+                                        .HasColumnType("nvarchar(512)");
+
+                                    b2.Property<DateTimeOffset>("CreatedAt")
+                                        .HasColumnType("datetimeoffset");
+
+                                    b2.Property<string>("Input")
+                                        .IsRequired()
+                                        .HasColumnType("nvarchar(max)")
+                                        .HasColumnName("InputJson");
+
+                                    b2.Property<bool>("IsCurrent")
+                                        .HasColumnType("bit");
+
+                                    b2.Property<Guid>("JobId")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<string>("Manifest")
+                                        .IsRequired()
+                                        .HasColumnType("nvarchar(max)")
+                                        .HasColumnName("ManifestJson");
+
+                                    b2.Property<Guid>("TaskId")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.HasKey("Id");
+
+                                    b2.HasIndex("JobId");
+
+                                    b2.ToTable("SpriteExports", (string)null);
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("JobId");
+                                });
+
+                            b1.OwnsMany("Noxtend.Domain.Sprites.SpriteImage", "Images", b2 =>
+                                {
+                                    b2.Property<Guid>("Id")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<Guid>("AssetId")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<Guid?>("BaseImageId")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<string>("BlobKey")
+                                        .IsRequired()
+                                        .HasMaxLength(512)
+                                        .HasColumnType("nvarchar(512)");
+
+                                    b2.Property<string>("ContentType")
+                                        .IsRequired()
+                                        .HasMaxLength(64)
+                                        .HasColumnType("nvarchar(64)");
+
+                                    b2.Property<DateTimeOffset>("CreatedAt")
+                                        .HasColumnType("datetimeoffset");
+
+                                    b2.Property<int>("FrameIndex")
+                                        .HasColumnType("int");
+
+                                    b2.Property<int>("Height")
+                                        .HasColumnType("int");
+
+                                    b2.Property<Guid>("JobId")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<int>("PlanRevision")
+                                        .HasColumnType("int");
+
+                                    b2.Property<Guid>("TaskId")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<int>("Width")
+                                        .HasColumnType("int");
+
+                                    b2.HasKey("Id");
+
+                                    b2.HasIndex("JobId");
+
+                                    b2.ToTable("SpriteImages", (string)null);
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("JobId");
+                                });
+
+                            b1.Navigation("Assets");
+
+                            b1.Navigation("Exports");
+
+                            b1.Navigation("Images");
+
+                            b1.Navigation("Requests");
+                        });
+
                     b.Navigation("GeneratedImages");
 
                     b.Navigation("GeneratedMeshes");
 
                     b.Navigation("Parts");
+
+                    b.Navigation("Sprites");
 
                     b.Navigation("Tasks");
                 });

@@ -31,7 +31,7 @@ public static class ReclaimPlan
         TaskKind kind, JobOptions job, GenerationOptions generation, MeshGenerationOptions mesh)
         => kind switch
         {
-            TaskKind.Generate => generation.Lease * 2,
+            TaskKind.Generate or TaskKind.GenerateSprite => generation.Lease * 2,
 
             // 3D 는 외부 작업이 10~120초 걸려 리스가 분 단위다. 텍스트 기준을 쓰면
             // 살아 있는 워커의 메시지를 뺏는다

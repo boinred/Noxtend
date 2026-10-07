@@ -1,4 +1,6 @@
 using Noxtend.Domain.Ports;
+using Noxtend.Domain.Job;
+using SkiaSharp;
 
 namespace Noxtend.Infrastructure.Image;
 
@@ -21,6 +23,7 @@ public sealed class FakeImageProvider : IImageProvider
     private readonly byte[] _bytes;
     private readonly string _contentType;
     private readonly int _imageCount;
+    private readonly bool _spriteSize;
 
     private FakeImageProvider(
         Exception? failure,
@@ -28,7 +31,8 @@ public sealed class FakeImageProvider : IImageProvider
         TimeSpan delay,
         byte[] bytes,
         string contentType,
-        int imageCount)
+        int imageCount,
+        bool spriteSize = true)
     {
         _failure = failure;
         _next = next;
@@ -36,6 +40,7 @@ public sealed class FakeImageProvider : IImageProvider
         _bytes = bytes;
         _contentType = contentType;
         _imageCount = imageCount;
+        _spriteSize = spriteSize;
     }
 
     /// <summary>PNG 시그니처만 갖춘 최소 바이트. 크기·형식 검사가 통과할 만큼만 진짜다.</summary>
@@ -57,7 +62,7 @@ public sealed class FakeImageProvider : IImageProvider
 
     /// <summary>응답을 직접 정한다 — 빈 응답·형식 위반·크기 초과를 재현한다.</summary>
     public static FakeImageProvider Returning(byte[] bytes, string contentType = "image/png", int imageCount = 1)
-        => new(null, null, TimeSpan.Zero, bytes, contentType, imageCount);
+        => new(null, null, TimeSpan.Zero, bytes, contentType, imageCount, spriteSize: false);
 
     /// <summary>느린 호출 — 리스 갱신과 취소 감시를 재현한다.</summary>
     public static FakeImageProvider Slow(TimeSpan delay)
@@ -80,6 +85,20 @@ public sealed class FakeImageProvider : IImageProvider
         ct.ThrowIfCancellationRequested();
 
         // 실제 공급자가 usage 를 주므로 Fake 도 준다 — 비용 집계가 Fake 모드에서도 검증된다
-        return new ImageResult(_bytes, _contentType, _imageCount, 1_120, 1_120);
+        var bytes = _bytes;
+        if (request.Context.Kind == TaskKind.GenerateSprite && _spriteSize)
+        {
+            var size = request.Size.Split('x');
+            if (size.Length != 2 || !int.TryParse(size[0], out var width) || !int.TryParse(size[1], out var height)
+                || width <= 0 || height <= 0 || (long)width * height > 16_777_216)
+                throw new ProviderBadResponseException("지원하지 않는 생성 크기입니다");
+            using var bitmap = new SKBitmap(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
+            bitmap.Erase(SKColors.Coral);
+            bitmap.SetPixel(0, 0, SKColors.Transparent);
+            using var image = SKImage.FromBitmap(bitmap);
+            using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+            bytes = data.ToArray();
+        }
+        return new ImageResult(bytes, _contentType, _imageCount, 1_120, 1_120);
     }
 }

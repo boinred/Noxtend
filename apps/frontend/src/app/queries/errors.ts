@@ -21,3 +21,8 @@ export function apiErrorCode(error: unknown): string | null {
 export function isUnreachable(error: unknown): boolean {
   return error instanceof ApiError && error.isUnreachable
 }
+
+/** HTTP 충돌과 응답 유실 재전송 구분 */
+export function apiErrorStatus(error: unknown): number | null {
+  return error instanceof ApiError ? error.status : null
+}

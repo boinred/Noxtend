@@ -1,3 +1,5 @@
+using Noxtend.Domain.Sprites;
+
 namespace Noxtend.Domain.Ports;
 
 /// <summary>
@@ -15,6 +17,27 @@ namespace Noxtend.Domain.Ports;
 /// </summary>
 public interface IImageTranscoder
 {
+    /// <summary>
+    /// PNG·JPEG·WebP의 실제 픽셀과 EXIF 방향을 검사한다. 바이트·픽셀 상한을 넘거나
+    /// 콘텐츠가 없으면 공급자 응답 검증 실패다. 입력 스트림은 호출자가 소유한다.
+    /// </summary>
+    Task<SpriteImageInfo> InspectSpriteAsync(
+        Stream image, long maxBytes, long maxPixels, CancellationToken ct);
+
+    /// <summary>
+    /// 고정 변환으로 투명 PNG를 만든다. 실제 원본 알파는 배치·마스크 전에 검사한다.
+    /// 입력은 호출자가 소유하며 반환 스트림은 position 0에서 호출자가 닫는다.
+    /// </summary>
+    Task<Stream> NormalizeSpriteAsync(Stream image, SpriteCanvas canvas, SpriteTransform transform,
+        bool requireTransparency, SpriteTileLayout layout, CancellationToken ct);
+
+    /// <summary>
+    /// 정규화 프레임을 2px extrusion과 함께 한 페이지 PNG로 순차 기록한다.
+    /// openFrame의 반환 스트림은 이 메서드가 닫고 output은 호출자가 소유한다.
+    /// </summary>
+    Task WriteSpriteSheetAsync(SpriteSheetLayout layout, Func<Guid, CancellationToken, Task<Stream>> openFrame,
+        Stream output, CancellationToken ct);
+
     /// <summary>이 형식을 그대로 올려도 되는가. 아니면 <see cref="ToPngAsync"/> 를 거친다.</summary>
     bool IsUploadable(string contentType);
 

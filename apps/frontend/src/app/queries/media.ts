@@ -19,3 +19,5 @@ export {
   meshFbxDownloadUrl,
   meshPreviewUrl,
 } from '@/infra/api/jobApi'
+
+export { spriteImageUrl, spriteExportUrl } from '@/infra/api/spriteApi'

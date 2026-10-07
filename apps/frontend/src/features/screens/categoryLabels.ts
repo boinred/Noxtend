@@ -9,6 +9,9 @@
  */
 import { ASSET_CATEGORIES, assetCategoryLabel } from '@/domain/job/types'
 import { ROUTES } from '@/routes/paths'
+import type { JobSummary } from '@/domain/job/types'
+import { productionModeOf } from '@/domain/sprites/rules'
+import type { SpritePhase } from '@/domain/sprites/types'
 import type { AssetCategory } from '@/domain/job/types'
 import type { IconName } from '@/features/shell/Icon'
 
@@ -65,4 +68,28 @@ export function categoryMeta(category: AssetCategory): CategoryMeta {
 export function categoryFromPath(path: string): AssetCategory | null {
   const found = CATEGORY_META_LIST.find((meta) => meta.path === path)
   return found?.category ?? null
+}
+
+export function jobCategoryLabel(job: Pick<JobSummary, 'category' | 'productionMode'>): string {
+  return `${productionModeOf(job) === 'twoD' ? '2D' : '3D'} ${assetCategoryLabel(job.category)}`
+}
+
+export function jobSummaryCount(job: JobSummary): string {
+  return productionModeOf(job) === 'twoD' && job.sprite
+    ? `에셋 ${job.sprite.assetCount}개 · 승인 ${job.sprite.approvedAssetCount}개 · 누적 이미지 ${job.sprite.imageCount}개`
+    : `파츠 ${job.partCount}개`
+}
+
+export function spritePhaseLabel(phase: SpritePhase): string {
+  return {
+    analyzing: '제작 대상 분석',
+    planReview: '제작 계획 검수',
+    baseGeneration: '기준 이미지 생성',
+    baseReview: '기준 이미지 검수',
+    frameGeneration: '애니메이션 프레임 생성',
+    frameReview: '애니메이션 검수',
+    exportReady: '내보내기 대기',
+    packaging: '패키징',
+    completed: '완료',
+  }[phase]
 }

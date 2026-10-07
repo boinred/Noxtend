@@ -1,3 +1,5 @@
+import type { ProductionMode, SpriteState, SpriteSummary } from '../sprites/types'
+
 /**
  * Design Ref: §3.4 — 작업 도메인 타입. 순수 TS 이며 외부 라이브러리를 쓰지 않는다.
  *
@@ -48,6 +50,9 @@ export type TaskKind =
    * `generate` 와 분리된 이유는 합성 생성이 실제 이미지 재생성을 막지 않기 위해서다.
    */
   | 'synthesize'
+  | 'analyzeSprites'
+  | 'generateSprite'
+  | 'packSprites'
 
 /** 제작 대상 카테고리 — 서버 wire 값과 동일. */
 export type AssetCategory = 'character' | 'object' | 'background'
@@ -100,6 +105,9 @@ const TASK_KIND_LABELS: Record<TaskKind, string> = {
   generate: '파츠 생성',
   reconstruct: '3D 제작',
   synthesize: '대칭 이미지 생성',
+  analyzeSprites: '2D 배경 분석',
+  generateSprite: '2D 배경 생성',
+  packSprites: '2D 배경 내보내기',
 }
 
 /** 작업 상태의 화면 표기. 부분 성공은 성공과 다른 낱말이어야 한다 (C-3). */
@@ -296,6 +304,8 @@ export interface JobModels {
 }
 
 export interface Job {
+  productionMode?: ProductionMode
+  sprite?: SpriteState | null
   id: string
   category: AssetCategory
   sourceImageId: string
@@ -318,6 +328,8 @@ export interface Job {
 
 /** 홈 두 섹션이 쓰는 요약. 목록에 프롬프트 전문과 공정을 싣지 않는다 (§4.2 #7). */
 export interface JobSummary {
+  productionMode?: ProductionMode
+  sprite?: SpriteSummary | null
   id: string
   category: AssetCategory
   status: JobStatus
@@ -449,7 +461,7 @@ export function nextPollDelayMs(attempt: number): number {
 // 화면마다 달라진다.
 //
 // 별도 파일이 아니라 이 파일에 있는 이유는 §9.2 계층 규칙이다 — `domain/job` 은
-// 타입조차 밖에서 끌어오지 않으므로 형제 파일 사이의 import 도 두지 않는다.
+// 공정의 파생 규칙과 타입을 같은 파일에서 확인한다.
 
 /** 파츠 카드 하나가 알아야 하는 것 전부. */
 export interface PartCard {

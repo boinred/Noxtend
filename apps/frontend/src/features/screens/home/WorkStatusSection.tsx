@@ -1,14 +1,15 @@
 /**
  * Design Ref: §5.1, §5.3 — 홈의 "실행 중" / "최근 작업" 공용 섹션 (FR-06 · FR-10).
  *
- * 직전 사이클에는 빈 상태 전용이었다. background-studio 에서 **목록도 받는다** —
- * 다만 빈 상태 경로는 그대로 남는다. 비어 있음이 **고장이 아니라 예고로** 읽혀야 하고,
- * 무엇보다 **API 가 없을 때 여기로 떨어진다** (§6 · §8.6 회귀 방어 장치).
+ * 로딩·조회 실패·정상 빈 결과를 구분하고 캐시된 목록은 재조회 오류에도 유지한다.
  */
 import { Link } from 'react-router-dom'
 import { Icon } from '@/features/shell/Icon'
 import { sourceImageUrl } from '@/app/queries/media'
-import { assetCategoryLabel } from '@/domain/job/types'
+import { jobStatusLabel } from '@/domain/job/types'
+import { jobCategoryLabel, jobSummaryCount } from '../categoryLabels'
+import { Button } from '@/components/ui/button'
+import { apiErrorMessage } from '@/app/queries/errors'
 import { jobPath } from '@/routes/paths'
 import { sectionCount, sectionCountLabel } from './sectionCount'
 import { workStatusStyles as styles } from './homeStyles'
@@ -18,13 +19,16 @@ import type { JobSummary } from '@/domain/job/types'
 
 export interface WorkStatusSectionProps {
   title: string
+  isLoading?: boolean
+  error?: Error | null
+  onRetry?: () => void
   icon: IconName
   emptyTitle: string
   emptyBody: ReactNode
   action?: ReactNode
   featured?: ReactNode
   testId: string
-  /** 비어 있으면 빈 상태를 그린다 — 없음과 못 받음을 화면에서 구분하지 않는다 */
+  /** 정상 조회의 작업 목록 */
   jobs?: JobSummary[]
   /** 항목 삭제 핸들러 — 최근 작업 등 완료된 작업 삭제에 사용 */
   onDelete?: (jobId: string) => void
@@ -33,14 +37,6 @@ export interface WorkStatusSectionProps {
    * 그 차이를 배지가 설명한다. 모르면 보이는 수만 쓴다
    */
   total?: number
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: '대기 중',
-  running: '분석 중',
-  succeeded: '완료',
-  failed: '실패',
-  canceled: '취소됨',
 }
 
 export function WorkStatusSection({
@@ -54,6 +50,9 @@ export function WorkStatusSection({
   jobs,
   onDelete,
   total,
+  isLoading,
+  error,
+  onRetry,
 }: WorkStatusSectionProps) {
   const hasJobs = jobs !== undefined && jobs.length > 0
   const hasContent = featured !== undefined || hasJobs
@@ -75,6 +74,15 @@ export function WorkStatusSection({
         ) : null}
       </h2>
 
+      {error ? (
+        <div role="alert" className={styles.empty}>
+          <p>{apiErrorMessage(error, '작업 목록을 불러올 수 없습니다. 연결을 확인해 주세요')}</p>
+          <Button variant="outline" onClick={onRetry}>
+            목록 다시 조회
+          </Button>
+        </div>
+      ) : null}
+      {isLoading && !hasContent ? <p role="status">작업 목록을 불러오는 중…</p> : null}
       {hasContent ? (
         <div className={styles.content}>
           {featured}
@@ -84,7 +92,7 @@ export function WorkStatusSection({
                 <li key={job.id} className={styles.jobRow}>
                   {/* 항목 클릭 → 카테고리별 작업 주소 (§5.4 홈 · FR-13 · 독립 리뷰 #2) */}
                   <Link
-                    to={jobPath(job.category, job.id)}
+                    to={jobPath(job.category, job.id, job.productionMode)}
                     className={styles.jobLink}
                     data-testid="job-item"
                   >
@@ -95,14 +103,12 @@ export function WorkStatusSection({
                       loading="lazy"
                     />
                     <span className={styles.jobBody}>
-                      <span className={styles.jobName}>
-                        {assetCategoryLabel(job.category)} 작업
-                      </span>
+                      <span className={styles.jobName}>{jobCategoryLabel(job)} 작업</span>
                       <span className={styles.jobStatus} data-status={job.status}>
-                        {STATUS_LABELS[job.status] ?? job.status}
+                        {job.status === 'succeeded' ? '완료' : jobStatusLabel(job.status)}
                       </span>
                       <span className={styles.jobMeta}>
-                        {formatTime(job.createdAt)} · 파츠 {job.partCount}개
+                        {formatTime(job.createdAt)} · {jobSummaryCount(job)}
                       </span>
                     </span>
                   </Link>
@@ -135,7 +141,7 @@ export function WorkStatusSection({
                   마우스로 꺾쇠를 눌러 온 사람에게는 그대로 동작한다.
                 */}
                     <Link
-                      to={jobPath(job.category, job.id)}
+                      to={jobPath(job.category, job.id, job.productionMode)}
                       className={styles.jobArrow}
                       aria-label="작업 열기"
                       tabIndex={-1}
@@ -148,13 +154,13 @@ export function WorkStatusSection({
             </ul>
           ) : null}
         </div>
-      ) : (
+      ) : !isLoading && !error ? (
         <div className={styles.empty}>
           <span className={styles.emptyTitle}>{emptyTitle}</span>
           <p className={styles.emptyBody}>{emptyBody}</p>
           {action}
         </div>
-      )}
+      ) : null}
     </section>
   )
 }

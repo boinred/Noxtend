@@ -24,6 +24,27 @@ public sealed class SimilarityStartHandlerTests
 {
     private static readonly DateTimeOffset Now = new(2026, 9, 1, 0, 0, 0, TimeSpan.Zero);
 
+    [Fact]
+    public async Task TwoDSimilarity_RejectsWithoutBlobRunEvaluationOrQueue()
+    {
+        var f = await SimilarityFixture.CreateAsync();
+        var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "image",
+            new(Noxtend.Domain.Sprites.SpriteView.SideView, Noxtend.Domain.Sprites.SpriteOutputKind.Layers),
+            new(24, 16), new(1536, 1024), Now).Value!;
+        job.Succeed(Now);
+        await f.Jobs.AddAsync(job, default);
+        var layout = SceneLayout.ComposeActive(job.Id, 1, [], SceneMeshSignature.Compute(job.LayoutSignatureInputs()), 0,
+            SceneStaging.ComposeCamera(null, []), SceneStaging.ComposeLight(null), Now);
+        await f.Layouts.AddAsync(layout, default);
+        var before = f.Blobs.Count;
+        var result = await f.Start.HandleAsync(f.Request() with { JobId = job.Id, LayoutId = layout.Id }, default);
+        Assert.Equal(ErrorCode.SpriteWrongMode, result.ErrorCode);
+        Assert.Equal(before, f.Blobs.Count);
+        Assert.Empty(await f.Similarity.ListRunsByJobAsync(job.Id, default));
+        Assert.Empty(f.Queue.Enqueued);
+        Assert.Single(await f.Layouts.ListByJobAsync(job.Id, default));
+    }
+
     // ─── 정상 시작 ───
 
     [Fact]
@@ -436,6 +457,19 @@ public sealed class StubSimilarityPromptCatalog(bool hasPrompt) : IPromptCatalog
 /// <summary>정규화 통과 스텁 — 여기서 보는 것은 배선이지 픽셀 처리가 아니다.</summary>
 public sealed class PassThroughTranscoder : Noxtend.Domain.Ports.IImageTranscoder
 {
+    public Task<Noxtend.Domain.Sprites.SpriteImageInfo> InspectSpriteAsync(
+        Stream image, long maxBytes, long maxPixels, CancellationToken ct)
+        => throw new NotSupportedException();
+
+    public Task<Stream> NormalizeSpriteAsync(Stream image, Noxtend.Domain.Sprites.SpriteCanvas canvas,
+        Noxtend.Domain.Sprites.SpriteTransform transform, bool requireTransparency,
+        Noxtend.Domain.Sprites.SpriteTileLayout layout, CancellationToken ct)
+        => throw new NotSupportedException();
+
+    public Task WriteSpriteSheetAsync(Noxtend.Domain.Sprites.SpriteSheetLayout layout,
+        Func<Guid, CancellationToken, Task<Stream>> openFrame, Stream output, CancellationToken ct)
+        => throw new NotSupportedException();
+
     public bool IsUploadable(string contentType) => true;
 
     public Task<(int Width, int Height)> MeasureAsync(Stream image, CancellationToken ct)
