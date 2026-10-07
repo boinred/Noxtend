@@ -170,3 +170,27 @@ function stageNote(task: JobTask): string {
 
   return '대기'
 }
+
+export function TaskAttemptDetails({ tasks }: StageProgressProps) {
+  const retried = groupGenerationStages(tasks)
+    .map((row) => ({
+      ...row,
+      attempts:
+        row.task?.attemptCount ?? Math.max(...(row.group ?? []).map((task) => task.attemptCount)),
+    }))
+    .filter((row) => row.attempts > 1)
+  if (retried.length === 0) return null
+
+  return (
+    <ul
+      aria-label="공정 시도 정보"
+      className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"
+    >
+      {retried.map((row) => (
+        <li key={row.key}>
+          {taskKindLabel(row.kind)} · {row.attempts}회 시도
+        </li>
+      ))}
+    </ul>
+  )
+}

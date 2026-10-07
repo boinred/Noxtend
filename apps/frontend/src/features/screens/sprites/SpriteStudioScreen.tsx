@@ -4,7 +4,6 @@ import { useJob, useRetryTask, useCancelJob } from '@/app/queries/useJob'
 import { apiErrorMessage } from '@/app/queries/errors'
 import { jobStatusLabel, taskKindLabel, isTerminal } from '@/domain/job/types'
 import { ROUTES } from '@/routes/paths'
-import { Icon } from '@/features/shell/Icon'
 import { PageContainer } from '../PageContainer'
 import { SpriteInput } from './SpriteInput'
 import { SpritePlanReview } from './SpritePlanReview'
@@ -60,39 +59,25 @@ export function SpriteStudioScreen() {
       ) : (
         <div className={styles.stack}>
           <section className={`${styles.panel} flex flex-col gap-4`} aria-label="작업 상태">
-            <SpriteProgress job={job} sprite={sprite}>
-              <Button
-                variant="outline"
-                size="icon-lg"
-                className="rounded-full p-0"
-                aria-label="서버 상태 새로고침"
-                title="서버 상태 새로고침"
-                onClick={() => void query.refetch()}
-              >
-                <Icon name="reset" size={15} />
-              </Button>
-              {!isTerminal(job.status) ? (
-                <Button
-                  variant="destructive"
-                  size="icon-lg"
-                  className="rounded-full p-0"
-                  aria-label="작업 취소"
-                  title="작업 취소"
-                  disabled={cancel.isPending || query.isError}
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        '작업을 취소할까요?\n\n이미 저장된 PNG와 ZIP은 계속 내려받을 수 있습니다.\n취소한 작업의 추가 생성과 검수는 진행할 수 없습니다.',
-                      )
-                    ) {
-                      cancel.mutate(job.id)
+            <SpriteProgress
+              job={job}
+              sprite={sprite}
+              onRefresh={() => void query.refetch()}
+              onCancel={
+                !isTerminal(job.status)
+                  ? () => {
+                      if (
+                        window.confirm(
+                          '작업을 취소할까요?\n\n이미 저장된 PNG와 ZIP은 계속 내려받을 수 있습니다.\n취소한 작업의 추가 생성과 검수는 진행할 수 없습니다.',
+                        )
+                      ) {
+                        cancel.mutate(job.id)
+                      }
                     }
-                  }}
-                >
-                  <Icon name="stop" size={15} />
-                </Button>
-              ) : null}
-            </SpriteProgress>
+                  : undefined
+              }
+              cancelDisabled={cancel.isPending || query.isError}
+            />
             {canceled ? (
               <p className={styles.hint}>
                 취소된 작업입니다. 이미 저장된 PNG와 ZIP은 내려받을 수 있습니다.

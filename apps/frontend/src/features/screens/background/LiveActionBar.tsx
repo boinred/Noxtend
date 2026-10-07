@@ -1,16 +1,13 @@
-/** 진행 중 결과 화면의 상태 요약과 취소 동작. */
-import { Button } from '@/components/ui/button'
+/** 진행 중 결과 화면의 상태 요약. */
 import { generationTally, meshTally } from '@/domain/job/types'
 import { backgroundStyles as styles } from './backgroundStyles'
 import type { Job } from '@/domain/job/types'
 
 export interface LiveActionBarProps {
   job: Job
-  onCancel: () => void
-  canceling: boolean
 }
 
-export function LiveActionBar({ job, onCancel, canceling }: LiveActionBarProps) {
+export function LiveActionBar({ job }: LiveActionBarProps) {
   const images = generationTally(job)
   const meshes = meshTally(job)
   const imageSummary =
@@ -26,10 +23,6 @@ export function LiveActionBar({ job, onCancel, canceling }: LiveActionBarProps) 
           {meshSummary} 만드는 중
         </span>
       </div>
-
-      <Button variant="outline" onClick={onCancel} disabled={canceling} data-testid="live-cancel">
-        {canceling ? '취소하는 중…' : '취소'}
-      </Button>
     </div>
   )
 }

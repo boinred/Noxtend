@@ -110,7 +110,8 @@ test('#5 취소 후 재시작 — 상태 오염이 없다', async ({ page }) => 
   await page.goto('/background')
   await selectImage(page)
   await page.getByTestId('start-analysis').click()
-  await page.getByTestId('run-cancel').click()
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('button', { name: '작업 취소', exact: true }).click()
 
   // 취소도 이미지를 이어받는다 — 취소는 대개 "이 이미지 말고" 가 아니라
   // "이 설정 말고" 이고, 바꾸고 싶으면 드롭존을 누르면 된다

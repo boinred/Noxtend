@@ -45,7 +45,7 @@ import { ImageDropzone } from './ImageDropzone'
 import { ProviderSelect } from './ProviderSelect'
 import { ModelSelect } from './ModelSelect'
 import { RunProgress } from './RunProgress'
-import { StageProgress } from './StageProgress'
+import { StageProgress, TaskAttemptDetails } from './StageProgress'
 import { RunResult } from './RunResult'
 import { ReviewGate } from './ReviewGate'
 import { LiveActionBar } from './LiveActionBar'
@@ -498,10 +498,24 @@ function JobView({ jobId }: { jobId: string }) {
           </div>
         ) : null}
         <div className="mb-4" data-testid="background-top-pipeline-progress">
-          <BackgroundPipelineStepper tasks={job.tasks} jobStatus={job.status} />
+          <BackgroundPipelineStepper
+            job={job}
+            onRefresh={() => void refetch()}
+            onCancel={
+              isActive(job.status)
+                ? () => {
+                    if (window.confirm('작업을 취소할까요?')) {
+                      cancelJob.mutate(jobId, { onSuccess: () => goToInput(job.sourceImageId) })
+                    }
+                  }
+                : undefined
+            }
+            cancelDisabled={cancelJob.isPending || Boolean(jobError)}
+          />
         </div>
         {/* 모델은 접수 시점에 고정된다 — 상태 분기 밖에 두어야 실패 화면에서도 남는다 */}
         <ModelSummary models={job.models} providers={providers} />
+        <TaskAttemptDetails tasks={job.tasks} />
 
         {job.status === 'failed' ? (
           <div className={styles.failure} data-testid="run-failure">
@@ -550,17 +564,7 @@ function JobView({ jobId }: { jobId: string }) {
         ) : hasResultToShow(job) ? (
           <>
             {/* 진행 중 결과 화면의 비용 통제 동작 */}
-            {isActive(job.status) ? (
-              <LiveActionBar
-                job={job}
-                canceling={cancelJob.isPending}
-                onCancel={() =>
-                  cancelJob.mutate(jobId, {
-                    onSuccess: () => goToInput(job.sourceImageId),
-                  })
-                }
-              />
-            ) : null}
+            {isActive(job.status) ? <LiveActionBar job={job} /> : null}
 
             {/* 분석 / 3D 배경 (scene-assembly §5.1) — 기존 결과 화면은 탭 안으로만 이동 */}
             <StudioViewTabs view={view} onSelect={selectView} sceneEnabled={sceneEnabled} />
@@ -613,15 +617,7 @@ function JobView({ jobId }: { jobId: string }) {
             )}
           </>
         ) : (
-          <RunProgress
-            sourceImageId={job.sourceImageId}
-            tasks={job.tasks}
-            cancelPending={cancelJob.isPending}
-            // 취소는 즉시 반환된다 (§4.2 #8). 워커를 기다리지 않고 입력으로 돌아간다
-            onCancel={() =>
-              cancelJob.mutate(jobId, { onSuccess: () => goToInput(job.sourceImageId) })
-            }
-          />
+          <RunProgress sourceImageId={job.sourceImageId} tasks={job.tasks} />
         )}
       </div>
     </PageContainer>

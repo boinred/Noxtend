@@ -108,20 +108,24 @@ test('sprite status summarizes current backgrounds and marks the review step', a
   await expect(steps.getByRole('listitem')).toHaveCount(0)
   await expect(progress).toBeVisible()
   await expect(panel.getByLabel('배경 생성 성공')).toHaveText('2 / 2')
+  await panel.screenshot({
+    path: '/tmp/noxtend-sprite-status-collapsed.png',
+    animations: 'disabled',
+  })
   await panel.getByRole('button', { name: '상세 보기', exact: true }).press('Space')
   await expect(steps.getByRole('listitem')).toHaveCount(5)
   const theme = page.getByTestId('theme-toggle')
   if ((await theme.getAttribute('data-theme-state')) === 'light') await theme.click()
   await expect(theme).toHaveAttribute('data-theme-state', 'dark')
-  await panel.screenshot({ path: '/tmp/noxtend-sprite-status-desktop.png' })
+  await panel.screenshot({ path: '/tmp/noxtend-sprite-status-desktop.png', animations: 'disabled' })
   await page.setViewportSize({ width: 390, height: 844 })
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await expect(steps.locator('[aria-current="step"]')).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
-  await panel.screenshot({ path: '/tmp/noxtend-sprite-status-mobile.png' })
+  await panel.screenshot({ path: '/tmp/noxtend-sprite-status-mobile.png', animations: 'disabled' })
   await theme.click()
   await expect(theme).toHaveAttribute('data-theme-state', 'light')
-  await panel.screenshot({ path: '/tmp/noxtend-sprite-status-light.png' })
+  await panel.screenshot({ path: '/tmp/noxtend-sprite-status-light.png', animations: 'disabled' })
 })
 
 test('static metadata review keeps five steps without animation stages', async ({ page }) => {
@@ -131,6 +135,9 @@ test('static metadata review keeps five steps without animation stages', async (
     'aria-valuenow',
     '5',
   )
+  await page
+    .getByRole('region', { name: '작업 상태', exact: true })
+    .screenshot({ path: '/tmp/noxtend-sprite-status-success.png', animations: 'disabled' })
   await page.getByLabel('대상 이름 1', { exact: true }).fill('잔디 지면')
   await page.getByRole('button', { name: '계획 저장', exact: true }).click()
   await expect(page.getByRole('button', { name: '잔디 지면 최종 승인', exact: true })).toBeEnabled()
@@ -458,6 +465,7 @@ test('partial bases export an explicit approved subset and report exclusions', a
     '3',
   )
   await expect(page.getByRole('link', { name: '현재 ZIP 다운로드', exact: false })).toBeVisible()
+  await panel.screenshot({ path: '/tmp/noxtend-sprite-status-partial.png', animations: 'disabled' })
 })
 
 test('failed pack preserves PNGs without inventing a ZIP and supports task retry/history', async ({
@@ -482,6 +490,7 @@ test('failed generation can retry and cancellation is authoritative', async ({ p
   await expect(page.getByRole('status').first()).toContainText('실패')
   const panel = page.getByRole('region', { name: '작업 상태', exact: true })
   await expect(panel.getByLabel('배경 생성 성공')).toHaveText('0 / 2')
+  await panel.screenshot({ path: '/tmp/noxtend-sprite-status-failed.png', animations: 'disabled' })
   await page.getByRole('button', { name: '실패 공정 재시도' }).first().click()
   await expect(page.getByRole('img', { name: '후경 지면 기준 이미지' })).toBeVisible()
   await expect(panel.getByLabel('배경 생성 성공')).toHaveText('2 / 2')
@@ -510,6 +519,10 @@ test('failed generation can retry and cancellation is authoritative', async ({ p
   ).toBeDisabled()
   await page.reload()
   await expect(page.getByRole('status').first()).toContainText('취소')
+  await panel.screenshot({
+    path: '/tmp/noxtend-sprite-status-canceled.png',
+    animations: 'disabled',
+  })
 })
 
 test('owned source URL sends only the GUID pair and rejects external/blob identity', async ({
