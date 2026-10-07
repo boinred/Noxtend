@@ -243,6 +243,12 @@ test('current missing failed and running slots are shown without historical task
   const records: NonNullable<SpriteFakeOptions['records']> = []
   await installFakeApi(page, { sprites: { seed: 'frameReview', frameStates: true, records } })
   await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const panel = page.getByRole('region', { name: '작업 상태', exact: true })
+  const steps = panel.getByRole('navigation', { name: '2D 제작 단계' })
+  await expect(steps.getByRole('listitem')).toHaveCount(7)
+  await expect(steps.locator('[aria-current="step"]')).toContainText('프레임 생성')
+  await expect(panel.getByLabel('배경 생성 성공')).toHaveText('2 / 2')
+  await expect(panel.getByLabel('프레임 생성 성공')).toHaveText('11 / 14')
   await expect(page.getByText('프레임 2 · 실패', { exact: true })).toBeVisible()
   await expect(page.getByText('프레임 3 · 생성 중', { exact: true })).toBeVisible()
   await expect(page.getByText('프레임 4 · 누락', { exact: true })).toBeVisible()
@@ -263,10 +269,13 @@ test('current missing failed and running slots are shown without historical task
     page.getByRole('button', { name: '전경 나무 애니메이션 승인', exact: true }),
   ).toBeEnabled()
   await page.getByRole('button', { name: '후경 지면 프레임 2 재생성', exact: true }).click()
+  await expect(panel.getByLabel('프레임 생성 성공')).toHaveText('12 / 14')
   await expect(page.getByText('프레임 2 · 완료', { exact: true })).toHaveCount(2)
   await expect(page.getByText('프레임 3 · 생성 중', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: '실패 공정 재시도', exact: true })).toHaveCount(0)
   expect(records).toHaveLength(1)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await panel.screenshot({ path: '/tmp/noxtend-sprite-status-animation-mobile.png' })
 })
 
 test('lost animation approval replays the same request without creating tasks', async ({

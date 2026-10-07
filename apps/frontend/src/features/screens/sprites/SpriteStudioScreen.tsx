@@ -4,25 +4,15 @@ import { useJob, useRetryTask, useCancelJob } from '@/app/queries/useJob'
 import { apiErrorMessage } from '@/app/queries/errors'
 import { jobStatusLabel, taskKindLabel, isTerminal } from '@/domain/job/types'
 import { ROUTES } from '@/routes/paths'
+import { Icon } from '@/features/shell/Icon'
 import { PageContainer } from '../PageContainer'
 import { SpriteInput } from './SpriteInput'
 import { SpritePlanReview } from './SpritePlanReview'
 import { SpriteFrameReview } from './SpriteFrameReview'
 import { SpritePreview } from './SpritePreview'
 import { SpriteExport } from './SpriteExport'
+import { SpriteProgress } from './SpriteProgress'
 import { spriteStyles as styles } from './spriteStyles'
-
-const PHASE_LABELS = {
-  analyzing: '제작 대상 분석',
-  planReview: '제작 계획 검수',
-  baseGeneration: '기준 이미지 생성',
-  baseReview: '기준 이미지 검수',
-  frameGeneration: '애니메이션 프레임 생성',
-  frameReview: '애니메이션 검수',
-  exportReady: '내보내기 대기',
-  packaging: '패키징',
-  completed: '완료',
-}
 
 export function SpriteStudioScreen() {
   const { jobId } = useParams()
@@ -69,25 +59,40 @@ export function SpriteStudioScreen() {
         <p role="alert">이 주소는 2D 작업에만 사용할 수 있습니다.</p>
       ) : (
         <div className={styles.stack}>
-          <section className={styles.panel} aria-label="작업 상태">
-            <div className={styles.row}>
-              <p role="status">
-                {jobStatusLabel(job.status)} · {PHASE_LABELS[sprite.phase]} · revision{' '}
-                {sprite.reviewRevision}
-              </p>
-              <Button variant="outline" onClick={() => void query.refetch()}>
-                서버 상태 새로고침
+          <section className={`${styles.panel} flex flex-col gap-4`} aria-label="작업 상태">
+            <SpriteProgress job={job} sprite={sprite}>
+              <Button
+                variant="outline"
+                size="icon-lg"
+                className="rounded-full p-0"
+                aria-label="서버 상태 새로고침"
+                title="서버 상태 새로고침"
+                onClick={() => void query.refetch()}
+              >
+                <Icon name="reset" size={15} />
               </Button>
               {!isTerminal(job.status) ? (
                 <Button
                   variant="destructive"
+                  size="icon-lg"
+                  className="rounded-full p-0"
+                  aria-label="작업 취소"
+                  title="작업 취소"
                   disabled={cancel.isPending || query.isError}
-                  onClick={() => cancel.mutate(job.id)}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        '작업을 취소할까요?\n\n이미 저장된 PNG와 ZIP은 계속 내려받을 수 있습니다.\n취소한 작업의 추가 생성과 검수는 진행할 수 없습니다.',
+                      )
+                    ) {
+                      cancel.mutate(job.id)
+                    }
+                  }}
                 >
-                  작업 취소
+                  <Icon name="stop" size={15} />
                 </Button>
               ) : null}
-            </div>
+            </SpriteProgress>
             {canceled ? (
               <p className={styles.hint}>
                 취소된 작업입니다. 이미 저장된 PNG와 ZIP은 내려받을 수 있습니다.
@@ -112,7 +117,11 @@ export function SpriteStudioScreen() {
               </p>
             ) : null}
             {job.tasks
-              .filter((task) => task.kind !== 'generateSprite' || currentFrameTasks.has(task.id))
+              .filter(
+                (task) =>
+                  task.status !== 'succeeded' &&
+                  (task.kind !== 'generateSprite' || currentFrameTasks.has(task.id)),
+              )
               .map((task) => (
                 <div key={task.id} className={styles.row}>
                   <span>
