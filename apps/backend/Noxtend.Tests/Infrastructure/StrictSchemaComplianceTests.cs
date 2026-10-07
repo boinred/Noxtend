@@ -18,7 +18,7 @@ public sealed class StrictSchemaComplianceTests
         { "analyze", SeedPrompts.BackgroundAnalyze().Schema },
         { "extract", SeedPrompts.BackgroundExtract().Schema },
         { "decompose", SeedPrompts.DecomposeV3().Schema },
-        { "generate", SeedPrompts.BackgroundGenerateV2().Schema },
+        { "generate", SeedPrompts.BackgroundGenerateV3().Schema },
         { "similarityEvaluateV3", SeedPrompts.SimilarityEvaluateBackgroundV3().Schema },
     };
 

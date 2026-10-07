@@ -24,6 +24,9 @@ public sealed class BackgroundGeneratePromptMigrationTests(SqlServerFixture sql)
     /// <summary>이 마이그레이션 바로 앞 — 운영자가 손댄 상황을 만들 지점.</summary>
     private const string BeforeThis = "20260818140000_CharacterPromptWorkstreamJ";
 
+    /// <summary>v2 를 심는 마이그레이션 — 이후 v3 가 번호를 더 가져가므로 여기서 멈춰 검사한다.</summary>
+    private const string ThisMigration = "20260825005323_BackgroundGeneratePromptV2";
+
     [Fact]
     public async Task MigratingUp_ActivatesTheRotationContractForBackgroundOnly()
     {
@@ -53,7 +56,7 @@ public sealed class BackgroundGeneratePromptMigrationTests(SqlServerFixture sql)
             Guid.NewGuid(), nameof(LlmOperationKind.Generate), "Background", 1, "운영자 실험", "user", "{}",
             "관리자 화면에서 만든 행", true, Now);
 
-        await db.Database.MigrateAsync();
+        await db.Database.MigrateAsync(ThisMigration);
 
         // 활성은 v2 하나뿐이고, 번호는 운영자 행 다음이다
         var active = Assert.Single(await ActiveGeneratePrompts(db, "Background"));
