@@ -42,7 +42,7 @@ import { ImageDropzone } from '@/features/screens/background/ImageDropzone'
 import { ProviderSelect } from '@/features/screens/background/ProviderSelect'
 import { ModelSelect } from '@/features/screens/background/ModelSelect'
 import { RunProgress } from '@/features/screens/background/RunProgress'
-import { StageProgress } from '@/features/screens/background/StageProgress'
+import { StageProgress, TaskAttemptDetails } from '@/features/screens/background/StageProgress'
 import { RunResult } from '@/features/screens/background/RunResult'
 import { ReviewGate } from '@/features/screens/background/ReviewGate'
 import { ModelSummary } from '@/features/screens/background/ModelSummary'
@@ -53,7 +53,7 @@ import { CharacterPipelineStepper } from './CharacterPipelineStepper'
 import { CharacterPipelinePreview } from './CharacterPipelinePreview'
 import { PART_TAXONOMY } from './characterPartTaxonomy'
 import { buildPartHints, selectionFromPartHints, type HintSelection } from './partHintSelection'
-import type { CharacterGender } from '@/domain/job/types'
+import { isActive, type CharacterGender } from '@/domain/job/types'
 
 export function CharacterStudioScreen() {
   const { jobId } = useParams<{ jobId: string }>()
@@ -455,9 +455,23 @@ function JobView({ jobId }: { jobId: string }) {
           </div>
         ) : null}
         <div className="mb-4" data-testid="character-top-pipeline-progress">
-          <CharacterPipelineStepper tasks={job.tasks} jobStatus={job.status} />
+          <CharacterPipelineStepper
+            job={job}
+            onRefresh={() => void refetch()}
+            onCancel={
+              isActive(job.status)
+                ? () => {
+                    if (window.confirm('작업을 취소할까요?')) {
+                      cancelJob.mutate(jobId, { onSuccess: () => goToInput(job.sourceImageId) })
+                    }
+                  }
+                : undefined
+            }
+            cancelDisabled={cancelJob.isPending || Boolean(jobError)}
+          />
         </div>
         <ModelSummary models={job.models} providers={providers} />
+        <TaskAttemptDetails tasks={job.tasks} />
 
         {job.status === 'failed' ? (
           <div className={styles.failure} data-testid="run-failure">
@@ -514,14 +528,7 @@ function JobView({ jobId }: { jobId: string }) {
             onReplanPartMesh={(selection) => replanPartMesh.mutateAsync(selection)}
           />
         ) : (
-          <RunProgress
-            sourceImageId={job.sourceImageId}
-            tasks={job.tasks}
-            cancelPending={cancelJob.isPending}
-            onCancel={() =>
-              cancelJob.mutate(jobId, { onSuccess: () => goToInput(job.sourceImageId) })
-            }
-          />
+          <RunProgress sourceImageId={job.sourceImageId} tasks={job.tasks} />
         )}
       </div>
     </PageContainer>

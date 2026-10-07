@@ -52,4 +52,29 @@ describe('computeStepStates', () => {
 
     expect(states.review).toBe('pendingReview')
   })
+  it('keeps completed tasks when cancellation stops later work', () => {
+    const states = computeStepStates(
+      [mockTask('analyze', 'succeeded'), mockTask('generate', 'running')],
+      'canceled',
+    )
+    expect(states.analyze).toBe('succeeded')
+    expect(states.generate).toBe('canceled')
+    expect(states.review).toBe('canceled')
+    expect(states.reconstruct).toBe('upcoming')
+  })
+
+  it('keeps partial generation and unselected stages incomplete', () => {
+    const states = computeStepStates(
+      [
+        mockTask('decompose', 'succeeded'),
+        mockTask('generate', 'succeeded'),
+        mockTask('generate', 'failed'),
+      ],
+      'partiallySucceeded',
+    )
+    expect(states.review).toBe('succeeded')
+    expect(states.generate).toBe('partiallySucceeded')
+    expect(states.rewriteDescriptions).toBe('upcoming')
+    expect(states.reconstruct).toBe('upcoming')
+  })
 })

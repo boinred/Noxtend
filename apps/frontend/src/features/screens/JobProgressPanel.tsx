@@ -158,6 +158,7 @@ export function JobProgressPanel({
               <li
                 key={step.id}
                 data-testid={step.testId}
+                data-state={step.state}
                 aria-current={active ? 'step' : undefined}
                 className={cn(
                   'flex min-w-0 items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-center',

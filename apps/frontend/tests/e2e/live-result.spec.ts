@@ -41,7 +41,8 @@ test('파츠가 생긴 진행 작업은 부분 결과와 취소 동작을 보여
   await expect(queuedMeshes).toHaveCount(2)
 
   // 진행 중 결과 화면의 유료 작업 중단 경로
-  await page.getByTestId('live-cancel').click()
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('button', { name: '작업 취소', exact: true }).click()
   await expect(page).toHaveURL(/\/background\?image=/)
   await expect(page.getByTestId('live-action-bar')).toHaveCount(0)
 })

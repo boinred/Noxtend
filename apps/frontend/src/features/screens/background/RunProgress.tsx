@@ -8,7 +8,6 @@
  * 사실이다. 다만 단계 **안**의 진행은 여전히 알 수 없으므로 (LLM 호출은 중간 신호를
  * 주지 않는다) 그것까지 지어내지는 않는다 — buffer 가 그 경계를 표시한다.
  */
-import { Button } from '@/components/ui/button'
 import { StageProgress } from './StageProgress'
 import { sourceImageUrl } from '@/app/queries/media'
 import { backgroundStyles as styles } from './backgroundStyles'
@@ -17,11 +16,9 @@ import type { JobTask } from '@/domain/job/types'
 export interface RunProgressProps {
   sourceImageId: string
   tasks: JobTask[]
-  onCancel: () => void
-  cancelPending: boolean
 }
 
-export function RunProgress({ sourceImageId, tasks, onCancel, cancelPending }: RunProgressProps) {
+export function RunProgress({ sourceImageId, tasks }: RunProgressProps) {
   return (
     <div className={styles.progress} data-testid="run-progress">
       <img
@@ -36,12 +33,6 @@ export function RunProgress({ sourceImageId, tasks, onCancel, cancelPending }: R
         <p className={styles.progressHint}>보통 30~90초, 길면 더 걸릴 수 있습니다</p>
 
         <StageProgress tasks={tasks} />
-
-        <div className={styles.progressActions}>
-          <Button onClick={onCancel} disabled={cancelPending} data-testid="run-cancel">
-            취소
-          </Button>
-        </div>
       </div>
     </div>
   )

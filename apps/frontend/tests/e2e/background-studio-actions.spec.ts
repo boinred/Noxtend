@@ -263,7 +263,8 @@ test.describe('스튜디오 — 실행', () => {
     await page.getByTestId('start-analysis').click()
 
     await expect(page.getByTestId('run-progress')).toBeVisible()
-    await page.getByTestId('run-cancel').click()
+    page.once('dialog', (dialog) => dialog.accept())
+    await page.getByRole('button', { name: '작업 취소', exact: true }).click()
 
     // 이미지를 이어받아 돌아온다 — 설정만 바꿔 다시 돌리는 것이 흔한 다음 행동이다
     await expect(page).toHaveURL(/\/background\?image=/)
