@@ -31,7 +31,7 @@ public sealed class BackgroundGeneratePromptMigrationTests(SqlServerFixture sql)
     public async Task MigratingUp_ActivatesTheRotationContractForBackgroundOnly()
     {
         await using var db = Context();
-        await db.Database.MigrateAsync();
+        await db.Database.MigrateAsync(ThisMigration);
 
         // 배경 활성은 v2 하나 — 회전 계약이 실려 있다
         var background = Assert.Single(await ActiveGeneratePrompts(db, "Background"));

@@ -84,7 +84,7 @@ public sealed class BackgroundGeneratePromptV3MigrationTests(SqlServerFixture sq
             .OrderBy(id => id)
             .ToListAsync();
 
-    // 운영자가 만든 종류별 프롬프트 — 버전 충돌 검사의 재료. 활성 행은 슬롯당 하나라 시드 행을 먼저 끈다
+    // 운영자 행 — 활성 1행 유니크 인덱스 때문에 시드 행 선비활성화
     private static Task InsertBackgroundGenerate(NoxtendDbContext db, int version)
         => db.Database.ExecuteSqlRawAsync(
             "UPDATE PromptVersions SET IsActive = 0 WHERE Kind = {1} AND Category = {2}; " +

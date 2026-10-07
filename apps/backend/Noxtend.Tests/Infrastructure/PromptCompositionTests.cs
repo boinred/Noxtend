@@ -59,7 +59,7 @@ public sealed class PromptCompositionTests
     {
         var (raw, _, _, _) = SeedPrompts.BackgroundGenerateV3();
 
-        // 문면이 줄바꿈으로 접혀 있어 공백을 하나로 모아 비교한다
+        // 줄바꿈으로 접힌 문면 — 공백 정규화 후 비교
         var system = Regex.Replace(raw, @"\s+", " ");
 
         Assert.Contains("reference image 1 is the FRONT view", system);
