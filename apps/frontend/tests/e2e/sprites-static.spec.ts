@@ -550,6 +550,23 @@ test('owned source URL sends only the GUID pair and rejects external/blob identi
   expect(records[0]!.body).not.toHaveProperty('uploadId')
 })
 
+test('repeat options follow the chosen view on the input screen', async ({ page }) => {
+  await installFakeApi(page, { sprites: {} })
+  await page.goto('/2d/background')
+  await chooseSetting(page, '결과 유형', '반복 타일')
+  const repeat = page.getByRole('combobox', { name: '반복 방향', exact: true })
+  const optionNames = async () => {
+    await repeat.click()
+    const names = await page.getByRole('option').allTextContents()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('listbox')).toHaveCount(0)
+    return names
+  }
+  expect(await optionNames()).toEqual(['가로', '세로', '양쪽'])
+  await chooseSetting(page, '시점', '아이소메트릭')
+  expect(await optionNames()).toEqual(['격자 X축', '격자 Y축', '양쪽'])
+})
+
 test('external revision preserves unsaved draft until explicit reload', async ({ page }) => {
   const records: NonNullable<SpriteFakeOptions['records']> = []
   await installFakeApi(page, { sprites: { records } })
