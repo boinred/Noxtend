@@ -221,6 +221,14 @@ internal static class SeedPrompts
         => (GenerateBackgroundV2System, GenerateUser, GenerateSchema,
             "download-view-consistency (2026-08-25) — 4방향이 각자 원본만 보고 그려 방향마다 다른 물체가 나왔다. 캐릭터의 정면 우선 회전 계약(공용 조각)을 배경에 이식: 비정면은 완성된 정면을 참조 1로 받아 같은 물체의 회전을 그린다. 지면 접점 실루엣 일관 조항 추가. 실 API 재검증 대기");
 
+    /// <summary>
+    /// 배경 Generate v3 — 캐릭터의 방향 정의를 배경 물체 기준으로 이식한다.
+    /// 정면은 원본 사진에서 카메라를 향한 면이고 좌우 궤도 규약은 캐릭터와 같다.
+    /// </summary>
+    public static (string System, string User, string Schema, string Note) BackgroundGenerateV3()
+        => (GenerateBackgroundV3System, GenerateUser, GenerateSchema,
+            "background-view-direction (2026-10-07) — 캐릭터 방향 정의를 배경 물체 기준으로 이식(정면=원본 사진에서 카메라를 향한 면, 좌우 궤도 규약은 캐릭터와 동일), 놓인 자세 유지, 원본에 겹쳐 보이는 다른 파츠 미작화. 실 API 재검증 대기");
+
     public static (string System, string User, string Schema, string Note) CharacterGenerate()
         => (GenerateCharacterSystem, GenerateUser, GenerateSchema, "armor-any-region (2026-09-08) — 관절 캡 일반화 + 서술에 없는 겹침 표시 미작화 규칙 추가. workstream K (2026-08-28, 사용자 요청) — workstream J에서 뺐던 \"belts\" 를 성별 무관 악세사리 목록에 되돌리고, 하의/겉옷/원피스 파츠가 원본 사진에 벨트가 보여도 항상 벨트 없이 그려지도록 머리카락 제외 규칙과 같은 방식의 명시 반례 문구를 추가했다. 벨트는 이제 Extract에서 다시 별도 파츠로 뽑히므로(workstream K) 그 자체로 이 프롬프트가 그리는 대상이 된다. 실 API 재검증 대기)");
 
@@ -436,6 +444,53 @@ internal static class SeedPrompts
           ground in a straight line from the front cannot meet it in a curve from the back.
         """;
 
+
+    private static readonly string GenerateBackgroundV3System =
+        GenerateBackgroundV2Prefix + "\n\n"
+        + RotationContractTemplate.Replace("{{original}}", "scene photo") + "\n\n"
+        + GenerateBackgroundV3Tail;
+
+    private const string GenerateBackgroundV3Tail = """
+        Rules:
+        - Draw exactly one object: the part named above. Nothing else.
+        - Draw it whole and unoccluded, even if the reference image shows it partly
+          hidden behind something.
+        - Anything the reference image shows attached to or layered on this object that
+          is NOT in this part's own description — a sign, a lamp, a banner, a poster, a
+          pipe, climbing plants — belongs to another part. Do not draw it, even though
+          the reference shows it there; continue this object's own surface naturally
+          underneath.
+        - Do not reproduce the surrounding scene, other objects, ground, sky or horizon.
+        - Keep the palette, lighting direction, colour temperature, material feel and
+          rendering style from the art direction above. Siblings drawn from the same
+          direction must look like they belong together.
+        - Keep only the form shading and highlights on the object itself. Do not add a
+          cast shadow, contact shadow, drop shadow, ground shadow, floor plane, pedestal
+          or support surface beneath or around it.
+        - Centre the object with a small even margin.
+        - The required view is the side of the object the camera sees, orbiting it at
+          the same height. The front is the face that points at the camera in the
+          original scene photo (the face reference image 1 shows, when present):
+          front = that face toward the viewer; right = orbit 90° so the side that was on
+          the right edge of the front view now faces the viewer and the front face
+          points toward the left edge of the image; back = seen from directly behind,
+          with the front face not visible; left = orbit 90° the other way so the side
+          that was on the left edge of the front view faces the viewer and the front
+          face points toward the right edge of the image. Never leave the front face
+          turned toward the camera on a side or back view.
+        - Keep the object's own resting pose identical across all four views — upright,
+          lying on its side, leaning, tilted or toppled exactly as reference image 1 (or
+          the description) shows it; only the camera orbits around it.
+        - Show only the required view. Keep camera elevation, distance, focal length,
+          object scale and vertical alignment identical across all four directions.
+          Rotate only around the object's vertical axis. Do not make a contact sheet.
+        - Use the exact same edge-to-edge background for every sibling image: one solid
+          neutral light gray, #F2F2F2. No gradient, texture, pattern, vignette, horizon,
+          transparency or checkerboard.
+        - The part rests on the ground of the scene: keep its ground-contact silhouette
+          and footprint consistent across all four directions — a wall that meets the
+          ground in a straight line from the front cannot meet it in a curve from the back.
+        """;
 
     private const string GenerateUser =
         "Draw the part described above as a standalone image, matching the reference style.";

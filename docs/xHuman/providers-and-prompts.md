@@ -30,7 +30,7 @@
 
 ### 이미지 생성
 
-`RunGenerationTaskHandler`가 활성 Generate 프롬프트를 조회하고 `GenerationStage` 변수·참조 이미지로 `ImageRequest`를 만든다. 이미지 어댑터 응답을 `GenerationStage.Validate`로 검증하고 Blob 저장 후 작업 상태에 반영한다. 성공 확정 전에 검증과 저장을 끝내는 순서를 유지한다.
+`RunGenerationTaskHandler`가 활성 Generate 프롬프트를 조회하고 `GenerationStage` 변수·참조 이미지로 `ImageRequest`를 만든다. 이미지 어댑터 응답을 `GenerationStage.Validate`로 검증하고 Blob 저장 후 작업 상태에 반영한다. 성공 확정 전에 검증과 저장을 끝내는 순서를 유지한다. Generate 프롬프트는 카테고리별로 두며 Background와 Character는 공용 `RotationContractTemplate`을 조합하고, 두 카테고리 모두 같은 궤도 규약으로 방향을 정의한다(오른쪽 뷰는 정면이 이미지 왼쪽 가장자리를 향한다). 배경 시드는 `SeedPrompts.BackgroundGenerateV3()`이며 migration `BackgroundGeneratePromptV3`로 활성화한다.
 
 주요 경로:
 

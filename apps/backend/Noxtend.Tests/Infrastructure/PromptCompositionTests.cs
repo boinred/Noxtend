@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using Noxtend.Infrastructure.Llm;
 
 namespace Noxtend.Tests.Infrastructure;
@@ -52,11 +53,39 @@ public sealed class PromptCompositionTests
         Assert.Contains("ground-contact silhouette", system);
     }
 
+    /// <summary>배경 v3 — v2 문면 위에 방향 정의·놓인 자세·겹침 파츠 미작화 조항이 더해진다.</summary>
+    [Fact]
+    public void BackgroundGenerateV3_AddsViewDefinition_KeepingSceneWording()
+    {
+        var (raw, _, _, _) = SeedPrompts.BackgroundGenerateV3();
+
+        // 줄바꿈으로 접힌 문면 — 공백 정규화 후 비교
+        var system = Regex.Replace(raw, @"\s+", " ");
+
+        Assert.Contains("reference image 1 is the FRONT view", system);
+        Assert.Contains("SAME physical object", system);
+        Assert.Contains("One-sided surfaces", system);
+        Assert.Contains("the original scene photo", system);
+        Assert.Contains("ground-contact silhouette", system);
+        Assert.Contains("#F2F2F2", system);
+
+        Assert.Contains("front face points toward the left edge", system);
+        Assert.Contains("front face points toward the right edge", system);
+        Assert.Contains("Never leave the front face", system);
+        Assert.Contains("resting pose", system);
+        Assert.Contains("belongs to another part", system);
+
+        Assert.DoesNotContain("full-body", system);
+        Assert.DoesNotContain("gender", system);
+        Assert.DoesNotContain("character", system);
+    }
+
     /// <summary>토큰이 안 치환된 채 새면 모델이 {{original}} 을 읽는다.</summary>
     [Fact]
     public void ComposedPrompts_LeaveNoUnreplacedTokens()
     {
         Assert.DoesNotContain("{{original}}", SeedPrompts.BackgroundGenerateV2().System);
+        Assert.DoesNotContain("{{original}}", SeedPrompts.BackgroundGenerateV3().System);
         Assert.DoesNotContain("{{original}}", SeedPrompts.CharacterGenerate().System);
     }
 }
