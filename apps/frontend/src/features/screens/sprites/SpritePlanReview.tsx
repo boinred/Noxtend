@@ -97,11 +97,7 @@ export function SpritePlanReview({
         {plans.length}/12개 · 정적 대상 1프레임 · 총 {count}/64장 · 모델 {model} ·{' '}
         {price == null ? '비용 미확인' : `예상 이미지 비용 $${(price * count).toFixed(2)}`}
       </p>
-      <p className={styles.hint}>
-        원본 {sprite.sourceCanvas.width}×{sprite.sourceCanvas.height} → 모델 요청{' '}
-        {sprite.generationCanvas.width}×{sprite.generationCanvas.height} → 최종{' '}
-        {sprite.outputCanvas.width}×{sprite.outputCanvas.height}px · 순서는 뒤에서 앞으로 증가
-      </p>
+      <p className={styles.hint}>순서는 뒤에서 앞으로 증가</p>
       <p className={styles.hint}>
         이름·순서·FPS 저장은 이미지를 생성하지 않습니다. 생성 입력 변경은 해당 결과와 승인을
         무효화하고 계획 재검수가 필요합니다.

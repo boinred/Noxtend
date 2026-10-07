@@ -16,6 +16,7 @@
 - 신규·수정 작업의 진행 상태 UI는 [JobProgressPanel](src/features/screens/JobProgressPanel.tsx)을 우선 재사용한다. 헤더·진행 막대·단계 카드·성공 요약·새로고침/취소 행동 표시를 별도로 복제하지 않는다.
 - 단계 판단·실제 완료 여부·집계는 작업별 연결부와 기존 도메인 함수에, 조회·취소 요청·취소 후 이동은 기존 화면에 둔다. 공용 표시 안에 작업 종류 분기·서버 요청·집계를 넣지 않는다.
 - 기존 2D 진행 상태의 외관을 바꾸려면 구현 전에 목업 승인을 받는다.
+- 분석 결과 요약은 [AnalysisSummaryPanel](src/features/screens/AnalysisSummaryPanel.tsx), 모델 표시는 [ModelSummary](src/features/screens/ModelSummary.tsx)를 우선 재사용한다. 작업별 값은 연결부의 순수 함수(`sceneAnalysisSummary`, `spriteAnalysisSummary`)가 만들며 공용 표시 안에 작업 종류 분기를 넣지 않는다.
 
 ## 서버 상태·API·오류
 

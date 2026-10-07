@@ -2,9 +2,12 @@ import { Link, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useJob, useRetryTask, useCancelJob } from '@/app/queries/useJob'
 import { apiErrorMessage } from '@/app/queries/errors'
+import { useProviders } from '@/app/queries/useProviders'
 import { jobStatusLabel, taskKindLabel, isTerminal } from '@/domain/job/types'
 import { ROUTES } from '@/routes/paths'
 import { PageContainer } from '../PageContainer'
+import { ModelSummary } from '../ModelSummary'
+import { SpriteAnalysisPanel } from './SpriteAnalysisPanel'
 import { SpriteInput } from './SpriteInput'
 import { SpritePlanReview } from './SpritePlanReview'
 import { SpriteFrameReview } from './SpriteFrameReview'
@@ -18,6 +21,7 @@ export function SpriteStudioScreen() {
   const query = useJob(jobId)
   const retry = useRetryTask(jobId)
   const cancel = useCancelJob()
+  const { providers } = useProviders()
   const job = query.job
   const sprite = job?.sprite
   const currentFrameTasks = new Set(
@@ -139,6 +143,9 @@ export function SpriteStudioScreen() {
               <p role="status">ZIP 패키징 중입니다. 완료된 파일만 다운로드할 수 있습니다.</p>
             ) : null}
           </section>
+          {/* 모델은 접수 시점 고정 — 분석 중에도 표시 */}
+          <ModelSummary models={job.models} providers={providers} />
+          {sprite.phase !== 'analyzing' ? <SpriteAnalysisPanel sprite={sprite} /> : null}
           {sprite.phase !== 'analyzing' && !canceled ? (
             <SpritePlanReview
               key={job.id}
