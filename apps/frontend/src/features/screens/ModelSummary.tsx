@@ -8,7 +8,15 @@ import { modelBadges } from '@/domain/job/types'
 import type { JobModels } from '@/domain/job/types'
 import type { Provider } from '@/domain/provider/types'
 
-import { backgroundStyles as styles } from './backgroundStyles'
+const styles = {
+  modelSummary: 'mb-4 flex flex-wrap items-center gap-2',
+  modelBadge:
+    'inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs',
+  modelBadgeLabel: 'font-semibold text-muted-foreground',
+  modelBadgeProvider: 'text-muted-foreground',
+  // 모델 id 는 코드값이므로 고정폭으로 — 비교할 때 눈이 자리를 잡는다
+  modelBadgeModel: 'font-mono text-foreground',
+}
 
 interface ModelSummaryProps {
   /** 이 필드를 내려보내기 전 서버가 응답하면 통째로 없다 — `modelBadges` 가 흡수한다 */
