@@ -696,3 +696,50 @@ for (const partial of [false, true])
       page.getByRole('img', { name: '전경 나무 기준 이미지', exact: true }),
     ).toHaveAttribute('src', other!)
   })
+
+test('sprite analysis card shows models and follows the saved plan', async ({ page }) => {
+  await installFakeApi(page, { sprites: { seed: 'analyzing' } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  await expect(page.getByTestId('model-text')).toContainText('analysis')
+  await expect(page.getByTestId('model-image')).toContainText('sprite-image')
+  await expect(page.getByTestId('sprite-analysis-panel')).toHaveCount(0)
+})
+
+test('sprite analysis card reflects saved plan edits only', async ({ page }) => {
+  await installFakeApi(page, { sprites: {} })
+  await start(page)
+  const card = page.getByTestId('sprite-analysis-panel')
+  await expect(card.getByTestId('sprite-analysis-summary')).toHaveText('횡스크롤 · 레이어 2개')
+  await expect(card.getByTestId('sprite-analysis-output')).toHaveText('배경 레이어')
+  await expect(card.getByTestId('sprite-analysis-canvas')).toHaveText(
+    '원본 320×180 → 요청 1024×1024 → 최종 320×180',
+  )
+  await expect(card.getByTestId('sprite-analysis-assets')).toHaveText('2개 · 총 2프레임')
+  await expect(page.getByText('모델 요청', { exact: false })).toHaveCount(0)
+
+  await page.getByLabel('루프 애니메이션 1', { exact: true }).check()
+  await expect(card.getByTestId('sprite-analysis-assets')).toHaveText('2개 · 총 2프레임')
+  await page.getByRole('button', { name: '계획 저장', exact: true }).click()
+  await expect(card.getByTestId('sprite-analysis-assets')).toHaveText('2개 · 총 9프레임')
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await expect(card).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+})
+
+test('sprite analysis card names isometric tiles', async ({ page }) => {
+  await installFakeApi(page, { sprites: {} })
+  await start(page, 'isometric', 'tiles')
+  const card = page.getByTestId('sprite-analysis-panel')
+  await expect(card.getByTestId('sprite-analysis-summary')).toHaveText('아이소메트릭 · 타일 2개')
+  await expect(card.getByTestId('sprite-analysis-output')).toHaveText('반복 타일 · 128px · 양쪽')
+})
+
+test('sprite analysis card stays on a canceled job after analysis', async ({ page }) => {
+  // canceled seed — 기준 이미지 생성 뒤 취소된 작업
+  await installFakeApi(page, { sprites: { seed: 'canceled' } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  await expect(page.getByTestId('sprite-analysis-panel')).toBeVisible()
+  await expect(page.getByTestId('model-summary')).toBeVisible()
+})

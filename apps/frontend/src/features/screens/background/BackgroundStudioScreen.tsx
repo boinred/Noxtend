@@ -39,7 +39,7 @@ import {
   readModelSelection,
 } from '@/routes/paths'
 import { ModeTabs } from './ModeTabs'
-import { ModelSummary } from './ModelSummary'
+import { ModelSummary } from '@/features/screens/ModelSummary'
 import { PromptModePanel } from './PromptModePanel'
 import { ImageDropzone } from './ImageDropzone'
 import { ProviderSelect } from './ProviderSelect'

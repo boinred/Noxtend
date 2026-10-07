@@ -62,15 +62,6 @@ export const backgroundStyles = {
   onboardingNotice:
     'mb-5 rounded-[10px] border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-foreground dark:border-amber-400/40 dark:bg-amber-400/10',
 
-  // 작업이 무엇으로 도는가 — 진행·결과 공통 머리줄
-  modelSummary: 'mb-4 flex flex-wrap items-center gap-2',
-  modelBadge:
-    'inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs',
-  modelBadgeLabel: 'font-semibold text-muted-foreground',
-  modelBadgeProvider: 'text-muted-foreground',
-  // 모델 id 는 코드값이므로 고정폭으로 — 비교할 때 눈이 자리를 잡는다
-  modelBadgeModel: 'font-mono text-foreground',
-
   // 실행 진행 카드
   progress:
     'flex items-center gap-5 rounded-xl border border-border bg-card p-6 max-[720px]:items-start max-[720px]:gap-3.5 max-[720px]:p-4',
@@ -87,22 +78,6 @@ export const backgroundStyles = {
   liveActivity: 'flex min-w-0 items-center gap-2 text-sm font-semibold text-foreground',
   livePulse:
     'size-2.5 shrink-0 rounded-full bg-primary shadow-[0_0_0_4px_color-mix(in_srgb,var(--primary)_16%,transparent)] animate-pulse motion-reduce:animate-none',
-
-  // 장면 명세
-  scene: 'rounded-xl border border-border bg-card px-[18px] py-4',
-  sceneHeader: 'mb-3 flex items-baseline gap-2.5',
-  sceneLabel: 'text-[0.8125rem] font-semibold text-muted-foreground',
-  sceneSummary: 'text-[0.9375rem] font-semibold text-foreground',
-  palette: 'mb-3.5 flex flex-wrap gap-x-3 gap-y-1.5',
-  swatch: 'inline-flex items-center gap-1.5 text-xs text-muted-foreground',
-  // 색을 아는 칩은 인라인 backgroundColor 가 채운다. 밝은 색도 경계가 보이도록 border 유지
-  swatchChip: 'size-3.5 rounded border border-border',
-  // 색상 미확정 — `transparent` 로 두면 지금 고치는 결함과 똑같이 빈 칩으로 읽힌다 (D-11)
-  swatchChipUnresolved: 'size-3.5 rounded border border-dashed border-border bg-[var(--sunken-bg)]',
-  sceneGrid: 'grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-x-5 gap-y-2.5',
-  sceneField: 'min-w-0',
-  sceneFieldLabel: 'mb-0.5 text-xs text-muted-foreground',
-  sceneFieldValue: 'text-[0.8125rem] leading-normal text-foreground',
 
   // 원본 이미지 좌표 오버레이
   overlay: 'mt-5',
