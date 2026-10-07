@@ -72,7 +72,7 @@ export function AnalysisSummaryPanel(props: AnalysisSummaryPanelProps): ReactEle
 
 - Produces: 위 공용 계약, `ModelSummary`(`@/features/screens/ModelSummary`, props `{ models, providers }` 불변), `sceneAnalysisSummary(scene: SceneSpec): AnalysisSummaryPanelProps`(`ScenePanel.tsx`에서 export)
 
-- [ ] **Step 1: 실패하는 테스트 작성** — `ScenePanel.test.ts`
+- [x] **Step 1: 실패하는 테스트 작성** — `ScenePanel.test.ts`
 
 ```ts
 import { describe, expect, it } from 'vitest'
@@ -125,12 +125,12 @@ describe('sceneAnalysisSummary', () => {
 
 스케일 값은 `formatScaleReference(scene.scale)` 결과와 같아야 한다: `expect(props.fields[2]!.value).toBe(formatScaleReference(scene.scale))`를 첫 테스트에 추가한다(`@/domain/job/sceneScale`에서 import).
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `pnpm --dir apps/frontend exec vitest run src/features/screens/background/ScenePanel.test.ts`
 Expected: FAIL — `sceneAnalysisSummary` export 없음
 
-- [ ] **Step 3: 공용 카드 작성** — `AnalysisSummaryPanel.tsx`. 위 공용 계약의 타입을 export하고 현재 `ScenePanel` 마크업을 옮긴다. 클래스 문자열은 `backgroundStyles`의 현재 값을 그대로 복사한다.
+- [x] **Step 3: 공용 카드 작성** — `AnalysisSummaryPanel.tsx`. 위 공용 계약의 타입을 export하고 현재 `ScenePanel` 마크업을 옮긴다. 클래스 문자열은 `backgroundStyles`의 현재 값을 그대로 복사한다.
 
 ```tsx
 /**
@@ -213,7 +213,7 @@ export function AnalysisSummaryPanel({
 }
 ```
 
-- [ ] **Step 4: `ScenePanel` 축소** — 상단 설계 주석(팔레트·camera/light/scale 이유)은 유지하고 본문을 다음으로 교체한다.
+- [x] **Step 4: `ScenePanel` 축소** — 상단 설계 주석(팔레트·camera/light/scale 이유)은 유지하고 본문을 다음으로 교체한다.
 
 ```tsx
 import { AnalysisSummaryPanel, type AnalysisSummaryPanelProps } from '../AnalysisSummaryPanel'
@@ -271,17 +271,17 @@ export function ScenePanel({ scene }: ScenePanelProps) {
 }
 ```
 
-- [ ] **Step 5: `ModelSummary` 이동** — `git mv apps/frontend/src/features/screens/background/ModelSummary.tsx apps/frontend/src/features/screens/ModelSummary.tsx`. 파일 안의 `backgroundStyles` import를 지역 `styles` 상수로 바꾼다(값은 현재 `modelSummary`·`modelBadge`·`modelBadgeLabel`·`modelBadgeProvider`·`modelBadgeModel`과 동일, 기존 주석 유지). 두 3D 화면의 import를 `@/features/screens/ModelSummary`로 바꾼다.
+- [x] **Step 5: `ModelSummary` 이동** — `git mv apps/frontend/src/features/screens/background/ModelSummary.tsx apps/frontend/src/features/screens/ModelSummary.tsx`. 파일 안의 `backgroundStyles` import를 지역 `styles` 상수로 바꾼다(값은 현재 `modelSummary`·`modelBadge`·`modelBadgeLabel`·`modelBadgeProvider`·`modelBadgeModel`과 동일, 기존 주석 유지). 두 3D 화면의 import를 `@/features/screens/ModelSummary`로 바꾼다.
 
-- [ ] **Step 6: 스타일 키 정리** — `rg -n "styles\.(scene|sceneHeader|sceneLabel|sceneSummary|palette|swatch|swatchChip|swatchChipUnresolved|sceneGrid|sceneField|sceneFieldLabel|sceneFieldValue|modelSummary|modelBadge\w*)\b" apps/frontend/src`로 다른 사용처가 없음을 확인하고 `backgroundStyles.ts`에서 해당 키와 그 주석만 삭제한다. 사용처가 남은 키는 두고 보고서에 적는다.
+- [x] **Step 6: 스타일 키 정리** — `rg -n "styles\.(scene|sceneHeader|sceneLabel|sceneSummary|palette|swatch|swatchChip|swatchChipUnresolved|sceneGrid|sceneField|sceneFieldLabel|sceneFieldValue|modelSummary|modelBadge\w*)\b" apps/frontend/src`로 다른 사용처가 없음을 확인하고 `backgroundStyles.ts`에서 해당 키와 그 주석만 삭제한다. 사용처가 남은 키는 두고 보고서에 적는다.
 
-- [ ] **Step 7: 대상 검증**
+- [x] **Step 7: 대상 검증**
 
 Run: `pnpm --dir apps/frontend exec vitest run src/features/screens/background/ScenePanel.test.ts` → PASS
 Run: `pnpm typecheck && pnpm lint` (저장소 루트) → 오류 0
 Run: `pnpm --dir apps/frontend exec playwright test tests/e2e/scene-palette.spec.ts tests/e2e/background-studio-e2e.spec.ts tests/e2e/background-studio-actions.spec.ts tests/e2e/part-generation-e2e.spec.ts tests/e2e/scene-assembly.spec.ts` → 전부 통과(테스트 수정 없이)
 
-- [ ] **Step 8: 커밋** — 이 작업 파일만 stage한다. `docs/xHuman/frontend.md`에 `ModelSummary`·`ScenePanel` 경로 언급이 없으면 문서는 Task 2에서 함께 고친다.
+- [x] **Step 8: 커밋** — 이 작업 파일만 stage한다. `docs/xHuman/frontend.md`에 `ModelSummary`·`ScenePanel` 경로 언급이 없으면 문서는 Task 2에서 함께 고친다.
 
 ```bash
 git commit -m "refactor(frontend): share analysis summary card and model badges"
@@ -305,7 +305,7 @@ git commit -m "refactor(frontend): share analysis summary card and model badges"
 - Consumes: Task 1의 `AnalysisSummaryPanel`·`AnalysisSummaryPanelProps`(`@/features/screens/AnalysisSummaryPanel`), `ModelSummary`(`@/features/screens/ModelSummary`)
 - Produces: `spriteViewLabel(view: SpriteView): string`, `spriteRepeatLabel(repeat: SpriteRepeat, view: SpriteView): string`, `spriteOutputLabel(settings: SpriteSettings): string`, `spriteAnalysisSummary(sprite: SpriteState): AnalysisSummaryPanelProps`, `SpriteAnalysisPanel({ sprite })`
 
-- [ ] **Step 1: 실패하는 단위 테스트 작성**
+- [x] **Step 1: 실패하는 단위 테스트 작성**
 
 `labels.test.ts`:
 
@@ -414,12 +414,12 @@ describe('spriteAnalysisSummary', () => {
 })
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `pnpm --dir apps/frontend exec vitest run src/domain/sprites/labels.test.ts src/features/screens/sprites/SpriteAnalysisPanel.test.ts`
 Expected: FAIL — 모듈 없음
 
-- [ ] **Step 3: 라벨 함수 작성** — `labels.ts`
+- [x] **Step 3: 라벨 함수 작성** — `labels.ts`
 
 ```ts
 import type { SpriteRepeat, SpriteSettings, SpriteView } from './types'
@@ -447,7 +447,7 @@ export function spriteOutputLabel(settings: SpriteSettings): string {
 }
 ```
 
-- [ ] **Step 4: 2D 연결부 작성** — `SpriteAnalysisPanel.tsx`
+- [x] **Step 4: 2D 연결부 작성** — `SpriteAnalysisPanel.tsx`
 
 ```tsx
 import { AnalysisSummaryPanel, type AnalysisSummaryPanelProps } from '../AnalysisSummaryPanel'
@@ -496,11 +496,11 @@ export function SpriteAnalysisPanel({ sprite }: { sprite: SpriteState }) {
 }
 ```
 
-- [ ] **Step 5: 단위 테스트 통과 확인**
+- [x] **Step 5: 단위 테스트 통과 확인**
 
 Run: `pnpm --dir apps/frontend exec vitest run src/domain/sprites/labels.test.ts src/features/screens/sprites/SpriteAnalysisPanel.test.ts` → PASS
 
-- [ ] **Step 6: 실패하는 E2E 작성** — `sprites-static.spec.ts` 끝에 추가. 이미 있는 `start`·`installFakeApi`·`SPRITE_IDS`를 쓴다. Fake 기본 계획은 정적 대상 2개(`후경 지면`, `전경 나무`), 원본 320×180, 요청 1024×1024, 레이어 최종 320×180, 타일 128px·`both`다.
+- [x] **Step 6: 실패하는 E2E 작성** — `sprites-static.spec.ts` 끝에 추가. 이미 있는 `start`·`installFakeApi`·`SPRITE_IDS`를 쓴다. Fake 기본 계획은 정적 대상 2개(`후경 지면`, `전경 나무`), 원본 320×180, 요청 1024×1024, 레이어 최종 320×180, 타일 128px·`both`다.
 
 ```ts
 test('sprite analysis card shows models and follows the saved plan', async ({ page }) => {
@@ -551,12 +551,12 @@ test('sprite analysis card stays on a canceled job after analysis', async ({ pag
 })
 ```
 
-- [ ] **Step 7: E2E 실패 확인**
+- [x] **Step 7: E2E 실패 확인**
 
 Run: `pnpm --dir apps/frontend exec playwright test tests/e2e/sprites-static.spec.ts -g "sprite analysis card"`
 Expected: FAIL — `sprite-analysis-panel`·`model-text` 없음
 
-- [ ] **Step 8: 화면 연결** — `SpriteStudioScreen.tsx`
+- [x] **Step 8: 화면 연결** — `SpriteStudioScreen.tsx`
 
 - import 추가: `import { useProviders } from '@/app/queries/useProviders'`, `import { ModelSummary } from '../ModelSummary'`, `import { SpriteAnalysisPanel } from './SpriteAnalysisPanel'`
 - 컴포넌트 첫 부분 훅 목록에 `const { providers } = useProviders()` 추가
@@ -576,7 +576,7 @@ Expected: FAIL — `sprite-analysis-panel`·`model-text` 없음
 
 `sprite.sourceCanvas` 등 더 이상 쓰지 않는 값이 생기면 lint 경고 없이 정리한다.
 
-- [ ] **Step 9: 지침·문서 갱신**
+- [x] **Step 9: 지침·문서 갱신**
 
 `apps/frontend/AGENTS.md`의 `## 작업 진행 표시` 절 끝에 추가:
 
@@ -590,13 +590,13 @@ Expected: FAIL — `sprite-analysis-panel`·`model-text` 없음
 - `src/features/screens/AnalysisSummaryPanel.tsx`는 분석 카드의 머리줄·선택적 팔레트·항목 격자를 그린다. 연결자는 `background/ScenePanel.tsx`(`sceneAnalysisSummary`, 3D 배경·캐릭터 `RunResult`)와 `sprites/SpriteAnalysisPanel.tsx`(`spriteAnalysisSummary`, 서버 저장 계획 기준)다. `src/features/screens/ModelSummary.tsx`는 3D 두 화면과 2D 화면의 진행 패널 아래에서 텍스트·이미지 모델 배지를 표시한다. 2D 카드는 분석이 끝난 뒤부터 표시하고, 시점·출력·반복 문구는 `src/domain/sprites/labels.ts`를 쓴다.
 ```
 
-- [ ] **Step 10: 대상·전체 검증**
+- [x] **Step 10: 대상·전체 검증**
 
 Run: `pnpm --dir apps/frontend exec playwright test tests/e2e/sprites-static.spec.ts tests/e2e/sprites-animation.spec.ts` → 전부 통과
 Run(저장소 루트): `pnpm test && pnpm lint && pnpm typecheck && pnpm build && pnpm test:e2e` → 전부 통과
 Run: `pnpm docs:check` → 통과
 
-- [ ] **Step 11: 커밋** — 이 작업 파일만 stage한다.
+- [x] **Step 11: 커밋** — 이 작업 파일만 stage한다.
 
 ```bash
 git commit -m "feat(frontend): show shared analysis summary in 2d studio"
@@ -604,4 +604,10 @@ git commit -m "feat(frontend): show shared analysis summary in 2d studio"
 
 ## 실행 기록
 
-(진행하면서 추가)
+- 실행 방식: Subagent-driven. 작업별 구현 에이전트 1개와 구현에 참여하지 않은 리뷰 에이전트 1개, 마지막에 브랜치 전체 리뷰 1회와 수정 범위 재리뷰 1회.
+- Task 1 완료: `4f61915` — `AnalysisSummaryPanel`·`sceneAnalysisSummary`, `ModelSummary` 공용 위치 이동, `backgroundStyles`의 옮긴 키 삭제. 리뷰 승인, 기존 3D E2E 5개 수정 없이 통과.
+- Task 2 완료: `327d5fb` — `labels.ts`·`SpriteAnalysisPanel`, 2D 화면 배치, `SpritePlanReview` 캔버스 문장 이동, E2E 4개, 지침·도메인 문서. 리뷰 승인.
+- 전체 리뷰 후 수정: `4617b7c` — 2D 세로 스택에서 `ModelSummary` 아래 여백 중복 제거(`className` 병합, 3D 클래스 불변), 공용 카드 머리 주석 명사구화. 재리뷰 통과.
+- 검증(최종 HEAD): `pnpm test` 437 통과, `pnpm lint`·`pnpm typecheck`·`pnpm build` 통과, `pnpm test:e2e` 321 통과, `pnpm docs:check` 통과.
+- 계획과 다른 점: 공용 카드 단위 테스트는 순수 함수 테스트와 E2E로 대체. 빈 팔레트면 3D도 팔레트 줄을 그리지 않음(설계 명시).
+- 보류: 카드 `section`의 접근성 이름(3D 접근성 트리 변경 우려), `SpriteInput` 선택지 문구와 `labels.ts` 중복(이번 범위에서 `SpriteInput` 불변), 대상 추가·삭제 후 카드 갱신 E2E.
