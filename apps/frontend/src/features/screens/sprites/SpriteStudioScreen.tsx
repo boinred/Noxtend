@@ -144,7 +144,7 @@ export function SpriteStudioScreen() {
             ) : null}
           </section>
           {/* 모델은 접수 시점 고정 — 분석 중에도 표시 */}
-          <ModelSummary models={job.models} providers={providers} />
+          <ModelSummary models={job.models} providers={providers} className="mb-0" />
           {sprite.phase !== 'analyzing' ? <SpriteAnalysisPanel sprite={sprite} /> : null}
           {sprite.phase !== 'analyzing' && !canceled ? (
             <SpritePlanReview
