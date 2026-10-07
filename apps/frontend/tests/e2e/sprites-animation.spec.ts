@@ -275,7 +275,10 @@ test('current missing failed and running slots are shown without historical task
   await expect(page.getByRole('button', { name: '실패 공정 재시도', exact: true })).toHaveCount(0)
   expect(records).toHaveLength(1)
   await page.setViewportSize({ width: 390, height: 844 })
-  await panel.screenshot({ path: '/tmp/noxtend-sprite-status-animation-mobile.png' })
+  await panel.screenshot({
+    path: '/tmp/noxtend-sprite-status-animation-mobile.png',
+    animations: 'disabled',
+  })
 })
 
 test('lost animation approval replays the same request without creating tasks', async ({
