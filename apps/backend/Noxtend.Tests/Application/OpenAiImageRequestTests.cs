@@ -91,6 +91,27 @@ public sealed class OpenAiImageRequestTests
             "reference-0(FrontView)가 reference-1(Original)보다 먼저 와야 한다");
     }
 
+    [Theory]
+    [InlineData("{")]
+    [InlineData("{}")]
+    [InlineData("{\"data\":{}}")]
+    [InlineData("{\"data\":null}")]
+    [InlineData("{\"data\":[null]}")]
+    [InlineData("{\"data\":[{\"b64_json\":123}]}")]
+    [InlineData("{\"data\":[{\"b64_json\":\"%%%private-response%%%\"}]}")]
+    [InlineData("{\"data\":[{\"b64_json\":\"AQ==\"}],\"usage\":[]}")]
+    public async Task MalformedResponse_BecomesSafeProviderBadResponse(string payload)
+    {
+        using var http = new HttpClient(new CapturingHandler(payload));
+        var provider = new OpenAiImageProvider(http, "private-api-key", "gpt-image-2");
+
+        var exception = await Assert.ThrowsAsync<ProviderBadResponseException>(() => provider.GenerateAsync(
+            new ImageRequest(Context, "항구", [], "1024x1024"), default));
+
+        Assert.Equal("이미지 공급자 응답 형식이 올바르지 않습니다", exception.Message);
+        Assert.Null(exception.InnerException);
+    }
+
     private sealed class CapturingHandler(string payload) : HttpMessageHandler
     {
         public string? Body { get; private set; }

@@ -71,6 +71,7 @@
 - 공통 `Llm:UseFake` 설정을 텍스트·이미지·3D Factory가 공유한다. 설정 파일의 기본값만 보고 실행 모드를 단정하지 말고 실제 호스트 설정과 Factory 등록을 확인한다.
 - 활성 프롬프트 선택과 카테고리별 기본값 fallback은 `apps/backend/Noxtend.Infrastructure/Llm/TuningPortAdapters.cs`의 `TuningPromptCatalog`에서 확인한다. 프롬프트 버전 id는 호출 맥락과 내역에 연결되므로 요청·응답 처리 과정에서 버리지 않는다.
 - 공급자 출력의 JSON 파싱·도메인 검증은 Application 단계에 둔다. 어댑터는 공급자 프로토콜에서 공통 계약으로 옮기는 데 필요한 파싱만 수행한다.
+- `OpenAiImageProvider`는 성공 HTTP 응답의 JSON 문법·필수 data·shape·base64 파싱 오류를 원문과 내부 예외 없이 안전한 `ProviderBadResponseException`으로 정규화한다. 생성과 edit가 같은 파싱 경계를 사용하며 원본 생성 API는 이를 `ProviderBadResponse` 502 봉투로 반환하고 업로드하지 않는다. Recorder는 실패 호출 한 건과 알 수 없는 사용량(null)을 남긴다. HTTP 실패의 transient 분류·취소 전파·유효 응답의 바이트·장수·사용량·rate-limit 헤더는 기존 계약을 유지한다.
 - `RewriteDescriptions`는 `RunTaskHandler`가 `IStage.BuildJsonSchema`를 호출해 현재 재작성 대상 이름을 JSON Schema `enum`으로 제한한다. 응답 해석은 정확한 대상 이름을 우선하고, 미확인 이름 하나와 누락 대상 하나가 남을 때만 1:1 보정한다. 중복·누락·모호한 응답은 실패시키며 Domain 검증은 그대로 유지한다. 관련 회귀는 `RewriteDescriptionsStageTests.cs`에서 확인한다.
 - `ProviderHttp`의 OpenAI 응답 분류는 텍스트·이미지 양쪽에서 429의 insufficient_quota type/code와 문서화된 credit_balance_exhausted·organization_spend_limit_exceeded·project_spend_limit_exceeded·organization_usage_limit_exceeded code를 즉시 실패로 분류한다. 일반 rate limit·잘못된/없는 오류 본문은 기존 상태 코드 기준 재시도를 유지하고 원문 message는 예외에 넣지 않는다.
 - 취소 토큰, transient 오류 분류, 재시도 한도는 Provider 예외와 `RunTaskHandler`·`TaskExecution`에서 함께 확인한다. 인증 실패·크레딧 부족·잘못된 설정을 무조건 재시도하지 않는다.

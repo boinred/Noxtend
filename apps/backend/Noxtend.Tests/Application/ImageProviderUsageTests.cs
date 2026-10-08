@@ -59,20 +59,26 @@ public sealed class ImageProviderUsageTests
         Assert.Equal(1, result.ImageCount);
     }
 
-    [Fact]
-    public async Task OpenAi_RecordsInputAndOutputTokens()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OpenAi_RecordsInputAndOutputTokens(bool edit)
     {
         const string payload = """
             {
-              "data": [{ "b64_json": "iVBORw0KGgo=" }],
+              "data": [{ "b64_json": "iVBORw0KGgo=" }, { "b64_json": "AQ==" }],
               "usage": { "input_tokens": 1580, "output_tokens": 1120, "total_tokens": 2700 }
             }
             """;
 
         var provider = new OpenAiImageProvider(Client(payload), "key", "gpt-image-2");
 
-        var result = await provider.GenerateAsync(Request(), CancellationToken.None);
+        var result = await provider.GenerateAsync(
+            Request(edit ? new ImageContent([1, 2, 3], "image/png") : null), CancellationToken.None);
 
+        Assert.Equal(Convert.FromBase64String("iVBORw0KGgo="), result.Bytes);
+        Assert.Equal("image/png", result.ContentType);
+        Assert.Equal(2, result.ImageCount);
         Assert.Equal(1580, result.InputTokens);
         Assert.Equal(1120, result.OutputTokens);
     }

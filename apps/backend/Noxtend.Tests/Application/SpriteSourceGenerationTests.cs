@@ -1,3 +1,4 @@
+using System.Net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
 using Noxtend.Api.Contracts;
@@ -206,6 +207,66 @@ public sealed class SpriteSourceGenerationTests
     }
 
     [Theory]
+    [InlineData("{")]
+    [InlineData("{}")]
+    [InlineData("{\"data\":{}}")]
+    [InlineData("{\"data\":[{\"b64_json\":\"%%%private-response%%%\"}]}")]
+    public async Task OpenAiMalformedResponse_ReturnsSafe502WithoutUploadAndRecordsOneFailure(string payload)
+    {
+        var recorder = new Recorder();
+        var httpHandler = new ResponseHandler(payload);
+        using var http = new HttpClient(httpHandler);
+        var f = new PipelineFixture(imageProvider: new RecordingImageProvider(
+            new OpenAiImageProvider(http, "private-api-key", "gpt-image-2.5-sunburst"),
+            recorder, NullLogger<RecordingImageProvider>.Instance));
+        var command = await PrepareOpenAi(f);
+
+        var response = Assert.IsType<ObjectResult>(await new UploadsController(f.Upload, f.Images, f.Blobs, f.GenerateSpriteSource)
+            .GenerateAsync(new(command.RequestId, command.Prompt, command.ImageProviderConfigId, command.ImageModel), default));
+
+        Assert.Equal(502, response.StatusCode);
+        var envelope = Assert.IsType<ApiResponse<UploadResponse>>(response.Value);
+        Assert.Null(envelope.Data);
+        Assert.Equal(ErrorCode.ProviderBadResponse, envelope.Error!.Code);
+        Assert.Equal("이미지 공급자 응답 형식이 올바르지 않습니다", envelope.Error.Message);
+        Assert.Equal(0, f.Blobs.Count);
+        Assert.Equal(1, httpHandler.Calls);
+        var entry = Assert.Single(recorder.Entries);
+        Assert.False(entry.Succeeded);
+        Assert.Equal(command.RequestId, entry.Context.SourceGenerationId);
+        Assert.Equal(LlmOperationKind.GenerateSpriteSource, entry.Context.Kind);
+        Assert.Equal(envelope.Error.Message, entry.FailureReason);
+        Assert.Null(entry.ResponsePayload);
+        Assert.Null(entry.InputTokens);
+        Assert.Null(entry.OutputTokens);
+        Assert.Null(entry.OutputImages);
+        Assert.False(Assert.Single(recorder.Tokens).CanBeCanceled);
+    }
+
+    [Fact]
+    public async Task OpenAiClientCancellation_PropagatesWithoutUploadOrFailureRecord()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var recorder = new Recorder();
+        var httpHandler = new ResponseHandler("{", entered);
+        using var http = new HttpClient(httpHandler);
+        var f = new PipelineFixture(imageProvider: new RecordingImageProvider(
+            new OpenAiImageProvider(http, "private-api-key", "gpt-image-2.5-sunburst"),
+            recorder, NullLogger<RecordingImageProvider>.Instance));
+        var command = await PrepareOpenAi(f);
+        using var request = new CancellationTokenSource();
+        var pending = new UploadsController(f.Upload, f.Images, f.Blobs, f.GenerateSpriteSource)
+            .GenerateAsync(new(command.RequestId, command.Prompt, command.ImageProviderConfigId, command.ImageModel), request.Token);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        request.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+        Assert.Equal(1, httpHandler.Calls);
+        Assert.Empty(recorder.Entries);
+        Assert.Equal(0, f.Blobs.Count);
+    }
+
+    [Theory]
     [InlineData("catalog")]
     [InlineData("rate")]
     [InlineData("provider")]
@@ -336,6 +397,29 @@ public sealed class SpriteSourceGenerationTests
         => new(f.Providers, catalog ?? f.Catalog, f.Prompts, factory ?? new PipelineFixture.StubImageProviderFactory(f.Images_),
             limiter is null ? f.RateLimitGate : new RateLimitGate(limiter, f.Clock),
             blobs is null ? f.Upload : new CreateUploadHandler(blobs, f.Images, f.Clock), time);
+
+    private static async Task<GenerateSpriteSourceCommand> PrepareOpenAi(PipelineFixture f)
+    {
+        var command = (await Prepare(f)) with { ImageModel = "gpt-image-2.5-sunburst" };
+        f.Catalog.ImageModels.Clear();
+        f.Catalog.ImageModels.Add(new(command.ImageModel, "sprite", new(true, [new(1024, 1024)])));
+        return command;
+    }
+
+    private sealed class ResponseHandler(string payload, TaskCompletionSource? entered = null) : HttpMessageHandler
+    {
+        public int Calls { get; private set; }
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Calls++;
+            if (entered is not null)
+            {
+                entered.TrySetResult();
+                await Task.Delay(Timeout.Infinite, ct);
+            }
+            return new(HttpStatusCode.OK) { Content = new StringContent(payload) };
+        }
+    }
 
     private sealed class CapturingProvider(IImageProvider inner, TaskCompletionSource? entered = null, Action? expire = null) : IImageProvider
     {
