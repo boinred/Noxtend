@@ -317,6 +317,7 @@ public sealed class SpritePersistenceTests(SqlServerFixture sql)
     [Theory]
     [InlineData(Noxtend.Domain.Llm.LlmOperationKind.AnalyzeSprites, "_SeedSpriteAnalyzePrompt")]
     [InlineData(Noxtend.Domain.Llm.LlmOperationKind.GenerateSprite, "_SeedSpriteGeneratePrompt")]
+    [InlineData(Noxtend.Domain.Llm.LlmOperationKind.GenerateSpriteSource, "_SeedSpriteSourcePrompt")]
     public async Task SpritePromptMigration_AddsOnlyBackgroundAndPreservesOperatorSlot(Noxtend.Domain.Llm.LlmOperationKind kind, string suffix)
     {
         await using var db = Context();

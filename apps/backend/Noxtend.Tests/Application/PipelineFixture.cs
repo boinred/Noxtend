@@ -424,6 +424,7 @@ public sealed class StubPromptCatalog : IPromptCatalog
 
     private readonly Dictionary<LlmOperationKind, PromptSnapshot> _active = new()
     {
+        [LlmOperationKind.GenerateSpriteSource] = Snapshot(LlmOperationKind.GenerateSpriteSource, "2D 기준 장면", "{{prompt}}"),
         [LlmOperationKind.GenerateSprite] = Snapshot(LlmOperationKind.GenerateSprite, "{{settings}}", "{{asset}}\n{{frame}}\n{{sourceCanvas}}\n{{outputCanvas}}"),
         [LlmOperationKind.AnalyzeSprites] = Snapshot(LlmOperationKind.AnalyzeSprites, "2D 분석", "{{settings}} {{sourceCanvas}}"),
         [LlmOperationKind.Analyze] = Snapshot(LlmOperationKind.Analyze, "장면을 분석하라", string.Empty),

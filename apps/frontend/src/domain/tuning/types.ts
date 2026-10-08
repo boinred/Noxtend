@@ -13,7 +13,9 @@ import type { AssetCategory, TaskKind } from '@/domain/job/types'
  * 유사도 평가처럼 공정이 아닌 호출의 슬롯이 여기에만 산다. reconstruct 는 LLM 이 없다.
  */
 export type PromptKind =
-  Exclude<TaskKind, 'reconstruct' | 'synthesize' | 'packSprites'> | 'similarityEvaluate'
+  | Exclude<TaskKind, 'reconstruct' | 'synthesize' | 'packSprites'>
+  | 'similarityEvaluate'
+  | 'generateSpriteSource'
 
 const PROMPT_KIND_LABELS: Record<PromptKind, string> = {
   analyze: '장면 분석',
@@ -24,6 +26,7 @@ const PROMPT_KIND_LABELS: Record<PromptKind, string> = {
   similarityEvaluate: '유사도 평가',
   analyzeSprites: '2D 배경 분석',
   generateSprite: '2D 배경 생성',
+  generateSpriteSource: '2D 배경 기준 생성',
 }
 
 export function promptKindLabel(kind: PromptKind): string {
@@ -36,7 +39,10 @@ export function promptKindLabel(kind: PromptKind): string {
  * 프롬프트가 없다는 오해를 만든다 (실측 피드백).
  */
 export function promptKindCategories(kind: PromptKind): (AssetCategory | null)[] {
-  return kind === 'similarityEvaluate' || kind === 'analyzeSprites' || kind === 'generateSprite'
+  return kind === 'similarityEvaluate' ||
+    kind === 'analyzeSprites' ||
+    kind === 'generateSprite' ||
+    kind === 'generateSpriteSource'
     ? ['background']
     : [null, 'character', 'object', 'background']
 }

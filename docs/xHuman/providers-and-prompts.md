@@ -24,6 +24,8 @@
 
 ### 2D 배경 이미지 생성
 
+`GenerateSpriteSource`는 Background 전용이며 변수 `{{prompt}}`로 참조 없는 업로드용 기준 이미지 생성을 위한 프롬프트를 정의한다. `SeedPrompts.GenerateSpriteSource()`와 `SeedSpriteSourcePrompt` migration은 기존 운영자 슬롯을 보존한다.
+
 `RunSpriteGenerationTaskHandler`는 `LlmOperationKind.GenerateSprite=6`·Background 전용 활성 프롬프트를 사용한다. `SeedPrompts.GenerateSprite()`와 `SeedSpriteGeneratePrompt` migration은 기존 운영자 슬롯을 보존한다. 허용 변수는 settings·asset·frame·sourceCanvas·outputCanvas이며, asset은 `SpriteFrameInput.Plan` snapshot이다. frame JSON에는 index·count·phase·BaseImageId와 고정 GenerationCanvas·anchor·transform을 전달한다. 이름·FPS를 나중에 편집해도 접수한 입력은 바뀌지 않는다. `ViewDirection`은 사용하지 않는다.
 
 모든 sprite 요청은 Background를 opaque 또는 transparent로 명시하고 기존 Factory·Recording·RateLimitGate를 통과한다. raw 응답은 실제 PNG와 image/png 및 고정 GenerationCanvas 크기가 일치해야 하며, 디코딩·크기·알파 오류는 재시도하지 않는다. 기존 입력 MIME은 원본 참조에 유지하고 출력은 픽셀 검증 후 PNG로 정규화한다. FakeImageProvider의 기본 성공·지연 응답은 GenerateSprite의 요청 크기에 맞는 RGBA PNG를 만들며 명시적인 Returning 오류 fixture는 변환하지 않는다.
