@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { spriteOutputLabel, spriteRepeatLabel, spriteViewLabel } from './labels'
+import {
+  spriteOutputKindLabel,
+  spriteOutputLabel,
+  spriteRepeatLabel,
+  spriteViewLabel,
+} from './labels'
 
 describe('sprite labels', () => {
   it('matches the input screen wording', () => {
@@ -14,6 +19,11 @@ describe('sprite labels', () => {
     expect(spriteRepeatLabel('x', 'topDown')).toBe('가로')
     expect(spriteRepeatLabel('y', 'sideView')).toBe('세로')
     expect(spriteRepeatLabel('both', 'isometric')).toBe('양쪽')
+  })
+
+  it('names the output kinds', () => {
+    expect(spriteOutputKindLabel('layers')).toBe('배경 레이어')
+    expect(spriteOutputKindLabel('tiles')).toBe('반복 타일')
   })
 
   it('describes the output kind', () => {

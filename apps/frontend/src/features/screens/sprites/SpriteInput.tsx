@@ -14,6 +14,7 @@ import { useStartSpriteJob } from '@/app/queries/useSprites'
 import { apiErrorMessage, apiErrorStatus } from '@/app/queries/errors'
 import { readSpriteSource, spriteBackgroundJobPath } from '@/routes/paths'
 import type { SpriteView, SpriteOutputKind, SpriteRepeat } from '@/domain/sprites/types'
+import { spriteOutputKindLabel, spriteRepeatLabel, spriteViewLabel } from '@/domain/sprites/labels'
 import { ProviderSelect } from '../background/ProviderSelect'
 import { ModelSelect } from '../background/ModelSelect'
 import { ImageDropzone } from '../background/ImageDropzone'
@@ -28,6 +29,8 @@ export function SpriteInput() {
   const [kind, setKind] = useState<SpriteOutputKind | ''>('')
   const [tileWidth, setTileWidth] = useState<64 | 128 | 256>(128)
   const [repeat, setRepeat] = useState<SpriteRepeat>('both')
+  // 시점 미선택 — 화면 축 문구
+  const axisView = view || 'sideView'
   const providers = useProviders()
   const [textId, setTextId] = useState<string | null>(null)
   const [imageId, setImageId] = useState<string | null>(null)
@@ -115,9 +118,11 @@ export function SpriteInput() {
                 <SelectValue placeholder="시점 선택" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="sideView">횡스크롤</SelectItem>
-                <SelectItem value="topDown">탑다운</SelectItem>
-                <SelectItem value="isometric">아이소메트릭</SelectItem>
+                {(['sideView', 'topDown', 'isometric'] as const).map((v) => (
+                  <SelectItem key={v} value={v}>
+                    {spriteViewLabel(v)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -131,17 +136,19 @@ export function SpriteInput() {
                 <SelectValue placeholder="결과 유형 선택" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="layers">배경 레이어</SelectItem>
-                <SelectItem value="tiles">반복 타일</SelectItem>
+                {(['layers', 'tiles'] as const).map((k) => (
+                  <SelectItem key={k} value={k}>
+                    {spriteOutputKindLabel(k)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
         </div>
         {view ? (
           <p className={styles.hint}>
-            원본과 선택한 시점이 다르면{' '}
-            {view === 'sideView' ? '횡스크롤' : view === 'topDown' ? '탑다운' : '아이소메트릭'}{' '}
-            시점으로 새로 재구성합니다. 단순 좌표 변환이 아닙니다.
+            원본과 선택한 시점이 다르면 {spriteViewLabel(view)} 시점으로 새로 재구성합니다. 단순
+            좌표 변환이 아닙니다.
           </p>
         ) : null}
         {kind === 'tiles' ? (
@@ -171,9 +178,11 @@ export function SpriteInput() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="x">{view === 'isometric' ? '격자 X축' : '가로'}</SelectItem>
-                  <SelectItem value="y">{view === 'isometric' ? '격자 Y축' : '세로'}</SelectItem>
-                  <SelectItem value="both">양쪽</SelectItem>
+                  {(['x', 'y', 'both'] as const).map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {spriteRepeatLabel(r, axisView)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

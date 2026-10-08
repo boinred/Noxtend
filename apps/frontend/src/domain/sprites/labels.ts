@@ -1,4 +1,4 @@
-import type { SpriteRepeat, SpriteSettings, SpriteView } from './types'
+import type { SpriteOutputKind, SpriteRepeat, SpriteSettings, SpriteView } from './types'
 
 const VIEW_LABELS: Record<SpriteView, string> = {
   sideView: '횡스크롤',
@@ -6,8 +6,17 @@ const VIEW_LABELS: Record<SpriteView, string> = {
   isometric: '아이소메트릭',
 }
 
+const OUTPUT_KIND_LABELS: Record<SpriteOutputKind, string> = {
+  layers: '배경 레이어',
+  tiles: '반복 타일',
+}
+
 export function spriteViewLabel(view: SpriteView): string {
   return VIEW_LABELS[view]
+}
+
+export function spriteOutputKindLabel(kind: SpriteOutputKind): string {
+  return OUTPUT_KIND_LABELS[kind]
 }
 
 // 아이소메트릭 반복은 화면 축이 아니라 다이아몬드 격자 축
@@ -18,6 +27,6 @@ export function spriteRepeatLabel(repeat: SpriteRepeat, view: SpriteView): strin
 }
 
 export function spriteOutputLabel(settings: SpriteSettings): string {
-  if (settings.outputKind === 'layers') return '배경 레이어'
-  return `반복 타일 · ${settings.tileWidth}px · ${spriteRepeatLabel(settings.repeat, settings.view)}`
+  if (settings.outputKind === 'layers') return spriteOutputKindLabel('layers')
+  return `${spriteOutputKindLabel('tiles')} · ${settings.tileWidth}px · ${spriteRepeatLabel(settings.repeat, settings.view)}`
 }
