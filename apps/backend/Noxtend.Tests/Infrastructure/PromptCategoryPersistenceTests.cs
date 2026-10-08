@@ -21,14 +21,10 @@ public sealed class PromptCategoryPersistenceTests(SqlServerFixture sql)
 
     private static readonly DateTimeOffset Now = new(2026, 8, 12, 0, 0, 0, TimeSpan.Zero);
 
-    // 마이그레이션이 시드하는 카테고리 활성 행은 캐릭터 Extract·Decompose·Generate 셋뿐이다.
-    //
-    // character-studio slice 4 이전에는 "카테고리 있는 활성 시드가 하나도 없다" 였다. slice 4 가
-    // 캐릭터 세 단계를 의도적으로 시드하면서 이 불변식을 좁혔다 — 이제 "그 셋 외에 다른 카테고리
-    // 활성 시드는 없다" 를 고정한다. 훗날 시드가 실수로 다른 전용 프롬프트를 켜면 이 단정이 잡는다.
-    // 캐릭터 시드 자체의 스코프·활성 유일성은 CharacterPromptSeedMigrationTests 가 지킨다.
+    // 캐릭터 3개·배경 8개의 활성 전용 시드
+    // CharacterPromptSeedMigrationTests의 캐릭터 슬롯 검증과 전체 목록 대조
     [Fact]
-    public async Task MigratedCategorizedSeeds_AreTheCharacterTripletPlusSevenBackgroundSlots()
+    public async Task MigratedCategorizedSeeds_AreTheCharacterTripletPlusEightBackgroundSlots()
     {
         await using var db = Context();
         await db.Database.MigrateAsync();
@@ -41,8 +37,8 @@ public sealed class PromptCategoryPersistenceTests(SqlServerFixture sql)
             .Select(p => new { p.Kind, p.Category })
             .ToListAsync();
 
-        // Character triplet and the seven independent Background slots
-        Assert.Equal(10, categorized.Count);
+        // 캐릭터 3개·배경 8개의 독립 슬롯
+        Assert.Equal(11, categorized.Count);
         Assert.DoesNotContain(categorized, row => row.Category == AssetCategory.Object);
         Assert.Equal(
             [LlmOperationKind.Extract, LlmOperationKind.Decompose, LlmOperationKind.Generate],
@@ -50,7 +46,7 @@ public sealed class PromptCategoryPersistenceTests(SqlServerFixture sql)
                 .Select(row => row.Kind).OrderBy(k => k));
         Assert.Equal(
             [LlmOperationKind.Analyze, LlmOperationKind.Extract, LlmOperationKind.Decompose,
-             LlmOperationKind.Generate, LlmOperationKind.AnalyzeSprites, LlmOperationKind.GenerateSprite, LlmOperationKind.SimilarityEvaluate],
+             LlmOperationKind.Generate, LlmOperationKind.AnalyzeSprites, LlmOperationKind.GenerateSprite, LlmOperationKind.GenerateSpriteSource, LlmOperationKind.SimilarityEvaluate],
             categorized.Where(row => row.Category == AssetCategory.Background)
                 .Select(row => row.Kind).OrderBy(kind => kind));
     }

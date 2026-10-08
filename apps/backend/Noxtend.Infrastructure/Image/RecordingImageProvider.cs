@@ -85,9 +85,10 @@ internal sealed class RecordingImageProvider(
     /// 이어 붙이면 된다. 두 곳에 두면 재생성 때 어긋난다.
     /// </summary>
     private static LlmCallContext ToCallContext(ImageCallContext context)
-        => LlmCallContext.ForTask(
-            context.JobId, context.TaskId, context.Kind,
-            context.PromptVersionId, context.ProviderConfigId, context.Model);
+        => context.SourceGenerationId is { } id
+            ? LlmCallContext.ForSourceGeneration(id, context.PromptVersionId, context.ProviderConfigId, context.Model)
+            : LlmCallContext.ForTask(context.JobId!.Value, context.TaskId!.Value, context.Kind,
+                context.PromptVersionId, context.ProviderConfigId, context.Model);
 
     /// <summary>
     /// 기록 실패는 삼킨다 (G-4 · NFR-06).

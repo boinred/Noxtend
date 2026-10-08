@@ -128,6 +128,28 @@ public sealed class JobDeletionPersistenceTests(SqlServerFixture sql)
         Assert.Single(read.StoredImages);
     }
 
+    [Fact]
+    public async Task Delete_KeepsJoblessSourceGenerationCall()
+    {
+        await Migrate();
+        var (jobId, _) = await SeedAsync();
+        var sourceGenerationId = Guid.NewGuid();
+        await using (var seed = Context())
+        {
+            seed.LlmCalls.Add(LlmCall.Success(
+                null, null, null, LlmOperationKind.GenerateSpriteSource, Guid.NewGuid(), Guid.NewGuid(),
+                "image-model", "prompt", "image/png", 10, 20, 100, Now, 1, sourceGenerationId));
+            await seed.SaveChangesAsync();
+        }
+
+        await using var db = Context();
+        Assert.NotNull(await new EfJobRepository(db).DeleteIfTerminalAsync(jobId, CancellationToken.None));
+        await using var read = Context();
+        var call = Assert.Single(await read.LlmCalls.ToListAsync());
+        Assert.Null(call.JobId);
+        Assert.Equal(sourceGenerationId, call.SourceGenerationId);
+    }
+
     // ─── 설정 ───
 
     /// <summary>작업 하나 + 원본 + 생성 이미지 + 3D 실행 + 비용 원장.</summary>

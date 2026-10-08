@@ -67,16 +67,22 @@ public enum ReferenceRole
 /// 이 호출이 어느 작업·공정·파츠·프롬프트 버전에 속하는가.
 ///
 /// 기존 파츠 생성은 <paramref name="PartId"/> 를 유지하고 sprite는 null 이다.
-/// 기록의 상관관계는 <paramref name="TaskId"/> 로 조회한다.
+/// 작업 호출은 <paramref name="TaskId"/>, 작업 없는 원본 생성은 <paramref name="SourceGenerationId"/> 로 조회한다.
 /// </summary>
 public sealed record ImageCallContext(
-    Guid JobId,
-    Guid TaskId,
+    Guid? JobId,
+    Guid? TaskId,
     Guid? PartId,
     Guid PromptVersionId,
     Guid ProviderConfigId,
     string Model,
-    TaskKind Kind = TaskKind.Generate);
+    TaskKind Kind = TaskKind.Generate,
+    Guid? SourceGenerationId = null)
+{
+    public static ImageCallContext ForSourceGeneration(
+        Guid sourceGenerationId, Guid promptVersionId, Guid providerConfigId, string model)
+        => new(null, null, null, promptVersionId, providerConfigId, model, SourceGenerationId: sourceGenerationId);
+}
 
 /// <summary>
 /// 이미지 공급자 응답.

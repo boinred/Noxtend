@@ -62,32 +62,36 @@ public sealed record LlmImage(string Name, ImageContent Content);
 /// <see cref="PromptVersionId"/> 가 여기 있는 것이 재현성의 핵심이다 (FR-10).
 ///
 /// 상관관계는 공정(<see cref="TaskId"/>) 또는 유사도 평가
-/// (<see cref="SimilarityEvaluationId"/>) **정확히 하나**다 (§7.3) — 생성자를 닫고
+/// (<see cref="SimilarityEvaluationId"/>) 또는 원본 생성(<see cref="SourceGenerationId"/>)
+/// **정확히 하나**다 — 생성자를 닫고
 /// factory 만 열어 잘못된 조합이 타입 수준에서 존재하지 않게 한다.
 /// </summary>
 public sealed record LlmCallContext
 {
     private LlmCallContext(
-        Guid jobId,
+        Guid? jobId,
         Guid? taskId,
         Guid? similarityEvaluationId,
         Llm.LlmOperationKind kind,
         Guid promptVersionId,
         Guid providerConfigId,
-        string model)
+        string model,
+        Guid? sourceGenerationId = null)
     {
         JobId = jobId;
         TaskId = taskId;
         SimilarityEvaluationId = similarityEvaluationId;
+        SourceGenerationId = sourceGenerationId;
         Kind = kind;
         PromptVersionId = promptVersionId;
         ProviderConfigId = providerConfigId;
         Model = model;
     }
 
-    public Guid JobId { get; }
+    public Guid? JobId { get; }
     public Guid? TaskId { get; }
     public Guid? SimilarityEvaluationId { get; }
+    public Guid? SourceGenerationId { get; }
     public Llm.LlmOperationKind Kind { get; }
     public Guid PromptVersionId { get; }
     public Guid ProviderConfigId { get; }
@@ -98,6 +102,11 @@ public sealed record LlmCallContext
         Guid promptVersionId, Guid providerConfigId, string model)
         => new(jobId, taskId, similarityEvaluationId: null,
             Llm.LlmOperation.FromTask(kind), promptVersionId, providerConfigId, model);
+
+    public static LlmCallContext ForSourceGeneration(
+        Guid sourceGenerationId, Guid promptVersionId, Guid providerConfigId, string model)
+        => new(null, null, null, Llm.LlmOperationKind.GenerateSpriteSource,
+            promptVersionId, providerConfigId, model, sourceGenerationId);
 
     public static LlmCallContext ForSimilarityEvaluation(
         Guid jobId, Guid similarityEvaluationId,

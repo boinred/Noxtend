@@ -86,7 +86,7 @@ public sealed class FakeImageProvider : IImageProvider
 
         // 실제 공급자가 usage 를 주므로 Fake 도 준다 — 비용 집계가 Fake 모드에서도 검증된다
         var bytes = _bytes;
-        if (request.Context.Kind == TaskKind.GenerateSprite && _spriteSize)
+        if ((request.Context.Kind == TaskKind.GenerateSprite || request.Context.SourceGenerationId is not null) && _spriteSize)
         {
             var size = request.Size.Split('x');
             if (size.Length != 2 || !int.TryParse(size[0], out var width) || !int.TryParse(size[1], out var height)

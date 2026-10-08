@@ -104,17 +104,18 @@ public sealed class LlmCallConfiguration : IEntityTypeConfiguration<LlmCall>
         builder.HasKey(c => c.Id);
         builder.Property(c => c.Id).ValueGeneratedNever();
 
-        builder.Property(c => c.JobId).IsRequired();
+        builder.Property(c => c.JobId);
         builder.Property(c => c.TaskId);
         builder.Property(c => c.SimilarityEvaluationId);
+        builder.Property(c => c.SourceGenerationId);
         builder.Property(c => c.Kind).HasConversion<string>().HasMaxLength(32).IsRequired();
 
-        // 상관관계는 공정 또는 유사도 평가 정확히 하나 (§7.3) — 애플리케이션은 factory 로
-        // 막지만 마지막 방어선은 DB 다
+        // 공정·유사도 평가·원본 생성의 단일 상관관계 보장
         builder.ToTable(t => t.HasCheckConstraint(
             "CK_LlmCalls_ExactlyOneCorrelation",
-            "([TaskId] IS NULL AND [SimilarityEvaluationId] IS NOT NULL) OR " +
-            "([TaskId] IS NOT NULL AND [SimilarityEvaluationId] IS NULL)"));
+            "([JobId] IS NOT NULL AND [TaskId] IS NOT NULL AND [SimilarityEvaluationId] IS NULL AND [SourceGenerationId] IS NULL) OR " +
+            "([JobId] IS NOT NULL AND [TaskId] IS NULL AND [SimilarityEvaluationId] IS NOT NULL AND [SourceGenerationId] IS NULL) OR " +
+            "([JobId] IS NULL AND [TaskId] IS NULL AND [SimilarityEvaluationId] IS NULL AND [SourceGenerationId] IS NOT NULL)"));
 
         // non-nullable 이 계약이다 (§3.2). 없으면 재현이 불가능하다
         builder.Property(c => c.PromptVersionId).IsRequired();
@@ -135,6 +136,7 @@ public sealed class LlmCallConfiguration : IEntityTypeConfiguration<LlmCall>
 
         builder.HasIndex(c => c.JobId);
         builder.HasIndex(c => c.TaskId);
+        builder.HasIndex(c => c.SourceGenerationId);
         builder.HasIndex(c => new { c.Kind, c.At });
     }
 }

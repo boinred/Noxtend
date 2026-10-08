@@ -25,7 +25,7 @@ API와 Worker는 같은 ASP.NET Core 호스트에서 실행된다. 프로젝트 
 | 공급자 관리 | `ProvidersController` → `ProviderHandlers` → Provider 도메인·Repository | `Noxtend.Tests/Application/ProviderHandlerTests.cs`, API 공급자 테스트 |
 | 프롬프트·호출 내역·단가 | Tuning Controller → Tuning Application → Tuning Domain·Infrastructure adapter | `PromptGridTests.cs`, `TuningTests.cs`, `RecordingLlmProviderTests.cs`, 가격 관련 테스트 |
 
-LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계산을 함께 바꿀 때는 [공급자와 프롬프트](providers-and-prompts.md)를 읽는다.
+LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계산을 함께 바꿀 때는 [공급자와 프롬프트](providers-and-prompts.md)를 읽는다. `JobId` null 원본 생성 기록은 작업 삭제 대상이 아니며 전체 통계에만 포함한다. `EfJobRepository.DeleteIfTerminalAsync`와 `EfLlmCallRepository.ListByJobAsync`는 해당 JobId의 호출만 대상으로 삼는다.
 
 ## 2D 배경 도메인 기반
 

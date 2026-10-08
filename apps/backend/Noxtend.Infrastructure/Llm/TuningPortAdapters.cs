@@ -53,12 +53,12 @@ internal sealed class TuningLlmCallRecorder(ILlmCallRepository calls, IClock clo
                 context.ProviderConfigId, context.Model,
                 entry.RequestPayload, entry.ResponsePayload ?? string.Empty,
                 entry.InputTokens, entry.OutputTokens, entry.LatencyMs, clock.Now,
-                entry.OutputImages)
+                entry.OutputImages, context.SourceGenerationId)
             : LlmCall.Failure(
                 context.JobId, context.TaskId, context.SimilarityEvaluationId, context.Kind, context.PromptVersionId,
                 context.ProviderConfigId, context.Model,
                 entry.RequestPayload, entry.FailureReason ?? "알 수 없는 오류",
-                entry.LatencyMs, clock.Now);
+                entry.LatencyMs, clock.Now, context.SourceGenerationId);
 
         await calls.AddAsync(call, ct);
         await calls.SaveChangesAsync(ct);
