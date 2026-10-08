@@ -12,6 +12,25 @@ export interface UploadResult {
   sizeBytes: number
 }
 
+export interface GenerateSpriteSourceInput {
+  requestId: string
+  prompt: string
+  imageProviderConfigId: string
+  imageModel: string
+}
+
+export function generateSpriteSource(
+  input: GenerateSpriteSourceInput,
+  signal?: AbortSignal,
+): Promise<UploadResult> {
+  const { requestId, prompt, imageProviderConfigId, imageModel } = input
+  return apiRequest<UploadResult>('/api/uploads/generate', {
+    method: 'POST',
+    body: { requestId, prompt, imageProviderConfigId, imageModel },
+    signal,
+  })
+}
+
 export function uploadImage(file: File, signal?: AbortSignal): Promise<UploadResult> {
   const form = new FormData()
   form.append('file', file)

@@ -7,10 +7,20 @@
  * 다음 화면이 그것을 선례로 삼는다.
  */
 import { useMutation } from '@tanstack/react-query'
-import { uploadImage } from '@/infra/api/uploadApi'
+import { generateSpriteSource, uploadImage } from '@/infra/api/uploadApi'
+import type { GenerateSpriteSourceInput } from '@/infra/api/uploadApi'
+
+export type { GenerateSpriteSourceInput, UploadResult } from '@/infra/api/uploadApi'
 
 export function useUpload() {
   return useMutation({
     mutationFn: (file: File) => uploadImage(file),
+  })
+}
+
+export function useGenerateSpriteSource() {
+  return useMutation({
+    mutationFn: (input: GenerateSpriteSourceInput) => generateSpriteSource(input),
+    retry: false,
   })
 }

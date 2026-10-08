@@ -40,7 +40,7 @@ React 19·Vite·React Router·TanStack Query·Tailwind·shadcn/ui(Radix) 구성�
 | --- | --- | --- |
 | 작업 생성·조회·폴링 | 화면 → `useJob`·`useStartJob`·`useJobList` → `jobApi.ts` → `client.ts` | `src/infra/api/jobApi.test.ts`, `src/domain/job/progress.test.ts`, `tests/e2e/home-active-job.spec.ts` |
 | 2D 계약·접수·검수·내보내기 | `domain/sprites/types.ts`의 wire 타입·reader, `rules.ts`의 `productionModeOf`·square/diamond `tileOffsets`·`playback.ts`의 `frameAt` → `useSprites.ts` → `spriteApi.ts`; 상세는 기존 `useJob` 공유 | `src/domain/sprites/rules.test.ts`, `src/infra/api/spriteApi.test.ts`, `src/app/queries/useSprites.test.ts`, `tests/e2e/sprites-static.spec.ts`, `src/domain/sprites/playback.test.ts`, `tests/e2e/sprites-animation.spec.ts` |
-| 이미지 업로드 | 스튜디오 화면의 `ImageDropzone` → 화면의 `useUpload` → `uploadApi.ts`, 검증은 `domain/job/rules.ts` | `src/domain/job/rules.test.ts` |
+| 이미지 업로드·원본 생성 | 스튜디오 화면의 `ImageDropzone` → `useUpload` → `uploadApi.ts`; 원본 생성은 `useGenerateSpriteSource` → `uploadApi.generateSpriteSource` → `POST /api/uploads/generate`, 업로드 검증은 `domain/job/rules.ts` | `src/domain/job/rules.test.ts`, `src/infra/api/uploadApi.test.ts` |
 | 검수 게이트·설명 확인 | `ReviewGate`·`DescriptionsReview` → `useReview.ts` → `reviewApi.ts` | `tests/e2e/review-gate.spec.ts`, `features/screens/background/descriptionReview.test.ts` |
 | 파츠 이미지 생성·재시도 | 스튜디오 화면·`PartGallery` → `useJob.ts`의 mutation(`useRetryTask`·`useGenerateSelectedViews` 등) → `jobApi.ts` | `tests/e2e/part-generation-*.spec.ts`, `src/domain/job/generation.test.ts` |
 | 3D 메시 결과·다운로드 | `MeshTile`·`MeshViewerDialog`(`@google/model-viewer`), `MeshDownloadMenu` | `src/domain/job/mesh*.test.ts`, `tests/e2e/mesh*.spec.ts` |
