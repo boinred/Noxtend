@@ -343,6 +343,24 @@ public sealed class SpriteApiTests
         Status(await Sprites(f).GetExportAsync(job.Id, task.SpriteExportInput.ExportId, default), 409);
     }
 
+    [Fact]
+    public async Task GenerateUpload_RejectsUnknownFieldsAndReturnsUploadEnvelope()
+    {
+        var f = new PipelineFixture();
+        var command = await SpriteSourceGenerationTests.Prepare(f);
+        var request = new GenerateSpriteSourceRequest(command.RequestId, command.Prompt, command.ImageProviderConfigId, command.ImageModel);
+        var json = JsonSerializer.Serialize(request, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.False((await Bind<GenerateSpriteSourceRequest>(json)).HasError);
+        Assert.True((await Bind<GenerateSpriteSourceRequest>(json[..^1] + ",\"blobKey\":\"foreign\"}")).HasError);
+        var api = new UploadsController(f.Upload, f.Images, f.Blobs, f.GenerateSpriteSource);
+        var response = await api.GenerateAsync(request, default);
+        Status(response, 201);
+        var upload = Data<UploadResponse>(response);
+        Assert.Equal("sprite-prompt", upload.OriginalName);
+        Assert.NotNull(await f.Images.GetAsync(upload.Id, default));
+        Status(await api.GenerateAsync(request with { Prompt = " " }, default), 400);
+    }
+
     private static SpriteJobsController Sprites(PipelineFixture f) => new(f.StartSprites, f.SpriteCommands, f.Jobs, f.Blobs)
     {
         ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },

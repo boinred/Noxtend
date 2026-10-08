@@ -20,6 +20,7 @@ API와 Worker는 같은 ASP.NET Core 호스트에서 실행된다. 프로젝트 
 | 변경 대상 | 코드 흐름 | 관련 테스트 시작점 |
 | --- | --- | --- |
 | 텍스트 공정 | `TaskWorker` → `RunTaskHandler` → `StageRegistry`·`IStage`의 변수·스키마·응답 처리 → `ILlmProvider` | `Noxtend.Tests/Application/RunTaskHandlerTests.cs`, 단계별 테스트 |
+| 2D 기준 이미지 생성 | `UploadsController.GenerateAsync` → `GenerateSpriteSourceHandler` → `IImageProvider` → `CreateUploadHandler` | `Noxtend.Tests/Application/SpriteSourceGenerationTests.cs`, `Api/SpriteApiTests.cs` |
 | 파츠 이미지 생성 | Worker → `RunGenerationTaskHandler` → `GenerationStage` → `IImageProvider` | `Noxtend.Tests/Application/RunGenerationTaskHandlerTests.cs`, `ImageProviderUsageTests.cs` |
 | 유사도 평가 | `EvaluateSimilarityHandler` → `ILlmProvider` | `Noxtend.Tests/Application/SimilarityEvaluateHandlerTests.cs`, `SimilarityStartHandlerTests.cs` |
 | 공급자 관리 | `ProvidersController` → `ProviderHandlers` → Provider 도메인·Repository | `Noxtend.Tests/Application/ProviderHandlerTests.cs`, API 공급자 테스트 |
@@ -71,10 +72,15 @@ LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계�
 
 ## 2D 배경 HTTP 계약
 
+`UploadsController.GenerateAsync`의 `POST /api/uploads/generate`는 `GenerateSpriteSourceRequest { requestId, prompt, imageProviderConfigId, imageModel }`을 받아 동기 생성 후 201 `ApiResponse<UploadResponse>`를 반환한다. `GenerateSpriteSourceHandler`는 설명을 trim 후 1~1000자로 제한하고 활성 Background 기준 프롬프트·투명 지원·양의 생성 크기가 확인된 모델을 요구한다. 너비 ≥ 높이인 크기 중 최대 면적을 선택하고 해당 크기가 없으면 전체 최대 면적을 사용한다. 참조 없이 opaque 한 장을 생성하고 `CreateUploadHandler`의 기존 PNG·JPEG·WebP, 12 MiB 업로드 규칙과 Blob 우선 저장을 재사용하며 이름은 `sprite-prompt`다. 생성 요청은 2D 작업을 만들지 않으며 `requestId`는 호출 기록의 `SourceGenerationId`로만 사용한다.
+
+설정 오류는 `SpriteSettingsInvalid`(400), 공급자 없음·중지는 `JobImageProviderNotFound`·`JobImageProviderDisabled`(400), 미확인 모델은 `JobImageModelUnavailable`(400), 활성 프롬프트 누락은 `PromptNotActive`(409)다. 공급자 호출·응답 실패와 한 장이 아닌 응답·업로드 규칙 위반은 `ProviderCallFailed`·`ProviderBadResponse`(502)로 반환한다. handler 진입부터 표준 `TimeProvider`의 180초 linked 취소 토큰을 조회·대기·생성·저장에 전달하며 서버 제한만 502로 변환하고 요청 취소는 전파한다. 반환 직후 취소 확인으로 토큰을 무시한 의존 호출도 다음 단계로 넘어가지 않는다. 공급자 응답 뒤 실패는 기존 recorder의 성공·실제 사용량을 보존하며 응답 전 취소는 사용량을 추정하지 않는다. 기록의 `CancellationToken.None`과 Blob 우선 저장을 유지하므로 협력적 제한이며 저장 도중 취소의 원자적 롤백·미사용 Blob 정리를 제공하지 않는다.
+
 `Noxtend.Api/Controllers/SpriteJobsController.cs`는 기존 `StartSpriteJobHandler`·`SpriteCommandsHandler`를 호출한다. `Contracts/SpriteContracts.cs`는 요청과 안전한 응답 DTO이며 엔티티·Blob 키·공급자 주소·fingerprint를 공개하지 않는다. 접수와 모든 검수 mutation은 기존 `{ data, error }` 봉투의 202와 `{ id, status, revision, taskIds }`를 반환한다.
 
 | 경로 | 본문·결과 |
 | --- | --- |
+| `POST /api/uploads/generate` | `requestId`, `prompt`, `imageProviderConfigId`, `imageModel` → 201 `UploadResponse` |
 | `POST /api/jobs/sprites` | `requestId`, `uploadId` 또는 `sourceJobId`·`sourceGeneratedImageId`, 분석·이미지 공급자/모델, `settings` |
 | `PUT /api/jobs/{id}/sprites/plan` | `requestId`, `expectedRevision`, `assets` 계획 배열 |
 | `POST /api/jobs/{id}/sprites/plan/approve` | `requestId`, `expectedRevision` |

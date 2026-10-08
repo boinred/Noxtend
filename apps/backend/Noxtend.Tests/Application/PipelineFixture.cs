@@ -56,6 +56,8 @@ public sealed class PipelineFixture
             Jobs, Orchestrator, Clock, Scheduler, NullLogger<TaskExecution>.Instance);
 
         RateLimitGate = new RateLimitGate(RateLimiter, Clock);
+        GenerateSpriteSource = new GenerateSpriteSourceHandler(Providers, Catalog, Prompts,
+            new StubImageProviderFactory(Images_), RateLimitGate, Upload);
         Run = new RunTaskHandler(
             Images, Blobs, new StubProviderFactory(Llm), Prompts,
             new StageRegistry(
@@ -144,6 +146,7 @@ public sealed class PipelineFixture
 
     public JobOrchestrator Orchestrator { get; }
     public CreateUploadHandler Upload { get; }
+    public GenerateSpriteSourceHandler GenerateSpriteSource { get; }
     public StartJobHandler Start { get; }
     public SpriteCommandsHandler SpriteCommands { get; }
     public RunSpritePackTaskHandler RunSpritePack { get; }

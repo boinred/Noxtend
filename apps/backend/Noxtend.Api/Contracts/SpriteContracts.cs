@@ -5,6 +5,9 @@ using Noxtend.Domain.Sprites;
 namespace Noxtend.Api.Contracts;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record GenerateSpriteSourceRequest(Guid RequestId, string Prompt, Guid ImageProviderConfigId, string ImageModel);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record StartSpriteJobRequest(Guid RequestId, Guid? UploadId, Guid? SourceJobId,
     Guid? SourceGeneratedImageId, Guid ProviderConfigId, string Model,
     Guid ImageProviderConfigId, string ImageModel, SpriteSettingsRequest? Settings);
