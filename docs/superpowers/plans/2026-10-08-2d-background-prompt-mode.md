@@ -79,15 +79,15 @@ public static (string System, string User, string Schema, string Note) GenerateS
 
 migration은 `SeedSpriteGeneratePrompt`와 같은 구조다. `SeedId = c9000000-0000-4000-8000-000000000001`, `[Kind] = N'GenerateSpriteSource'`, `IF NOT EXISTS`로 운영자 슬롯을 보존하고 `CreatedAt`은 `'2026-10-08T00:00:00+00:00'`이다. 모델 변경이 없으므로 snapshot diff가 생기면 원인을 확인한다.
 
-- [ ] **Step 1: 실패 테스트 작성**
+- [x] **Step 1: 실패 테스트 작성**
   - `SpritePersistenceTests.SpritePromptMigration_AddsOnlyBackgroundAndPreservesOperatorSlot`에 `[InlineData(LlmOperationKind.GenerateSpriteSource, "_SeedSpriteSourcePrompt")]` 추가
   - `SeedPromptVariableTests`에 Fact 추가: `SeedPrompts.GenerateSpriteSource()`의 System+User 자리표시자 집합이 `PromptTemplate.AllowedVariables(LlmOperationKind.GenerateSpriteSource)`(`{ "prompt" }`)와 같다
   - `backendParity.test.ts`의 operation 기대 목록에 `'generateSpriteSource'`를 추가하고 `expect(promptKindCategories('generateSpriteSource')).toEqual(['background'])`
-- [ ] **Step 2: 실패 확인** — `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName~SeedPromptVariableTests|FullyQualifiedName~SpritePromptMigration|FullyQualifiedName~PromptGridTests'`, `pnpm --filter @nextend/frontend exec vitest run src/domain/job/backendParity.test.ts` (컴파일·기대 불일치로 FAIL)
-- [ ] **Step 3: 구현** — 위 Files 순서. Frontend: `PromptKind`에 `| 'generateSpriteSource'`, 라벨 `'2D 배경 기준 생성'`, `promptKindCategories`의 Background 전용 조건에 추가, `PromptsScreen` `STAGES`에서 `'generateSprite'` 뒤에 추가. migration 생성 후 SQL을 리뷰한다.
-- [ ] **Step 4: 통과 확인** — Step 2 명령 PASS, `PromptGridTests.Grid_CoversEveryKindAndColumn` 포함
-- [ ] **Step 5: 문서** — `providers-and-prompts.md` 2D 프롬프트 단락에 "`GenerateSpriteSource`는 Background 전용, 변수 `{{prompt}}`, 참조 없는 업로드용 기준 이미지 생성" 한 문장
-- [ ] **Step 6: Commit** — `feat(backend): add sprite source prompt kind`
+- [x] **Step 2: 실패 확인** — `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName~SeedPromptVariableTests|FullyQualifiedName~SpritePromptMigration|FullyQualifiedName~PromptGridTests'`, `pnpm --filter @nextend/frontend exec vitest run src/domain/job/backendParity.test.ts` (컴파일·기대 불일치로 FAIL)
+- [x] **Step 3: 구현** — 위 Files 순서. Frontend: `PromptKind`에 `| 'generateSpriteSource'`, 라벨 `'2D 배경 기준 생성'`, `promptKindCategories`의 Background 전용 조건에 추가, `PromptsScreen` `STAGES`에서 `'generateSprite'` 뒤에 추가. migration 생성 후 SQL을 리뷰한다.
+- [x] **Step 4: 통과 확인** — Step 2 명령 PASS, `PromptGridTests.Grid_CoversEveryKindAndColumn` 포함
+- [x] **Step 5: 문서** — `providers-and-prompts.md` 2D 프롬프트 단락에 "`GenerateSpriteSource`는 Background 전용, 변수 `{{prompt}}`, 참조 없는 업로드용 기준 이미지 생성" 한 문장
+- [x] **Step 6: Commit** — `feat(backend): add sprite source prompt kind`
 
 ## Task 2: 작업 없는 이미지 호출 기록
 
@@ -101,7 +101,7 @@ migration은 `SeedSpriteGeneratePrompt`와 같은 구조다. `SeedId = c9000000-
 - Modify: `apps/backend/Noxtend.Infrastructure/Persistence/Configurations/TuningConfigurations.cs` — `LlmCallConfiguration`
 - Create: `apps/backend/Noxtend.Infrastructure/Persistence/Migrations/<timestamp>_AddSourceGenerationCalls.cs` (+ `.Designer.cs`, snapshot)
 - Modify: `apps/backend/Noxtend.Infrastructure/Image/FakeImageProvider.cs`
-- Test: `apps/backend/Noxtend.Tests/Domain/LlmOperationTests.cs`, `Application/SpriteProviderRequestTests.cs`, `Infrastructure/JobDeletionPersistenceTests.cs`, Create `Infrastructure/LlmCallCorrelationPersistenceTests.cs`
+- Test: `apps/backend/Noxtend.Tests/Domain/LlmOperationTests.cs`, `Application/SpriteProviderRequestTests.cs`, `Infrastructure/JobDeletionPersistenceTests.cs`, `Infrastructure/PromptCategoryPersistenceTests.cs`, Create `Infrastructure/LlmCallCorrelationPersistenceTests.cs`
 - Modify: `docs/xHuman/providers-and-prompts.md`, `docs/xHuman/backend.md`
 
 **Interfaces:**
@@ -149,17 +149,17 @@ public sealed record ImageCallContext(
 
 `FakeImageProvider`: 실제 PNG 생성 조건을 `(request.Context.Kind == TaskKind.GenerateSprite || request.Context.SourceGenerationId is not null) && _spriteSize`로 넓힌다. 로컬 Fake 모드에서 생성 결과가 2D 시작 디코딩을 통과해야 한다.
 
-- [ ] **Step 1: 실패 테스트 작성**
+- [x] **Step 1: 실패 테스트 작성**
   - `LlmOperationTests`: `ForSourceGeneration`이 Kind `GenerateSpriteSource`, `JobId`·`TaskId`·`SimilarityEvaluationId` null, `SourceGenerationId` 설정
   - `SpriteProviderRequestTests`: `RecordingImageProvider`에 `ImageCallContext.ForSourceGeneration(...)` 요청을 보내면 기록 entry가 같은 `SourceGenerationId`·null `JobId`·`TaskId`이고, 실패 공급자일 때 `Succeeded=false`로 같은 상관관계를 남김. 기존 task 경로 entry의 `JobId`·`TaskId` 단정 유지
   - `LlmCallCorrelationPersistenceTests`(SqlServerCollection, `JobDeletionPersistenceTests`의 context 생성 방식): 원본 생성 호출 저장·재조회 성공, `JobId` null + `TaskId` 설정·`JobId` 설정 + `SourceGenerationId` 설정·상관관계 없음 조합은 `DbUpdateException`
   - 같은 SQL 테스트에서 작업 호출 1건·원본 생성 호출 1건을 저장하고 `EfLlmCallRepository.GetStatsAsync`의 `Count == 2`, `ListByJobAsync(jobId)`에는 작업 호출 1건만 포함됨을 단정
   - `JobDeletionPersistenceTests`: 작업 삭제 후 `JobId` null 원본 생성 기록이 남음
-- [ ] **Step 2: 실패 확인** — `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName~LlmOperationTests|FullyQualifiedName~SpriteProviderRequestTests|FullyQualifiedName~LlmCallCorrelation|FullyQualifiedName~JobDeletionPersistenceTests'`
-- [ ] **Step 3: 구현** — 위 Interfaces 그대로. 기존 `ForTask`·`ForSimilarityEvaluation`·`LlmCall.Success/Failure` 호출부는 수정하지 않는다(nullable 확장·끝 선택 인자). migration 생성 후 `AlterColumn`(nullable)·`AddColumn`·check constraint drop/add·인덱스만 있는지 리뷰한다.
-- [ ] **Step 4: 통과 확인** — Step 2 명령 PASS 후 Backend 전체 회귀
-- [ ] **Step 5: 문서** — `providers-and-prompts.md`의 `ImageCallContext` 문장에 원본 생성 상관관계 추가, `backend.md`의 호출 기록·삭제 설명에 "`JobId` null 원본 생성 기록은 작업 삭제 대상이 아니며 전체 통계에만 포함" 추가
-- [ ] **Step 6: Commit** — `feat(backend): record jobless sprite source image calls`
+- [x] **Step 2: 실패 확인** — `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName~LlmOperationTests|FullyQualifiedName~SpriteProviderRequestTests|FullyQualifiedName~LlmCallCorrelation|FullyQualifiedName~JobDeletionPersistenceTests'`
+- [x] **Step 3: 구현** — 위 Interfaces 그대로. 기존 `ForTask`·`ForSimilarityEvaluation`·`LlmCall.Success/Failure` 호출부는 수정하지 않는다(nullable 확장·끝 선택 인자). migration 생성 후 `AlterColumn`(nullable)·`AddColumn`·check constraint drop/add·인덱스만 있는지 리뷰한다.
+- [x] **Step 4: 통과 확인** — Step 2 명령 PASS 후 Backend 전체 회귀 실행. 새 시드로 달라진 `PromptCategoryPersistenceTests`의 총수·정확한 종류 목록을 갱신하고 해당 테스트 재검증. 최종 Backend 전체 PASS는 Task 3에서 확인(아래 실행 기록).
+- [x] **Step 5: 문서** — `providers-and-prompts.md`의 `ImageCallContext` 문장에 원본 생성 상관관계 추가, `backend.md`의 호출 기록·삭제 설명에 "`JobId` null 원본 생성 기록은 작업 삭제 대상이 아니며 전체 통계에만 포함" 추가
+- [x] **Step 6: Commit** — `feat(backend): record jobless sprite source image calls`
 
 ## Task 3: 생성 handler와 `POST /api/uploads/generate`
 
@@ -215,7 +215,7 @@ public sealed record GenerateSpriteSourceRequest(Guid RequestId, string Prompt, 
 
 handler 진입 시 `CancellationTokenSource(TimeSpan.FromSeconds(MaxGenerationSeconds), timeProvider ?? TimeProvider.System)`을 만들고 요청 `ct`와 연결한다. 모든 비동기 의존 호출에 `linked.Token`을 전달한다. `OperationCanceledException`은 `!ct.IsCancellationRequested && deadline.IsCancellationRequested`일 때만 위 시간 초과 결과로 변환하고, 요청 취소는 그대로 전파한다. 토큰을 무시한 반환 직후에는 다음 단계 전에 `linked.Token.ThrowIfCancellationRequested()`로 확인한다. 기존 recorder의 `CancellationToken.None` 기록 정책은 유지하므로 180초는 협력적 처리 제한이며 기록·저장의 원자적 롤백을 보장하지 않는다. 저장 전 취소는 업로드 0건, 저장 도중 취소는 기존 Blob 우선 저장 경로를 유지하며 미사용 Blob 정리를 추가하지 않는다.
 
-- [ ] **Step 1: 실패 테스트 작성** — `SpriteSourceGenerationTests` (준비는 `SpriteAnalysisTests.Prepare`처럼 `f.SeedProviderAsync()`와 `ImageModels`에 `new(true, [new(1024, 1024), new(1536, 1024)])` 모델)
+- [x] **Step 1: 실패 테스트 작성** — `SpriteSourceGenerationTests` (준비는 `SpriteAnalysisTests.Prepare`처럼 `f.SeedProviderAsync()`와 `ImageModels`에 `new(true, [new(1024, 1024), new(1536, 1024)])` 모델)
   - 정상: 결과 `StoredImage`가 `f.Images`에 있고 `OriginalName == "sprite-prompt"`, Blob 존재, 요청은 `Reference` 비어 있음·`Size == "1536x1024"`·`Background == Opaque`·프롬프트에 trim된 설명 포함, `Context.SourceGenerationId == RequestId`
   - `PickSize`: `[1024x1536, 1024x1024]` → `1024x1024`, `[1024x1536]` → `1024x1536`, `[1024x1024, 1536x1024, 1792x1024]` → `1792x1024`
   - 검증 theory: null·`""`·`"   "`·1001자 설명, `Guid.Empty` RequestId, null·빈·공백 ImageModel → `SpriteSettingsInvalid`, 공급자 호출·업로드 모두 0회; 정확히 1000자는 성공
@@ -224,11 +224,11 @@ handler 진입 시 `CancellationTokenSource(TimeSpan.FromSeconds(MaxGenerationSe
   - 기록: `RecordingImageProvider`로 감싼 fixture에서 정상·공급자 예외·2장·GIF를 각각 실행. 호출마다 `SourceGenerationId`와 Kind `GenerateSpriteSource`, 정상/2장/GIF는 `Succeeded=true`·실제 OutputImages/토큰 보존, 공급자 예외만 `Succeeded=false`. API 결과는 정상만 성공이고 나머지는 502이며 중복 기록 없음
   - 시간 제한: 테스트 파일 내부의 최소 `TimeProvider`/`ITimer` stub으로 180초를 진행시켜 장시간 실제 대기 없이 검증(새 패키지 없음). 느린 카탈로그 조회·레이트리밋 대기·`FakeImageProvider.Slow`·저장 stub 각각에 취소 가능한 linked 토큰이 전달되고 서버 제한은 `ProviderCallFailed`, 저장 전 제한은 업로드 0건. 요청 ct 취소는 `OperationCanceledException` 전파. 공급자 응답 전 취소는 기존 recorder와 같이 기록 없음·사용량을 0으로 추정하지 않음
   - `SpriteApiTests`: `Bind<GenerateSpriteSourceRequest>`에 알 수 없는 필드가 있으면 바인딩 실패; `new UploadsController(f.Upload, f.Images, f.Blobs, f.GenerateSpriteSource).GenerateAsync(...)` → 201·`UploadResponse`; 설정 오류 → 400, 공급자 실패·잘못된 응답·서버 제한 시간 초과 → 502
-- [ ] **Step 2: 실패 확인** — `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName~SpriteSourceGeneration|FullyQualifiedName~SpriteApiTests'`
-- [ ] **Step 3: 구현** — handler, DTO, controller action(`ApiResults.From(result, UploadResponse.From, StatusCodes.Status201Created)`), DI, fixture 속성
-- [ ] **Step 4: 통과 확인** — Step 2 PASS 후 `ServiceRegistrationTests` 포함 Backend 전체 회귀
-- [ ] **Step 5: 문서** — `backend.md` 2D 단락에 `UploadsController`의 `generate`·`GenerateSpriteSourceHandler`·오류 코드·`CreateUploadHandler` 재사용, 테스트 표에 `SpriteSourceGenerationTests` 추가
-- [ ] **Step 6: Commit** — `feat(backend): generate sprite source uploads from prompts`
+- [x] **Step 2: 실패 확인** — `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName~SpriteSourceGeneration|FullyQualifiedName~SpriteApiTests'`
+- [x] **Step 3: 구현** — handler, DTO, controller action(`ApiResults.From(result, UploadResponse.From, StatusCodes.Status201Created)`), DI, fixture 속성
+- [x] **Step 4: 통과 확인** — Step 2 PASS 후 `ServiceRegistrationTests` 포함 Backend 전체 회귀
+- [x] **Step 5: 문서** — `backend.md` 2D 단락에 `UploadsController`의 `generate`·`GenerateSpriteSourceHandler`·오류 코드·`CreateUploadHandler` 재사용, 테스트 표에 `SpriteSourceGenerationTests` 추가
+- [x] **Step 6: Commit** — `feat(backend): generate sprite source uploads from prompts`
 
 ## Task 4: Frontend 생성 API와 mutation
 
@@ -237,6 +237,7 @@ handler 진입 시 `CancellationTokenSource(TimeSpan.FromSeconds(MaxGenerationSe
 - Modify: `apps/frontend/src/infra/api/uploadApi.ts`
 - Modify: `apps/frontend/src/app/queries/useUpload.ts`
 - Create: `apps/frontend/src/infra/api/uploadApi.test.ts`
+- Modify: `docs/xHuman/frontend.md` — 이미지 업로드 행에 생성 API·mutation·테스트 경로
 
 **Interfaces:**
 
@@ -256,13 +257,15 @@ export function generateSpriteSource(input: GenerateSpriteSourceInput, signal?: 
 export function useGenerateSpriteSource()
 ```
 
+`useUpload.ts`에서 `GenerateSpriteSourceInput`·`UploadResult`를 type으로 재노출한다. 화면은 이 경로에서 타입을 가져오고 URL은 기존 `app/queries/media.ts`의 `sourceImageUrl`을 쓴다.
+
 mutation은 기존 `useUpload`처럼 `mutationFn: (input: GenerateSpriteSourceInput) => generateSpriteSource(input)`, `retry: false`로 등록한다. TanStack Query의 두 번째 mutation 인자는 `MutationFunctionContext`이므로 API 함수의 선택 인자 `AbortSignal`에 직접 연결하지 않는다.
 
-- [ ] **Step 1: 실패 테스트 작성** — `spriteApi.test.ts`와 같은 fetch stub 방식으로: 요청 URL `apiUrl('/api/uploads/generate')`·POST·본문이 정확히 네 필드(추가 속성을 넣은 입력도 네 필드만 전송), 201 봉투에서 `UploadResult` 반환, 502 봉투는 `ApiError`(상태·메시지 보존)
-- [ ] **Step 2: 실패 확인** — `pnpm --filter @nextend/frontend exec vitest run src/infra/api/uploadApi.test.ts`
-- [ ] **Step 3: 구현**
-- [ ] **Step 4: 통과 확인** — Step 2 PASS, `pnpm typecheck`
-- [ ] **Step 5: Commit** — `feat(frontend): add sprite source generation api`
+- [x] **Step 1: 실패 테스트 작성** — `spriteApi.test.ts`와 같은 fetch stub 방식으로: 요청 URL `apiUrl('/api/uploads/generate')`·POST·본문이 정확히 네 필드(추가 속성을 넣은 입력도 네 필드만 전송), 201 봉투에서 `UploadResult` 반환, 502 봉투는 `ApiError`(상태·메시지 보존)
+- [x] **Step 2: 실패 확인** — `pnpm --filter @nextend/frontend exec vitest run src/infra/api/uploadApi.test.ts`
+- [x] **Step 3: 구현** — 코드와 `frontend.md` 이미지 업로드 행을 함께 갱신
+- [x] **Step 4: 통과 확인** — Step 2 PASS, `pnpm typecheck`
+- [x] **Step 5: Commit** — `feat(frontend): add sprite source generation api`
 
 ## Task 5: 2D 입력 탭·프롬프트 패널
 
@@ -273,11 +276,12 @@ mutation은 기존 `useUpload`처럼 `mutationFn: (input: GenerateSpriteSourceIn
 - Modify: `apps/frontend/src/features/screens/sprites/SpriteInput.tsx`
 - Modify: `apps/frontend/src/features/screens/sprites/spriteStyles.ts` — `textarea`, `results`, `result` 클래스
 - Modify: `apps/frontend/tests/e2e/spriteFakeApi.ts`, `sprites-static.spec.ts`, `sprites-animation.spec.ts`, `background-studio-actions.spec.ts`
+- Modify: `apps/frontend/tests/e2e/fakeApi.ts`, `decomposition-admin.spec.ts` — 새 프롬프트 슬롯의 관리자 Fake·격자·편집 검증 동기화
 - Modify: `docs/xHuman/frontend.md`, `PRODUCT.md`, `docs/superpowers/specs/2026-10-06-2d-background-sprites-design.md` (§13 끝에 이 기능 spec 링크 한 문장)
 
 **Interfaces:**
 
-- Consumes: `useGenerateSpriteSource`, `GenerateSpriteSourceInput`, `UploadResult`, `sourceImageUrl` (Task 4), `ModeTabs`·`StudioMode`
+- Consumes: `useGenerateSpriteSource`, `GenerateSpriteSourceInput`, `UploadResult` (Task 4의 app 계층 노출), 기존 `app/queries/media.ts`의 `sourceImageUrl`, `ModeTabs`·`StudioMode`
 - Produces: 표시 전용 패널. 상태는 탭 전환에도 남도록 `SpriteInput`이 소유한다.
 
 ```ts
@@ -316,30 +320,51 @@ const canGenerate = promptLength >= 1 && promptLength <= 1000 && !!imageProvider
 - 제출: `mode === 'prompt'`이면 `{ uploadId: selectedId }`로 업로드 없이 시작하고, 아니면 현재 식별 로직을 쓴다. 시작 버튼 조건의 `(!file && !source)`를 `!hasSource`로 바꾼다.
 - 섹션: 기존 `aria-label="이미지 입력"` 섹션을 `aria-label="원본 입력"`으로 바꾸고, 그 안에 `ModeTabs` → 모드별 내용(이미지 모드는 기존 원본 안내·오류·`ImageDropzone`)을 둔다.
 
-- [ ] **Step 1: e2e Fake 확장** — `SpriteFakeOptions`에 `generateErrorOnce?: boolean`. `POST /api/uploads/generate`는 본문을 `options.records`에 기록하고, 실패 1회면 `fail(route, 502, '공급자 호출 실패')`, 아니면 기존 ID와 겹치지 않는 `guid(8)`의 업로드(`originalName: 'sprite-prompt'`)를 201로 반환한다. 파일 업로드의 고정 `SPRITE_IDS.upload`와 생성 ID는 구분한다. `/api/uploads/{id}/content`는 고정 파일 업로드와 이 Fake에서 실제 생성한 ID에만 `SPRITE_SOURCE_PNG`를 준다.
+- [x] **Step 1: e2e Fake 확장** — `SpriteFakeOptions`에 `generateErrorOnce?: boolean`. `POST /api/uploads/generate`는 본문을 `options.records`에 기록하고, 실패 1회면 `fail(route, 502, '공급자 호출 실패')`, 아니면 기존 ID와 겹치지 않는 `guid(8)`의 업로드(`originalName: 'sprite-prompt'`)를 201로 반환한다. 파일 업로드의 고정 `SPRITE_IDS.upload`와 생성 ID는 구분한다. `/api/uploads/{id}/content`는 고정 파일 업로드와 이 Fake에서 실제 생성한 ID에만 `SPRITE_SOURCE_PNG`를 준다.
   - 파일 업로드 여부는 Playwright `page.on('request', ...)`로 `POST /api/uploads`를 별도 집계한다. multipart 본문을 `postDataJSON()`으로 읽지 않으며 생성 API와도 경로를 정확히 구분한다.
-- [ ] **Step 2: 기존 e2e 보정** — `/2d/background`에서 `setInputFiles` 전에 `page.getByTestId('mode-tab-image').click()` (`sprites-static.spec.ts`의 `start()`·390px 테스트, `sprites-animation.spec.ts` 시작 helper). `background-studio-actions.spec.ts` #1에 `page.getByRole('tab')` 텍스트가 `['프롬프트 모드', '이미지 모드']`이고 image 탭이 선택됨을 추가.
-- [ ] **Step 3: 실패 e2e 작성** (`sprites-static.spec.ts`, `records` 사용)
+- [x] **Step 2: 기존 e2e 보정** — `/2d/background`에서 `setInputFiles` 전에 `page.getByTestId('mode-tab-image').click()` (`sprites-static.spec.ts`의 `start()`·390px 테스트, `sprites-animation.spec.ts` 시작 helper). `background-studio-actions.spec.ts` #1에 `page.getByRole('tab')` 텍스트가 `['프롬프트 모드', '이미지 모드']`이고 image 탭이 선택됨을 추가.
+- 관리자 통합 보완: `fakeApi.ts`의 `generateSpriteSource` Background 활성 시드·`['prompt']` 허용 변수·격자 row를 추가한다. `decomposition-admin.spec.ts` #A3은 9행·정확한 종류 목록·9개 dedicated 슬롯과 Background 편집의 `{{prompt}}` 표시를 검증한다.
+- [x] **Step 3: 실패 e2e 작성** (`sprites-static.spec.ts`, `records` 사용)
   1. 새 진입은 prompt 탭 선택. 설명 `  항구 마을  `을 입력하고 두 번 생성하면 결과 2개가 쌓이고 두 번째가 선택된다. 두 생성 ID는 서로 다르고 `SPRITE_IDS.upload`와도 다르다. 첫 번째를 고르고 설정을 마친 뒤 시작하면 generate 기록은 유효한 GUID requestId·trim된 prompt·선택한 공급자 ID·모델 ID 문자열만 포함한다. `/api/jobs/sprites` 본문 `uploadId`는 첫 결과 ID, 파일 업로드 요청 집계는 0이다.
   2. `generateErrorOnce`이면 alert에 `공급자 호출 실패`가 뜨고 설명이 유지되며, 재시도하면 성공해 결과 1개가 남는다. 별도 테스트에서 두 결과 생성·첫 결과 선택 후 다음 생성 요청만 502로 응답하도록 route를 덮어쓴다. 기존 두 결과·첫 선택·설명은 그대로이며, 다시 성공하면 세 번째 결과가 추가·선택된다. 실패 요청의 자동 재시도는 없어야 한다.
   3. `spriteBackgroundWithSourcePath(...)`와 잘못된 source 쿼리 진입은 image 탭 선택. 새 진입에서 결과를 만든 뒤 image 탭에서 파일을 고르고 prompt 탭으로 돌아오면 결과·선택이 남는다. image 탭에서 시작하면 본문 `uploadId`는 `SPRITE_IDS.upload`, 파일 업로드 요청 집계는 1이다. 생성 응답 대기 중(route 지연)에는 어느 탭에서도 생성 버튼과 `2D 분석 시작`이 비활성이다.
   4. 빈 설명·공백만·1001자, `unsupportedModel`이면 생성 버튼 비활성. prompt 탭에서 결과 미선택이면 시작 비활성.
   5. 공급자 목록·이미지 모델의 캐시 후 오류를 각각 검증한다. 진입 전 `page.clock.install()`; 정상 조회·결과 선택·필수 설정 완료 후 해당 route만 503으로 덮어쓴다. `page.clock.fastForward(300001)`로 모델 staleTime 5분을 넘기고 `window`의 offline→online 이벤트로 reconnect refetch를 실행한다. 실패 요청을 확인한 뒤 캐시 모델·오류 안내·생성/시작 비활성과 생성 요청 집계 불변을 단정한다. 현재 `refetchOnWindowFocus: false`이므로 탭 재포커스로 재조회를 가정하지 않는다. 최초 이미지 모델 조회 실패도 검증한다.
-- [ ] **Step 4: 실패 확인** — `pnpm --filter @nextend/frontend exec playwright test tests/e2e/sprites-static.spec.ts tests/e2e/background-studio-actions.spec.ts`
-- [ ] **Step 5: 구현** — ModeTabs 순서, 패널, `SpriteInput`, 스타일(textarea는 기존 `backgroundStyles.textarea` 톤에 맞추고, 결과 목록은 `grid grid-cols-3 gap-3 max-[720px]:grid-cols-2`, 선택 항목은 `aria-pressed` 기반 ring)
-- [ ] **Step 6: 통과 확인** — Frontend 전체 회귀(`pnpm test && pnpm lint && pnpm typecheck && pnpm build && pnpm test:e2e`)
-- [ ] **Step 7: 문서**
+- [x] **Step 4: 실패 확인** — `pnpm --filter @nextend/frontend exec playwright test tests/e2e/sprites-static.spec.ts tests/e2e/background-studio-actions.spec.ts`
+- [x] **Step 5: 구현** — ModeTabs 순서, 패널, `SpriteInput`, 스타일(textarea는 기존 `backgroundStyles.textarea` 톤에 맞추고, 결과 목록은 `grid grid-cols-3 gap-3 max-[720px]:grid-cols-2`, 선택 항목은 `aria-pressed` 기반 ring)
+- [x] **Step 6: 통과 확인** — Frontend 전체 회귀(`pnpm test && pnpm lint && pnpm typecheck && pnpm build && pnpm test:e2e`)
+- [x] **Step 7: 문서**
   - `frontend.md`의 `SpriteInput.tsx` 항목: 탭·기본 탭 규칙, 상태 소유, 생성 API·`useGenerateSpriteSource`, 테스트 위치
   - `PRODUCT.md` 2D 문단 첫 문장: "장면 설명으로 기준 이미지를 생성해 고르거나, 이미지 또는 기존 작업의 생성 이미지에서 시작해"
   - 2D spec §13 끝에 링크 문장
-- [ ] **Step 8: Commit** — `feat(frontend): add prompt mode to 2d background input`
+- [x] **Step 8: Commit** — `feat(frontend): add prompt mode to 2d background input`
 
 ## 마무리 검증
 
-- [ ] 구현에 참여하지 않은 리뷰 에이전트가 `main...HEAD` 전체 diff를 spec·이 계획 기준으로 리뷰하고, 지적을 수정한 뒤 해당 범위를 재리뷰한다.
-- [ ] Backend 마지막 소스 변경 후 Task 3의 전체 회귀, Frontend 마지막 소스 변경 후 Task 5의 전체 회귀 결과를 실행 기록에 남기고 최종 diff와 대조한다. 이후 소스 변경이 없으면 같은 전체 회귀를 반복하지 않는다. 리뷰 수정으로 소스가 바뀌면 관련 테스트와 영향받는 스택 전체 회귀를 다시 실행한다. 건너뛴 테스트·환경 미설정은 통과로 세지 않는다.
-- [ ] `pnpm docs:check`를 실행하고 `docs/xHuman` 링크·경로를 확인한다.
+- [x] 구현에 참여하지 않은 리뷰 에이전트가 `main...HEAD` 전체 diff를 spec·이 계획 기준으로 리뷰하고, 지적을 수정한 뒤 해당 범위를 재리뷰한다.
+- [x] Backend 마지막 소스 변경 후 Task 3의 전체 회귀, Frontend 마지막 소스 변경 후 Task 5의 전체 회귀 결과를 실행 기록에 남기고 최종 diff와 대조한다. 이후 소스 변경이 없으면 같은 전체 회귀를 반복하지 않는다. 리뷰 수정으로 소스가 바뀌면 관련 테스트와 영향받는 스택 전체 회귀를 다시 실행한다. 건너뛴 테스트·환경 미설정은 통과로 세지 않는다.
+- [x] `pnpm docs:check`를 실행하고 `docs/xHuman` 링크·경로를 확인한다.
 
 ## 실행 기록
 
-(실행 중 작업별 커밋·리뷰 결과·검증 명령과 결과·미해결 사항을 기록한다)
+- 실행 방식: Subagent-driven, 기존 `claude/2d-prompt-mode` 체크아웃 사용. 시작 `32f0878`.
+- Task 1: `606b1bd`, 독립 리뷰 Approved. RED→GREEN Backend 관련 28개·Frontend parity 13개 통과, typecheck·커밋 훅·문서 검사 통과.
+- Task 2: `ea5041c`, 독립 리뷰 Approved. 관련 49개 통과, Backend 빌드 통과. 전체 회귀 1,571 통과·1 실패·0 건너뜀(6분 9초); 유일한 실패는 기존 시드 기대값 10개/7종에 새 Background 종류가 빠진 것. 정확한 목록·총수·테스트명을 갱신한 뒤 해당 테스트 1개 통과. 같은 전체 회귀의 즉시 반복을 생략하고 Task 3 최종 전체 회귀를 완료 조건으로 유지.
+- 확인한 제약: 새 jobless 호출이 남은 상태에서 이전 필수 JobId 스키마로 downgrade하려면 기록 보존·이관 방침이 필요. 실제 DB 적용·downgrade는 실행하지 않음.
+- 기존 경고: SSH.NET NU1903, Skia CS0618, 다른 계획 문서 2개의 500행 경고. 의존성 교체는 이번 범위에서 제외.
+- Task 3: `36f32af`, 독립 리뷰 Approved. 집중 89 통과·0 실패·0 건너뜀, Backend 빌드 통과(오류 0). 최종 Backend 전체 회귀 1,617 통과·0 실패·0 건너뜀(6분 22초). Task 2의 시드 기대값 수정도 이 전체 회귀에서 확인. 후속 최종 리뷰 보완의 검증은 아래 별도 기록.
+- Task 4: `1cbdb8f`, 독립 리뷰 Approved. API 계약 테스트 RED→GREEN 2개 통과, typecheck·정상 커밋 훅 lint/format 통과. API 문서 행을 같은 커밋에 반영.
+- Task 5: `e398cf5`, 독립 리뷰 Approved. 최종 Frontend 단위 440개·E2E 335개 통과(실패·건너뜀·미실행 0), lint·typecheck·build·정상 커밋 훅 통과. initial JS 113.92 / 122.55 kB. 1440×900·390px PNG, 긴 설명/오류, 키보드·선택·가로 넘침 검증.
+- Task 5 중간 회귀: 관리자 격자 #A3의 이전 8행 기대와 Fake 누락으로 전체 E2E 334 통과·1 실패. 새 Background 기준 생성 시드·변수·격자와 정확한 9개 종류/슬롯 기대를 동기화하고 편집 경로·`{{prompt}}`를 검증. 집중 1개 및 최종 전체 335개 통과로 해소.
+- 최초 완료 검증 로그 대조: Backend 1,617·Frontend 단위 440·E2E 335 통과. 이후 최종 리뷰에서 실제 OpenAI 어댑터의 malformed 응답 경로를 발견해 Backend 검증을 갱신한다. Frontend는 최종 E2E 이후 소스·계약 변경 없음.
+- 전체 변경 독립 리뷰 보완: `8b8551f`. Important 1건(OpenAI JSON/base64 파싱 예외가 502 계약을 벗어남)을 어댑터 외부 응답 파싱에 한정해 수정했다. 실제 어댑터→recorder→handler/controller Fake HTTP 테스트에서 안전한 502·업로드 0·실패 기록 1건·취소 전파를 검증. 관련 72개 및 최종 Backend 전체 1,631개 통과(실패·건너뜀 0, 6분 19초), build 오류 0. 독립 재리뷰에서 ADDRESSED, 새 Critical/Important 0건.
+- 최종 상태: Backend는 `8b8551f`, Frontend는 `e398cf5`의 검증 대상 소스와 동일. 각 작업 독립 리뷰·전체 변경 리뷰·수정 범위 재리뷰 완료. `pnpm docs:check`·문서 대상 파일 대조·브랜치 diff 공백 검사 통과.
+- 실행 범위: 로컬 구현·커밋·Fake/격리 SQL·Redis 검증. 실제 AI·유료 smoke·실 HTTP 호스트·운영 DB 적용·배포·push·main merge는 수행하지 않음.
+- Frontend 검증 경고: Vite 큰 chunk·색상 환경 변수 충돌. 초기 번들 예산은 통과했으며, 이 경고 전부의 변경 전 발생 여부를 독립 확인한 것은 아님.
+
+### 실행 중 판단
+
+1. Backend 통합 검사가 드러낸 기존 시드 기대값 누락을 Task 2에서 보완했다. 잘못된 시드를 허용할 위험을 줄이기 위해 총수뿐 아니라 카테고리별 정확한 종류 목록을 유지했다.
+2. 위 보완 직후 동일 Backend 전체 검사를 중복 실행하지 않고 집중 검증 뒤 Task 3의 최종 전체 회귀를 사용했다. 상호작용 문제 발견이 마지막 게이트까지 늦어질 수 있었으며, 최종 1,617개 통과로 확인했다.
+3. 생성 입력·결과 타입은 `useUpload`, 이미지 URL은 기존 `app/queries/media.ts`를 통해 화면에 노출했다. Frontend 계층 규칙을 유지하는 선택이며 잘못됐을 때 조정 범위는 타입 import 경로다.
+4. Frontend 전체 검사가 드러낸 관리자 Fake·기대값 누락을 Task 5에서 보완했다. 잘못된 슬롯을 허용할 위험을 줄이기 위해 9개 정확한 종류 목록과 Background 편집 경로·`{{prompt}}` 변수를 함께 검증했다.
