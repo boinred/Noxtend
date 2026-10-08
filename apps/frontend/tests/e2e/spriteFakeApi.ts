@@ -21,6 +21,7 @@ export interface SpriteFakeOptions {
   records?: { path: string; body: Record<string, unknown> }[]
   seed?:
     'baseReview' | 'failed' | 'canceled' | 'packFailed' | 'completed' | 'analyzing' | 'frameReview'
+  generateErrorOnce?: boolean
   providerErrorOnce?: boolean
   providersEmpty?: boolean
   detailErrorOnce?: boolean
@@ -207,6 +208,8 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
   let job: Job | null = null
   const receipts = new Map<string, { fingerprint: string; receipt: SpriteAccepted }>()
   const archives = new Map<string, Buffer>()
+  const generatedUploads = new Set<string>()
+  let generateFailure = options.generateErrorOnce ?? false
   let providerFailure = options.providerErrorOnce ?? false,
     detailFailure = options.detailErrorOnce ?? false,
     conflict = options.conflictOnce ?? false,
@@ -535,6 +538,25 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
     }
     if (path === '/api/prices')
       return options.priceError ? fail(route, 503, '단가 조회 실패') : ok(route, [])
+    if (path === '/api/uploads/generate' && method === 'POST') {
+      options.records?.push({ path, body: request.postDataJSON() as Record<string, unknown> })
+      if (generateFailure) {
+        generateFailure = false
+        return fail(route, 502, '공급자 호출 실패')
+      }
+      const id = guid(8)
+      generatedUploads.add(id)
+      return ok(
+        route,
+        {
+          id,
+          originalName: 'sprite-prompt',
+          contentType: 'image/png',
+          sizeBytes: SPRITE_SOURCE_PNG.length,
+        },
+        201,
+      )
+    }
     if (path === '/api/uploads' && method === 'POST')
       return ok(
         route,
@@ -546,7 +568,11 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
         },
         201,
       )
-    if (path === `/api/uploads/${SPRITE_IDS.upload}/content`)
+    const uploadContent = /^\/api\/uploads\/([^/]+)\/content$/.exec(path)
+    if (
+      uploadContent &&
+      (uploadContent[1] === SPRITE_IDS.upload || generatedUploads.has(uploadContent[1]!))
+    )
       return route.fulfill({ status: 200, contentType: 'image/png', body: SPRITE_SOURCE_PNG })
     if (path === `/api/jobs/${SPRITE_IDS.job}`) {
       if (detailFailure) {

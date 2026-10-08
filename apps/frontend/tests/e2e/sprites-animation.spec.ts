@@ -15,6 +15,7 @@ async function choose(page: Page, label: string, value: string) {
 }
 async function loopPlan(page: Page) {
   await page.goto('/2d/background')
+  await page.getByTestId('mode-tab-image').click()
   await page
     .getByTestId('image-input')
     .setInputFiles({ name: 'source.png', mimeType: 'image/png', buffer: SPRITE_SOURCE_PNG })
