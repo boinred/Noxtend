@@ -36,6 +36,7 @@ public sealed class ReclaimPlanTests
     /// 같은 공정이 두 번 돌아 이미지가 두 번 만들어진다.
     ///
     /// 생성은 리스가 텍스트 단계의 세 배라 같은 기준을 쓰면 정상 작업을 회수하게 된다.
+    /// 3D 재구성은 리스가 분 단위라 텍스트 기준을 쓰면 마찬가지로 정상 작업을 뺏는다.
     /// </summary>
     [Fact]
     public void EachKindWaitsTwiceItsOwnLease()
@@ -43,10 +44,13 @@ public sealed class ReclaimPlanTests
         var job = new JobOptions { LeaseSeconds = 100 };
         var generation = new GenerationOptions { LeaseSeconds = 400 };
 
-        var plan = ReclaimPlan.For(job, generation).ToDictionary(s => s.Kind, s => s.IdleLongerThan);
+        var mesh = new MeshGenerationOptions { LeaseSeconds = 1000 };
+
+        var plan = ReclaimPlan.For(job, generation, mesh).ToDictionary(s => s.Kind, s => s.IdleLongerThan);
 
         Assert.Equal(TimeSpan.FromSeconds(200), plan[TaskKind.Extract]);
         Assert.Equal(TimeSpan.FromSeconds(800), plan[TaskKind.Generate]);
         Assert.Equal(TimeSpan.FromSeconds(800), plan[TaskKind.GenerateSprite]);
+        Assert.Equal(TimeSpan.FromSeconds(2000), plan[TaskKind.Reconstruct]);
     }
 }

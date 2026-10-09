@@ -57,7 +57,7 @@ TaskKind별 handler는 `TaskWorkerRegistration`의 표가 정본이다. 텍스�
 | 대상 | 테스트(`apps/backend/Noxtend.Tests/` 기준) |
 | --- | --- |
 | 상태 전이·준비 판정 | `Domain/PipelineJobTests.cs`, `Domain/PipelineTaskTests.cs`, `Domain/MeshRunTests.cs` |
-| 적재·회수·재시도 | `Application/JobOrchestratorTests.cs`, `SweepStaleTasksHandlerTests.cs`, `RetryTaskHandlerTests.cs`, `RetryReenqueueSchedulingTests.cs`, `JobLifecycleTests.cs`, `Api/ReclaimPlanTests.cs`(Reconstruct 기준은 미검증) |
+| 적재·회수·재시도 | `Application/JobOrchestratorTests.cs`, `SweepStaleTasksHandlerTests.cs`, `RetryTaskHandlerTests.cs`, `RetryReenqueueSchedulingTests.cs`, `JobLifecycleTests.cs`, `Api/ReclaimPlanTests.cs` |
 | Worker 등록·경합 | `Api/TaskWorkerRegistrationTests.cs`, `Api/TaskWorkerConcurrencyTests.cs` |
 | SQL·Redis(Docker) | `Infrastructure/TaskConcurrencyTests.cs`, `EfJobRepositoryConcurrencyTests.cs`, `RedisTaskQueueTests.cs`, `JobDeletionPersistenceTests.cs`, `MigrationRegistrationTests.cs`, `ServiceRegistrationTests.cs` |
 | 3D 메시 | `Application/MeshRecoveryTests.cs`, `MeshJobIntakeTests.cs`, `Infrastructure/TripoMeshProviderTests.cs`, `MeshyMeshProviderTests.cs`, `TripoResultDownloadTests.cs`, `MeshPersistenceTests.cs`, `Api/GeneratedMeshesControllerTests.cs` |
