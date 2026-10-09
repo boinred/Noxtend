@@ -69,6 +69,33 @@ public sealed class OfficialTextPriceSourceTests
         Assert.Contains("Cached input", evidence);
     }
 
+    [Theory]
+    [InlineData("leaf-swapped")]
+    [InlineData("group-swapped")]
+    [InlineData("wrong-span")]
+    public void Anthropic_changed_header_structure_is_blocked(string mutation)
+    {
+        var groups = mutation == "group-swapped"
+            ? "<th>Model</th><th colspan=\"3\">Prompt caching</th><th colspan=\"2\">Base tokens</th>"
+            : $"<th>Model</th><th colspan=\"{(mutation == "wrong-span" ? 3 : 2)}\">Base tokens</th><th colspan=\"3\">Prompt caching</th>";
+        var leaves = mutation == "leaf-swapped"
+            ? "<th>Name</th><th>Output</th><th>Input</th>"
+            : "<th>Name</th><th>Input</th><th>Output</th>";
+        var prices = mutation == "leaf-swapped"
+            ? "<td>$15 / MTok</td><td>$3 / MTok</td>"
+            : "<td>$3 / MTok</td><td>$15 / MTok</td>";
+        var html = $"""
+            <h2>Model pricing</h2><table><thead><tr>{groups}</tr>
+            <tr>{leaves}<th>5m writes</th><th>1h writes</th><th>Hits and refreshes</th></tr></thead>
+            <tbody><tr><td><a href="/docs/en/models/sonnet-4-6/overview">Claude Sonnet 4.6</a></td>
+            {prices}<td>$3.75 / MTok</td><td>$6 / MTok</td><td>$0.30 / MTok</td></tr></tbody></table>
+            """;
+        var candidate = Assert.Single(OfficialTextPriceParser.Parse("anthropic", System.Text.Encoding.UTF8.GetBytes(html),
+            "https://official.example/pricing", DateTimeOffset.UtcNow, ["claude-sonnet-4-6"]));
+        Assert.Null(candidate.Terms);
+        Assert.NotNull(candidate.BlockedReason);
+    }
+
     [Fact]
     public void Exact_mapping_does_not_price_unknown_or_date_alias()
     {

@@ -114,6 +114,35 @@ public sealed class OfficialModelCollectionTests
     }
 
     [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("<br><br>")]
+    public async Task Empty_google_paid_input_is_partial_and_blocked_at_source_boundary(string input)
+    {
+        var page = 0;
+        var html = $"""
+            <h2 id="gemini-2.5-flash">Gemini 2.5 Flash</h2>
+            <section><h3>Standard</h3><table>
+            <thead><tr><th></th><th>Free Tier</th><th>Paid Tier, per 1M tokens in USD</th></tr></thead>
+            <tbody><tr><td>Input price</td><td>Free of charge</td><td>{input}</td></tr>
+            <tr><td>Output price</td><td>Free of charge</td><td>$2.50</td></tr></tbody>
+            </table></section>
+            """;
+        using var http = new HttpClient(new Handler((request, _) => Task.FromResult(
+            Response(request.RequestUri!.AbsolutePath.EndsWith("/models")
+                ? File.ReadAllBytes(Fixture($"google-models-page-{++page}.json"))
+                : Encoding.UTF8.GetBytes(html)))));
+        var result = await OfficialModelPriceSource.CollectTextAsync(new(http), Guid.NewGuid(), "google", "test-secret", TimeProvider.System, default);
+        Assert.Equal("complete", result.ModelListStatus);
+        Assert.Equal("partial", result.Status);
+        Assert.Null(result.ModelError);
+        Assert.NotNull(result.PriceError);
+        var candidate = Assert.Single(result.Candidates.Where(c => c.Model == "gemini-2.5-flash"));
+        Assert.Null(candidate.Terms);
+        Assert.NotNull(candidate.BlockedReason);
+    }
+
+    [Theory]
     [InlineData("https://untrusted.example/v1/models")]
     [InlineData("http://api.anthropic.com/v1/models")]
     [InlineData("https://api.anthropic.com:444/v1/models")]

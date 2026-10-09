@@ -88,8 +88,15 @@ internal static class OfficialTextPriceParser
         {
             if (element.LocalName == "h2") { heading = Text(element); continue; }
             if (!heading.StartsWith("Model pricing", StringComparison.Ordinal)) continue;
-            var headers = element.QuerySelectorAll("thead th").Select(Text).ToArray();
-            if (!headers.Contains("Base tokens") || !headers.Contains("Input") || !headers.Contains("Output")) continue;
+            var headerRows = element.QuerySelectorAll("thead tr").ToArray();
+            if (headerRows.Length != 2) continue;
+            var groups = headerRows[0].Children.ToArray();
+            var columns = headerRows[1].Children.ToArray();
+            if (!groups.Select(Text).SequenceEqual(["Model", "Base tokens", "Prompt caching"]) ||
+                !columns.Select(Text).SequenceEqual(["Name", "Input", "Output", "5m writes", "1h writes", "Hits and refreshes"])) continue;
+            if ((groups[0].GetAttribute("colspan") ?? "1") != "1" || groups[1].GetAttribute("colspan") != "2" ||
+                groups[2].GetAttribute("colspan") != "3" || columns.Any(c => (c.GetAttribute("colspan") ?? "1") != "1") ||
+                groups.Concat(columns).Any(c => (c.GetAttribute("rowspan") ?? "1") != "1")) continue;
             foreach (var row in element.QuerySelectorAll("tbody tr"))
             {
                 var cells = row.Children.ToArray();
@@ -154,6 +161,7 @@ internal static class OfficialTextPriceParser
     {
         if (Money(value, out money)) return true;
         var lines = value.Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (lines.Length == 0) return false;
         var main = lines[0];
         var suffix = " (" + modalities + ")";
         if (!main.EndsWith(suffix, StringComparison.Ordinal)) return false;
