@@ -38,10 +38,10 @@
 | 책임 | 계약 |
 | --- | --- |
 | 가격 메타데이터 | `ModelPrice`에 `ProviderKind? Provider`, `bool AllowHistoricalFallback`, `string? SourceEvidenceJson` 추가. legacy 기본값은 `null/true/null`, 수집 행은 명시 공급자·`false`·근거 JSON |
-| 가격 후보 | 신규 `Tuning.Domain/Prices/PriceUpdateTypes.cs`: `PriceUpdateCandidate`는 ID, 공급자, 정확한 모델 ID, 영역/작업, 요금 조건, 기존 값 fingerprint, 수집 단가, 출처, 변경 종류, 실행 지원, 적용 불가 이유 보유 |
+| 가격 후보 | 신규 `Tuning.Domain/Prices/PriceUpdateTypes.cs`: `PriceUpdateCandidate`는 ID, 공급자, 정확한 모델 ID, 영역/작업, 요금 조건, 기존 값 fingerprint와 currentTerms, 수집 terms, 출처 배열과 providerConfigIds, 변경 종류, 실행 지원, 적용 불가 이유 보유 |
 | 후보 단가 | `PriceUpdateTerms`는 기존 7개 가격 입력값을 보유: input/output, longContextFrom/longInput/longOutput, perImage, 공식 시행일(nullable). credit·환산 근거는 `PriceEvidence`에 별도 보관 |
-| 수집 결과 | `ProviderCollectionResult`는 config ID·kind, 상태 `success/partial/failed`, 모델/가격 수집 실패 구분, 수집 시각, 후보 배열. `PriceEvidence`는 URL·확인 시각·SHA-256·조건·credit/작업·USD/credit의 확인값 |
-| 서버 변경안 | `PriceUpdatePreview`: ID, 생성/만료 UTC, 공급자 결과. 유효시간 30분. 가격·근거·기존 비교값은 서버 snapshot에서 읽음 |
+| 수집 결과 | `ProviderCollectionResult`는 config ID·kind, 상태 `success/partial/failed`, 모델/가격 수집 실패 구분, 수집 시각, 모델 목록 완전성 `complete/partial/failed`, 후보 배열. `PriceEvidence`는 URL·확인 시각·SHA-256·조건·credit/작업·USD/credit의 확인값 |
+| 서버 변경안 | `PriceUpdatePreview`: ID, 생성/만료 UTC, 공급자 결과와 중복 제거한 top-level candidates. 공급자 결과는 candidateIds로 후보를 참조한다. 유효시간 30분. 가격·근거·기존 비교값은 서버 snapshot에서 읽음 |
 | 수집 port | `IPriceUpdateSource.CollectAsync(Guid providerConfigId, CancellationToken ct) → Task<ProviderCollectionResult>`. 공급자 분기는 Infrastructure 한 구현에서 처리하고 supplier별 parser는 순수 함수로 분리 |
 | 저장 port | `IPriceUpdateRepository.SavePreviewAsync(PriceUpdatePreview, ct)`, `GetPreviewAsync(Guid, ct)`, `ApplyAsync(PriceApplyRequest, DateTimeOffset now, ct) → Task<Result<PriceUpdateReceipt>>`. 원자성은 SQL 구현 책임, 검증 규칙은 Domain 함수로 공유 |
 | 적용 입력 | `PriceApplyRequest(requestId, previewId, candidateIds, effectiveFrom?)`. `null`은 즉시 적용. 정렬한 후보 ID와 UTC 적용 입력으로 요청 fingerprint 생성 |
@@ -52,19 +52,21 @@
 | Frontend | `createPriceUpdatePreview(input, signal?)`, `applyPriceUpdate(previewId, input, signal?)`; `useCreatePriceUpdatePreview()`, `useApplyPriceUpdate()`는 자동 retry 없음 |
 | 필터 | `ProviderPriceFilter = 'all' | ProviderKind | 'unknown'`. 기존 단가와 preview의 필터 상태는 독립. 표시용 순수 필터이며 HTTP·수집 대상·단가 변경 없음 |
 
-`PriceUpdateCandidate`의 변경 종류는 `newModel/priceChanged/unchanged/priceUnknown`, 실행 지원은 `supported/unverified/unsupported`로 고정한다. 적용 여부는 별도 `blockedReason`으로 표현해 신규 모델 발견과 실행 허용을 혼동하지 않는다. 가격 출처는 항상 plain text/링크로 렌더하고 HTML을 실행하지 않는다.
+`PriceUpdateCandidate`의 변경 종류는 `newModel/priceChanged/unchanged/priceUnknown/notInCatalog`, 실행 지원은 `supported/unverified/unsupported`로 고정한다. 적용 여부는 별도 `blockedReason`으로 표현해 신규 모델 발견과 실행 허용을 혼동하지 않는다. 가격 출처는 항상 plain text/링크로 렌더하고 HTML을 실행하지 않는다. `notInCatalog`는 확인된 공급자의 기존 단가 모델이 완전히 수집된 목록에 없다는 뜻이며 폐기 확정이 아니다. 적용 불가로 표시하고 기존 단가·설정·작업을 보존한다.
 
 ## Task 1: 비교 실행 자료와 공통 검증 준비
 
-**Files:** 신규 `docs/evals/model-price-update/brief.md`, `docs/evals/model-price-update/fixtures/manifest.json`, 같은 fixtures 디렉터리의 공급자별 원문 파일, `docs/evals/model-price-update/acceptance.md`. 참가자 외부 보관 결과는 `.codex`의 이 작업용 산출물 디렉터리를 사용하고 저장소에 로그·키를 넣지 않는다.
+**Files:** 신규 `docs/evals/model-price-update/brief.md`, `docs/evals/model-price-update/fixtures/manifest.json`, 같은 fixtures 디렉터리의 공급자별 원문 파일, `docs/evals/model-price-update/acceptance.md`; 공통 실행 검사로 신규 `apps/backend/Noxtend.Tests/Api/ModelPriceUpdateAcceptanceTests.cs`, `ModelPriceUpdateAcceptanceHost.cs`, `apps/frontend/tests/e2e/model-price-update-acceptance.spec.ts`. 공통 host에 필요한 기존 test csproj/API 진입점 변경도 측정 전 공통 준비에 포함한다. 참가자 외부 보관 결과는 `.codex`의 이 작업용 산출물 디렉터리를 사용하고 저장소에 로그·키를 넣지 않는다.
 
 **Interfaces:** 입력은 승인된 Spec과 기준 커밋. 출력은 source URL·수집 시각·SHA-256이 있는 동일 fixture 묶음, 구현 위치를 노출하지 않는 요구사항, 평가 기준이다.
 
 - [ ] 공식 공개 자료를 같은 시점에 저장하고 각 공급자의 정상 모델/가격, 미래 가격, 단위/구조 변경 사례를 준비한다. 키가 필요한 목록은 문서화된 계약의 합성 응답으로 표시하고 실 계정 응답인 척하지 않는다. 원문 HTML fixture는 헤더·등급·단위 관계를 보존한다.
 - [ ] 정상 fixture의 기대 후보·단가·보류 이유를 사람이 근거와 대조해 `manifest.json`에 기록한다. 가격 숫자를 이 계획의 기억에서 채우지 않는다. parser 내부 함수명에 의존하는 검사는 공통 합격 검사로 사용하지 않는다.
+- [ ] 평가자가 실행할 공통 HTTP 검사는 `WebApplicationFactory` 기반 test host에서 실제 API·일회용 SQL DB·원문 fixture를 반환하는 outbound HTTP handler를 연결한다. 필요한 `Microsoft.AspNetCore.Mvc.Testing`은 기존 ASP.NET 버전에 맞춰 restore 후 양쪽에 동일하게 고정한다. 가격 수집기 자체를 Fake로 바꾸지 않고 네트워크 경계만 대체하며 운영 API에 임의 URL 입력을 추가하지 않는다. 테스트는 HTTP 계약과 저장 결과만 관찰하고 참가자 내부 parser 이름에 의존하지 않는다. host의 구현별 연결 차이는 평가자가 기록하며 결과 판단 코드는 수정하지 않는다.
+- [ ] 공통 검사는 기존 단가 사전 등록 → 수집 → 선택 적용 → 재전송/충돌/만료 → 단가 재조회 시나리오와 아래 누락·중복·실패 요약 사례를 고정한다. `dotnet test apps/backend/Noxtend.Tests/Noxtend.Tests.csproj --filter FullyQualifiedName~ModelPriceUpdateAcceptanceTests`와 `pnpm --filter @nextend/frontend test:e2e tests/e2e/model-price-update-acceptance.spec.ts`를 양쪽에 동일하게 실행한다. UI 검사는 Fake 응답 기준이며 실제 HTTP/SQL 검사와 결과를 구분한다. 측정 전 기대값·테스트 해시·케이스 수를 고정하고 신규 기능 미구현으로 실패하는 것도 확인한다.
 - [ ] neutral brief에는 제품 흐름·필터 규칙·HTTP 계약·합격 기준·공급자 자료만 넣는다. 이 계획의 파일 경로, 진행자용 코드 지도, 해법, 이전 에이전트 보고는 제외한다.
 - [ ] 양쪽 사본의 기준 코드·fixture 해시·런타임을 일치시킨다. 사본 준비와 restore는 측정 전 완료하고 공유 작업 트리에서 A/B를 실행하지 않는다. 관련 지침 노출과 xHuman 접근 기록의 수집 가능 여부를 먼저 확인한다.
-- [ ] 공통 fixture/요구사항만 별도 커밋한다. 양쪽에 동일 커밋을 제공하고 새 참가자로 시작한다. 코드를 만드는 Task 2–6의 구체적 분해는 각 팀이 brief에서 작성하되 기능 범위·상한·리뷰 기회는 고정한다.
+- [ ] 공통 fixture/요구사항/평가 테스트와 실행 준비만 별도 커밋한다. 양쪽에 동일 커밋을 제공하고 새 참가자로 시작한다. 코드를 만드는 Task 2–6의 구체적 분해는 각 팀이 brief에서 작성하되 기능 범위·상한·리뷰 기회는 고정한다.
 
 ## Task 2: 공급자 메타데이터·비소급 가격·공통 타입
 
@@ -101,6 +103,8 @@
 - [ ] Meshy OpenAPI enum 및 공식 가격 HTML, Tripo 모델/가격 HTML fixture로 모델·작업·텍스처·geometry 조건을 읽는 실패 테스트를 작성한다. `latest`를 특정 버전으로 추정하지 않는 사례를 포함한다.
 - [ ] credit/작업과 USD/credit를 별도 값으로 보존한다. 계정 종속 환산, 누락 조건, 현재 계산기로 표현 불가한 조건을 보류한다. 모든 공급자 결과가 항상 보류인 stub로 이 작업을 완료하지 않는다. 최소한 명확한 지원 요금과 명확한 보류 사례를 각각 증명한다.
 - [ ] 기존 3D 어댑터의 실제 요청 옵션과 가격 조건을 대조한다. 지원되지 않는 새 프로토콜·옵션은 발견 결과에는 남기고 실행 지원 확인 필요로 표시한다. 고정 실행 모델과 잔액 조회를 신규 모델 목록 조회인 것처럼 사용하지 않는다.
+- [ ] 같은 공급자의 여러 설정에서 나온 후보는 공급자 종류 + 정확한 모델 ID + 영역/작업 + 정규화한 요금 조건으로 묶는다. 설정별 수집 성공/실패는 별도로 유지하고 동일 단가·공식 시행일이면 후보 하나에 출처와 관찰한 config ID를 합친다. 값이나 시행일이 다르면 어느 하나를 고르지 않고 충돌로 보류한다. 서로 다른 조건의 후보가 동일 `(Model, EffectiveFrom)` 저장 키를 요구하면 함께 적용하지 않는다. 두 설정에서 같은 후보를 수집해도 한 행만 저장되는 경우와 상충 요금의 전체 거부를 검증한다.
+- [ ] 선택한 공급자의 모델 목록이 모든 페이지에서 정상 수집됐을 때만 확인된 공급자의 기존 단가 모델과 정확한 ID로 비교해 `notInCatalog`를 만든다. 같은 공급자의 여러 설정 중 하나라도 실패/부분 수집이면 누락 판정을 보류하고, 정상 목록은 합집합으로 비교한다. 미분류 기존 행은 제외한다. 가격표 실패와 목록 실패를 구분하고 목록 미노출만으로 모델 폐기·권한 상실을 단정하지 않는다. 정상 미노출/부분 수집/401/서로 다른 계정 목록 사례에서 오판과 기존 데이터 변경이 없는지 검증한다.
 - [ ] 값이 동일하면 unchanged/선택 불가, 다른 공급자의 동일 ID나 공급자 미분류 기존 행과의 불명확한 매칭은 blocked로 반환한다. 출처/요금 등급만 다른 동일 숫자를 근거 없이 같은 정책으로 합치지 않는다.
 - [ ] `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName~MeshPriceSourceTests|FullyQualifiedName~PriceUpdateRulesTests|FullyQualifiedName~MeshModelCatalogTests'` 통과 후 독립 리뷰·관련 지도·scoped commit.
 
@@ -115,7 +119,7 @@
 - [ ] preview 조회가 운영 단가를 바꾸지 않는 것, 공급자별 부분 실패, 적용 입력 변조·중복 ID·다른 request body 거부 테스트를 먼저 작성한다. 대상 설정 ID는 중복 제거 후 1–25개, 수집 전체 상한은 120초로 고정하고 미수집 공급자를 성공으로 표시하지 않는다.
 - [ ] `PriceUpdatePreviews`에 ID·CreatedAt·ExpiresAt·schemaVersion=1의 typed payload JSON을 저장한다. 적용 이력 테이블은 RequestId PK·PreviewId·request fingerprint·receipt JSON·AppliedAt을 보유한다. 단가 행의 근거 JSON은 preview 정리와 독립적으로 남긴다. 스케줄러/자동 삭제는 추가하지 않는다.
 - [ ] SQL `Serializable` transaction에서 성공 request 재조회 → 본문 동일성 → 미적용 snapshot 만료 → 현재 단가 지문 재확인 → 도메인 검증 → 선택 단가와 receipt 저장 순서를 구현한다. 재전송은 만료 전후 모두 저장 결과를 반환한다. 동시 unique 충돌은 새 context로 승자 결과를 읽고 동일 요청이면 반환, 그 외는 409; 다른 DB 오류를 성공으로 숨기지 않는다.
-- [ ] 즉시 적용은 각 후보의 `max(now, officialEffectiveFrom)`으로 확정한다. 명시 시각이 현재/공식 시행일 하한보다 이르면 400이다. 선택 묶음 하나라도 stale·blocked이면 전체 거부한다. 현재값과 동일해진 후보를 다시 새 행으로 넣지 않는다.
+- [ ] 즉시 적용은 각 후보의 `max(now, officialEffectiveFrom)`으로 확정한다. 명시 시각이 현재/공식 시행일 하한보다 이르면 400이다. 선택 묶음 하나라도 stale·blocked이면 전체 거부한다. 현재값과 동일해진 후보를 다시 새 행으로 넣지 않는다. 서로 다른 candidate ID가 같은 가격 행을 대상으로 하는지도 transaction 안에서 재검증해 후보 중복으로 인한 일부 저장을 차단한다.
 - [ ] HTTP/DI와 기존 `{ data, error }`를 연결한다. 취소는 전파하고 snapshot 성공 후 apply 실패를 수집 실패와 혼동하지 않는다. `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName~PriceUpdateHandlerTests|FullyQualifiedName~PriceUpdatePersistenceTests|FullyQualifiedName~PriceUpdatesControllerTests'`에서 실제 SQL 경쟁/rollback과 response 유실 재전송을 검증한 후 독립 리뷰·지도·scoped commit.
 
 ## Task 6: 관리자 업데이트 화면과 공급자 필터
@@ -127,6 +131,7 @@
 - [ ] `all/openai/anthropic/google/tripo/meshy/unknown` 필터, null/누락 provider, 빈 결과를 순수 테스트로 고정한다. 문자열 접두사 추정 없이 정확한 provider 값으로 필터링한다. 기존 공급자 라벨을 재사용한다.
 - [ ] 기존 단가 표에 라벨 `공급자`의 select를 추가하고 필터 후 groupPricesByModel을 적용한다. 전체/표시 건수를 구분하며 `useModelPrices`의 error·isError·refetch도 노출해 조회 실패를 미분류/빈 목록으로 숨기지 않는다.
 - [ ] 업데이트 패널에 별도의 수집 대상 설정 선택·수집 버튼·공급자별 결과/출처·preview 공급자 필터·선택 적용·예약 시각을 연결한다. supplier filter는 외부 요청을 만들지 않는다. 필터 변경과 새 preview 전환 시 선택을 초기화하고 `공급자 필터가 변경되어 적용 선택을 해제했습니다` 또는 `새 수집 결과로 적용 선택을 해제했습니다`를 status로 알린다.
+- [ ] 공급자별 실패 요약은 후보 필터 바깥에 유지한다. 선택 공급자의 `수집 실패`, `정상 수집 결과 없음`, `적용 가능한 항목 없음`을 구분하고 `notInCatalog`는 `목록에서 확인되지 않음 · 확인 필요`로 표시한다. Google 수집 실패 후 OpenAI로 필터를 바꿔도 Google 실패 요약이 남는 공통 E2E와 초기 선택 0건·닫기/선택 해제 시 적용 요청 0회 검사를 포함한다.
 - [ ] `현재 표시된 적용 가능 항목 선택`과 적용 버튼의 선택 건수를 제공한다. 화면 필터 변경 시 숨겨지는 항목을 apply payload에 남기지 않는다. 요청 진행 중 필터/선택을 잠그고, 새 동작은 새 requestId, 응답 유실 재시도는 같은 입력을 재사용한다. 자동 mutation retry는 끈다.
 - [ ] 가격 응답은 필드·enum·날짜·배열을 읽는 reader로 검증하고 기존 단가 응답의 새 필드 누락만 호환한다. 성공 apply 후 prices·callStats·jobCalls 계열 캐시를 무효화하고 409는 오류를 표시하며 사용자가 재수집하도록 한다. 임의로 새 requestId·새 가격으로 자동 재적용하지 않는다.
 - [ ] Fake E2E에서 5개 공급자+legacy 미분류, 숨겨진 선택 0건 전송, 필터 시 네트워크 수집 0회, 일부 실패/만료/중복/재시도, 390px·1440px·키보드·light/dark를 검증한다. `pnpm --filter @nextend/frontend test src/domain/tuning/priceUpdates.test.ts src/infra/api/priceUpdateApi.test.ts` 및 `pnpm --filter @nextend/frontend test:e2e tests/e2e/price-updates.spec.ts tests/e2e/prices-admin.spec.ts` 통과 후 독립 리뷰·관련 지도·scoped commit.
@@ -139,7 +144,7 @@
 
 - [ ] 새 A/B 참가자는 같은 brief와 fixture로 실행한다. 양쪽 모두 Subagent-driven이며 같은 과제 수와 리뷰 기회를 제공한다. A는 xHuman 읽기/갱신만 실험용 예외, B는 관련 지도 참조·갱신. 상세 진행자 계획과 해결책 전달은 금지한다.
 - [ ] 제안 상한은 팀당 구현·작업 리뷰 120분, 실행 검증 45분이다. 시간 초과도 결과에 남기고 한쪽에만 연장하지 않는다. 환경 준비·서버/컨테이너 대기·진행자 통합 시간은 별도 집계한다. 토큰 계측이 불가능하면 토큰/비용을 미확인으로 남긴다. 이 상한은 소요시간 예측이 아니며 계획 승인 후 실행 시작 전에 고정한다.
-- [ ] 각 구현·리뷰 로그에서 xHuman 노출·다른 사본 접근·새 웹자료 사용을 확인한다. 참가자 출력에 없는 자동 맥락까지 확인할 수 없으면 그 한계를 결과에 명시한다. A/B 라벨을 가린 새 리뷰어가 동일 acceptance와 실제 diff를 대조한다.
+- [ ] 각 구현·리뷰 로그에서 xHuman 노출·다른 사본 접근·새 웹자료 사용을 확인한다. 참가자 출력에 없는 자동 맥락까지 확인할 수 없으면 그 한계를 결과에 명시한다. A/B 라벨을 가린 새 리뷰어가 Task 1에서 해시를 고정한 공통 검사와 실제 diff를 대조한다. 각 참가자의 자체 테스트 결과는 공통 검사 결과와 별도 기록한다.
 - [ ] 동시 E2E 서버/SQL 자원 경합을 피해서 두 결과의 전체 회귀를 순차 실행한다. Backend: `dotnet build apps/backend/Noxtend.slnx` 및 `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName!~TripoSmokeTests&FullyQualifiedName!~SimilaritySmokeTests'`. Frontend: `pnpm test && pnpm lint && pnpm typecheck && pnpm build && pnpm test:e2e`.
 - [ ] 합격 항목/실패/미실행, 리뷰 수정 횟수, 불필요한 변경, 총 작업·검증 시간, 환경 차이를 함께 보고한다. 속도만으로 구현을 선택하지 않는다. 선택 후보를 통합한 뒤 변경된 부분은 재리뷰·영향 회귀하고, 두 결과를 무조건 합쳐 사용하지 않는다.
 - [ ] 문서·코드 동기화, `pnpm docs:check`, `git diff --check`, scoped commit을 완료한다. 실 공급자 검증·merge/push·배포는 실행된 증거가 있을 때만 별도로 보고한다.
@@ -150,7 +155,9 @@
 | --- | --- |
 | 5개 공급자 모델·단가 수집과 공식 근거 | 1·3·4 |
 | 신규 모델/실행 지원/단가 표현 가능성 구분 | 2·3·4 |
-| provider 저장·legacy 미분류·필터 | 2·6 |
+| provider 저장·legacy 미분류·필터·실패 요약 유지 | 2·6 |
+| 목록 미노출의 보수적 판정·기존 데이터 보존 | 1·4·6 |
+| 계정 간 동일 후보 중복 제거·상충 요금 보류 | 1·4·5 |
 | snapshot·30분·멱등·원자성·동시성 | 2·5 |
 | 과거 비용·미등록·alias·미래 시행일 보존 | 2·5 |
 | 필터 전환 시 숨겨진 선택 차단·오류·접근성 | 6 |
@@ -161,7 +168,8 @@
 
 ## 실행 기록
 
+- 검토 기준 커밋: `49a98ac`. 커밋 후 목록 미노출·계정 간 후보 중복·공통 실행 검사·필터와 독립된 실패 요약의 누락을 보완했다. 테스트 파일과 패키지 추가는 후속 구현 계획이며 이번 문서 작업에서 실행하지 않았다.
 - 계획 작성: 기본 설계 승인과 공급자 필터 요구를 반영했다. 기본 설계 문서도 같은 동작으로 수정했다.
-- 실행 방식: Subagent-driven 유지. 구현·비교 실행·공급자 호출·DB 적용은 아직 미실행이다.
+- 실행 방식: Subagent-driven. 2026-10-09 사용자 실행 승인 후 독립 worktree `codex/model-price-update`에서 공통 준비 시작. A/B 측정은 공통 자료·검사 확정 후 시작하며 유료 호출·운영 DB 적용은 범위 밖이다.
 - 현재 검증: 두 문서 대상 `pnpm docs:check` 통과, 참조 기존 경로 존재 및 두 문서의 줄 끝 공백 없음 확인. 기능 테스트는 실행하지 않았다.
-- 계획 검토 후 구현 실행 요청을 받으면 Task 1부터 진행한다. 실행 중 완료·실제 명령 결과·수정·미해결 항목을 이 절에 기록한다.
+- Task 1 공통 준비 진행 중이다. 실행 중 완료·실제 명령 결과·수정·미해결 항목을 이 절에 기록한다.
