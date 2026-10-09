@@ -7,6 +7,7 @@
  * 관찰하고 조정하는 별개 관심사다.
  */
 import type { AssetCategory, TaskKind } from '@/domain/job/types'
+import type { ProviderKind } from '@/domain/provider/types'
 
 /**
  * 프롬프트 슬롯 축 (background-similarity-tuning §7.1) — pipeline TaskKind 에서 분리됐다.
@@ -205,6 +206,9 @@ export function describeRun(run: GoldenRun): string {
  * 인상분이 과거 지출까지 소급되어 지난달 비용이 조용히 부풀어 오른다.
  */
 export interface ModelPrice {
+  provider?: ProviderKind | null
+  allowHistoricalFallback?: boolean
+  sourceEvidenceJson?: string | null
   id: string
   model: string
   inputPerMillion: number
@@ -225,7 +229,10 @@ export interface ModelPrice {
   perImage: number | null
 }
 
-export type ModelPriceDraft = Omit<ModelPrice, 'id'>
+export type ModelPriceDraft = Omit<
+  ModelPrice,
+  'id' | 'allowHistoricalFallback' | 'sourceEvidenceJson'
+>
 
 /**
  * 모델별로 묶고, 묶음 안에서 **적용 중인 행을 맨 위**에 둔다.
@@ -248,13 +255,15 @@ export function groupPricesByModel(prices: ModelPrice[]): ModelPriceGroup[] {
 
   return [...byModel.entries()]
     .flatMap(([model, rows]) => {
-      const desc = [...rows].sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))
+      const desc = [...rows].sort(
+        (a, b) => Date.parse(b.effectiveFrom) - Date.parse(a.effectiveFrom),
+      )
       const earliest = desc.at(-1)
 
       // 묶음은 행이 있어야 만들어진다 — 빈 묶음은 생길 수 없지만 타입으로 못 박는다
       if (!earliest) return []
 
-      const current = currentPrice(desc, earliest)
+      const current = currentPrice(desc)
 
       return [{ model, rows: orderForDisplay(desc, current), current }]
     })
@@ -265,20 +274,14 @@ export interface ModelPriceGroup {
   model: string
   /** 적용 중인 행 → 예정(빠른 순) → 지난 행(최신 순) */
   rows: ModelPrice[]
-  /** 지금 적용되는 행. 미래 시행 행만 있으면 그중 가장 이른 것 */
-  current: ModelPrice
+  /** 지금 적용되는 행. 미래 행만 있으면 null */
+  current: ModelPrice | null
 }
 
-/**
- * 지금 적용되는 행.
- *
- * 미래 시행일만 있는 경우 — 인상을 미리 등록해 둔 상태 — 에는 가장 이른 행을 준다.
- * 백엔드가 "모든 행보다 오래된 호출은 가장 오래된 행으로 소급" 하는 것과 같은 규칙이라
- * 화면과 계산이 어긋나지 않는다.
- */
-function currentPrice(sortedDesc: ModelPrice[], earliest: ModelPrice): ModelPrice {
-  const now = new Date().toISOString()
-  return sortedDesc.find((p) => p.effectiveFrom <= now) ?? earliest
+/** 비용 소급 정책과 별개인 현재 시행 행. */
+function currentPrice(sortedDesc: ModelPrice[]): ModelPrice | null {
+  const now = Date.now()
+  return sortedDesc.find((p) => Date.parse(p.effectiveFrom) <= now) ?? null
 }
 
 /**
@@ -287,19 +290,20 @@ function currentPrice(sortedDesc: ModelPrice[], earliest: ModelPrice): ModelPric
  * 예정은 **빠른 순**이다 — 다음에 무엇이 적용될지가 먼 미래보다 궁금하다.
  * 지난 행은 최신 순 — 최근 이력이 오래된 것보다 자주 참조된다.
  */
-function orderForDisplay(sortedDesc: ModelPrice[], current: ModelPrice): ModelPrice[] {
+function orderForDisplay(sortedDesc: ModelPrice[], current: ModelPrice | null): ModelPrice[] {
+  if (!current) return [...sortedDesc].reverse()
   const rest = sortedDesc.filter((p) => p.id !== current.id)
 
   const scheduled = rest
-    .filter((p) => p.effectiveFrom > current.effectiveFrom)
-    .sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom))
+    .filter((p) => Date.parse(p.effectiveFrom) > Date.parse(current.effectiveFrom))
+    .sort((a, b) => Date.parse(a.effectiveFrom) - Date.parse(b.effectiveFrom))
 
-  const past = rest.filter((p) => p.effectiveFrom <= current.effectiveFrom)
+  const past = rest.filter((p) => Date.parse(p.effectiveFrom) <= Date.parse(current.effectiveFrom))
 
   return [current, ...scheduled, ...past]
 }
 
 /** 미래 시행 행인가 — 화면이 "예정" 으로 구분해 보여준다 */
 export function isScheduled(price: ModelPrice): boolean {
-  return price.effectiveFrom > new Date().toISOString()
+  return Date.parse(price.effectiveFrom) > Date.now()
 }

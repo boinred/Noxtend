@@ -90,25 +90,22 @@ public sealed class ModelPriceBook
     /// OpenAI 는 접미사로 **단가가 다른** 모델을 가르기 때문에 Anthropic 보다 위험하다.
     ///
     /// **시행일 선택.** 그 시각 이전에 시작된 행 중 가장 최근 것을 쓴다. 호출이 모든
-    /// 행보다 오래됐으면 **가장 오래된 행**으로 소급한다 — 이 표가 생기기 전의 호출을
+    /// 행보다 오래됐으면 소급을 허용하는 **가장 오래된 행**으로 소급한다 — 이 표가 생기기 전의 호출을
     /// 통째로 미등록 처리하는 것보다 낫고, 그때의 단가로는 그 값이 유일한 근거다.
     /// </summary>
     private ModelPrice? Lookup(string model, DateTimeOffset at)
     {
-        // prices 는 모델명 긴 순으로 정렬돼 있다 — 처음 걸린 모델명이 가장 구체적이다
-        var matchedModel = prices.FirstOrDefault(p => Matches(model, p.Model))?.Model;
-
+        // 시행 전 비소급 행을 제외한 뒤 가장 구체적인 alias 선택
+        var eligible = prices.Where(p => p.EffectiveFrom <= at || p.AllowHistoricalFallback).ToList();
+        var matchedModel = eligible.FirstOrDefault(p => Matches(model, p.Model))?.Model;
         if (matchedModel is null)
         {
             return null;
         }
 
-        var candidates = prices.Where(p => p.Model == matchedModel).ToList();
-
-        return candidates
-                   .Where(p => p.EffectiveFrom <= at)
-                   .MaxBy(p => p.EffectiveFrom)
-               ?? candidates.MinBy(p => p.EffectiveFrom);
+        var candidates = eligible.Where(p => p.Model == matchedModel).ToList();
+        return candidates.Where(p => p.EffectiveFrom <= at).MaxBy(p => p.EffectiveFrom)
+               ?? candidates.Where(p => p.AllowHistoricalFallback).MinBy(p => p.EffectiveFrom);
     }
 
     /// <summary>모델 id 가 이 단가 행에 걸리는가 — 정확히 같거나, 날짜 접미사만 더 붙었거나.</summary>

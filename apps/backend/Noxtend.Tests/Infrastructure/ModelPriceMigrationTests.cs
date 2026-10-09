@@ -111,9 +111,12 @@ public sealed class ModelPriceMigrationTests(SqlServerFixture sql)
 
         // 단가가 비어 있는 걸 발견한 운영자가 관리자 화면에서 먼저 등록한 행.
         // 씨앗과 같은 (모델, 시행일) 이라 `IX_ModelPrices_ModelEffectiveFrom` 에 부딪힌다
-        db.ModelPrices.Add(ModelPrice.CreatePerImage(
-            "gemini-3.1-flash-lite-image", 0.09m, SeededFrom, "운영자가 직접 등록"));
-        await db.SaveChangesAsync();
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO [ModelPrices] ([Id], [Model], [InputPerMillion], [OutputPerMillion],
+                [EffectiveFrom], [Note], [PerImage])
+            VALUES ({Guid.NewGuid()}, N'gemini-3.1-flash-lite-image', 0, 0,
+                {SeededFrom}, N'운영자가 직접 등록', 0.09);
+            """);
 
         await db.Database.MigrateAsync();
 
@@ -124,6 +127,53 @@ public sealed class ModelPriceMigrationTests(SqlServerFixture sql)
             .ToListAsync();
 
         Assert.Equal(0.09m, Assert.Single(rows).PerImage);
+    }
+
+    [Fact]
+    public async Task MetadataMigration_BackfillsExactKnownIdsAndPreservesUnclassifiedRows()
+    {
+        await using var db = Context();
+        await db.Database.MigrateAsync("20261008040836_SeedSpriteSourcePrompt");
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO [ModelPrices] ([Id], [Model], [InputPerMillion], [OutputPerMillion],
+                [EffectiveFrom], [Note])
+            VALUES ({Guid.NewGuid()}, N'gpt-5-unknown-variant', 17, 23, {SeededFrom}, N'보존');
+            """);
+        await db.Database.MigrateAsync();
+
+        var unknown = await db.ModelPrices.SingleAsync(p => p.Model == "gpt-5-unknown-variant");
+        Assert.Null(unknown.Provider);
+        Assert.True(unknown.AllowHistoricalFallback);
+        Assert.Null(unknown.SourceEvidenceJson);
+        Assert.Equal(17m, unknown.InputPerMillion);
+        foreach (var (model, provider) in new[]
+        {
+            ("gpt-5", "openai"), ("claude-opus-4-5", "anthropic"),
+            ("gemini-2.5-flash-image", "google"), ("P1-20260311", "tripo"), ("meshy-7", "meshy")
+        })
+        {
+            var row = await db.ModelPrices.FirstAsync(p => p.Model == model);
+            Assert.Equal(provider, row.Provider);
+            Assert.True(row.AllowHistoricalFallback);
+            Assert.Null(row.SourceEvidenceJson);
+        }
+    }
+
+    [Fact]
+    public async Task CollectedMetadata_RoundTripsWithoutHistoricalFallback()
+    {
+        await using var db = Context();
+        await db.Database.MigrateAsync();
+        var row = ModelPrice.CreateCollected("new-model", 2m, 3m, null, null, null,
+            SeededFrom, "근거", null, "openai", "[{\"sha256\":\"test\"}]");
+        db.ModelPrices.Add(row);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+        var saved = await db.ModelPrices.SingleAsync(p => p.Id == row.Id);
+        Assert.Equal("openai", saved.Provider);
+        Assert.False(saved.AllowHistoricalFallback);
+        Assert.Equal(row.SourceEvidenceJson, saved.SourceEvidenceJson);
+        Assert.Null(new ModelPriceBook([saved]).Estimate("new-model", SeededFrom.AddDays(-1), 1, 0));
     }
 
     private static readonly DateTimeOffset SeededFrom =

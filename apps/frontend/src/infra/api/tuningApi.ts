@@ -139,7 +139,9 @@ export function recordVerdict(
  * 전에는 코드 안의 상수 표라 단가 하나를 고치려면 재배포해야 했다.
  */
 export function listModelPrices(signal?: AbortSignal): Promise<ModelPrice[]> {
-  return apiRequest<ModelPrice[]>('/api/prices', { signal })
+  return apiRequest<ModelPrice[]>('/api/prices', { signal }).then((prices) =>
+    prices.map(normalizeModelPrice),
+  )
 }
 
 /** 새 단가 행 — **공급자가 단가를 바꿨을 때**. 과거 호출의 비용은 그대로 남는다. */
@@ -147,7 +149,9 @@ export function createModelPrice(
   draft: ModelPriceDraft,
   signal?: AbortSignal,
 ): Promise<ModelPrice> {
-  return apiRequest<ModelPrice>('/api/prices', { method: 'POST', body: draft, signal })
+  return apiRequest<ModelPrice>('/api/prices', { method: 'POST', body: draft, signal }).then(
+    normalizeModelPrice,
+  )
 }
 
 /** 기존 행 수정 — **오타 정정**. 과거 호출의 비용도 함께 다시 계산된다. */
@@ -156,9 +160,20 @@ export function updateModelPrice(
   draft: ModelPriceDraft,
   signal?: AbortSignal,
 ): Promise<ModelPrice> {
-  return apiRequest<ModelPrice>(`/api/prices/${id}`, { method: 'PUT', body: draft, signal })
+  return apiRequest<ModelPrice>(`/api/prices/${id}`, { method: 'PUT', body: draft, signal }).then(
+    normalizeModelPrice,
+  )
 }
 
 export function deleteModelPrice(id: string, signal?: AbortSignal): Promise<void> {
   return apiRequestVoid(`/api/prices/${id}`, { method: 'DELETE', signal })
+}
+
+function normalizeModelPrice(price: ModelPrice): ModelPrice {
+  return {
+    ...price,
+    provider: price.provider ?? null,
+    allowHistoricalFallback: price.allowHistoricalFallback ?? true,
+    sourceEvidenceJson: price.sourceEvidenceJson ?? null,
+  }
 }

@@ -272,3 +272,42 @@ describe('미등록과 사용량 없음', () => {
     expect(rows.map(costLabel)).toEqual(['$0.011', '미등록', '사용량 없음'])
   })
 })
+
+it('비소급 신규 3D 단가는 과거 미등록을 보존한다', () => {
+  const future = {
+    ...price({ effectiveFrom: '2099-01-01T00:00:00Z' }),
+    allowHistoricalFallback: false,
+  }
+  expect(estimateMeshBatchCost([future], future.model, 1)).toBeNull()
+})
+
+it('미래 날짜 버전이 기존 3D alias의 과거 단가를 가리지 않는다', () => {
+  const legacy = price({ model: 'P1', effectiveFrom: '2020-01-01T00:00:00Z' })
+  const future = {
+    ...price({ model: 'P1-20260311', effectiveFrom: '2099-01-01T00:00:00Z', perImage: 5 }),
+    allowHistoricalFallback: false,
+  }
+  expect(estimateMeshBatchCost([future, legacy], future.model, 1)).toBe(legacy.perImage)
+})
+
+it('수집 시행일은 timezone 문자열 순서 대신 같은 순간으로 비교한다', () => {
+  const collected = {
+    ...price({ effectiveFrom: '2026-08-02T00:00:00+09:00' }),
+    allowHistoricalFallback: false,
+  }
+  const summary = summarizeJobUsage(
+    [],
+    [
+      {
+        id: 'mesh',
+        taskId: 'task',
+        partName: 'part',
+        model: collected.model,
+        createdAt: '2026-08-01T16:00:00Z',
+        creditsConsumed: null,
+      },
+    ],
+    [collected],
+  )
+  expect(summary.rows[0]?.costUsd).toBe(collected.perImage)
+})

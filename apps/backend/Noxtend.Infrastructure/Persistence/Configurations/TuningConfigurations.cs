@@ -72,6 +72,9 @@ public sealed class ModelPriceConfiguration : IEntityTypeConfiguration<ModelPric
         builder.Property(p => p.Id).ValueGeneratedNever();
 
         builder.Property(p => p.Model).HasMaxLength(128).IsRequired();
+        builder.Property(p => p.Provider).HasMaxLength(16);
+        builder.Property(p => p.AllowHistoricalFallback).HasDefaultValue(true).ValueGeneratedNever();
+        builder.Property(p => p.SourceEvidenceJson);
 
         // decimal(18,6) — 100만 토큰당 USD. gpt-5-nano 의 $0.05 까지 담고도 여유가 있다
         builder.Property(p => p.InputPerMillion).HasPrecision(18, 6).IsRequired();

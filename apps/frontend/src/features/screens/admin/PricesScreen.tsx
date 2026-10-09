@@ -123,7 +123,7 @@ export function PricesScreen() {
                     </td>
                     <td>
                       {formatDate(price.effectiveFrom)}
-                      {price.id === group.current.id ? (
+                      {price.id === group.current?.id ? (
                         <span className={styles.activeBadge} data-testid="price-current">
                           적용 중
                         </span>
@@ -212,6 +212,7 @@ function PriceForm({ price, isSaving, onSubmit, onCancel }: PriceFormProps) {
       effectiveFrom: `${effectiveFrom}T00:00:00Z`,
       note: note.trim(),
       // 비우면 토큰 과금 모델이다 — 0 으로 두면 "장당 공짜" 로 읽힌다
+      provider: price?.provider ?? null,
       perImage: perImage.trim().length > 0 ? Number(perImage) : null,
     })
   }

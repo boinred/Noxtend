@@ -1,6 +1,7 @@
 using Noxtend.Domain.Common;
 using Noxtend.Infrastructure.Persistence.InMemory;
 using Noxtend.Tuning.Application.Prices;
+using Noxtend.Tuning.Domain.Call;
 
 namespace Noxtend.Tests.Application;
 
@@ -22,6 +23,37 @@ public sealed class ModelPriceHandlerTests
         decimal? longInput = null,
         decimal? longOutput = null)
         => new(model, input, 1.20m, longFrom, longInput, longOutput, from ?? Aug, "테스트");
+
+    [Fact]
+    public async Task ManualCreate_DefaultsToLegacyAndAcceptsOptionalProvider()
+    {
+        var repo = new InMemoryModelPriceRepository();
+        var legacy = await new CreateModelPriceHandler(repo).HandleAsync(Input(), default);
+        Assert.Null(legacy.Value!.Provider);
+        Assert.True(legacy.Value.AllowHistoricalFallback);
+        Assert.Null(legacy.Value.SourceEvidenceJson);
+        var classified = await new CreateModelPriceHandler(repo)
+            .HandleAsync(Input(from: Aug.AddDays(1)) with { Provider = "openai" }, default);
+        Assert.Equal("openai", classified.Value!.Provider);
+        var invalid = await new CreateModelPriceHandler(repo)
+            .HandleAsync(Input(from: Aug.AddDays(2)) with { Provider = "unknown" }, default);
+        Assert.Equal(ErrorCode.PriceInvalid, invalid.ErrorCode);
+        Assert.Equal(2, (await repo.ListAsync(default)).Count);
+    }
+
+    [Fact]
+    public async Task LegacyUpdate_PreservesCollectedServerMetadata()
+    {
+        var repo = new InMemoryModelPriceRepository();
+        var price = ModelPrice.CreateCollected("model", 1m, 2m, null, null, null,
+            Aug, "수집", null, "openai", "[]");
+        await repo.AddAsync(price, default);
+        var result = await new UpdateModelPriceHandler(repo).HandleAsync(price.Id, Input(), default);
+        Assert.True(result.IsSuccess);
+        Assert.Equal("openai", result.Value!.Provider);
+        Assert.False(result.Value.AllowHistoricalFallback);
+        Assert.Equal("[]", result.Value.SourceEvidenceJson);
+    }
 
     [Fact]
     public async Task Create_AddsRow()

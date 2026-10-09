@@ -49,6 +49,10 @@ public sealed class ModelPrice
     /// </summary>
     public string Model { get; private set; } = string.Empty;
 
+    public string? Provider { get; private set; }
+    public bool AllowHistoricalFallback { get; private set; } = true;
+    public string? SourceEvidenceJson { get; private set; }
+
     /// <summary>100만 토큰당 USD.</summary>
     public decimal InputPerMillion { get; private set; }
 
@@ -89,14 +93,34 @@ public sealed class ModelPrice
         decimal? longOutputPerMillion,
         DateTimeOffset effectiveFrom,
         string note,
-        decimal? perImage = null)
+        decimal? perImage = null,
+        string? provider = null)
     {
         var price = new ModelPrice(
             Guid.NewGuid(), model.Trim(), inputPerMillion, outputPerMillion,
             longContextFrom, longInputPerMillion, longOutputPerMillion, effectiveFrom, note.Trim(),
             perImage);
 
+        price.Provider = provider?.Trim().ToLowerInvariant();
         price.Validate();
+        return price;
+    }
+
+    public static ModelPrice CreateCollected(
+        string model, decimal inputPerMillion, decimal outputPerMillion,
+        int? longContextFrom, decimal? longInputPerMillion, decimal? longOutputPerMillion,
+        DateTimeOffset effectiveFrom, string note, decimal? perImage,
+        string provider, string sourceEvidenceJson)
+    {
+        if (string.IsNullOrWhiteSpace(provider) || string.IsNullOrWhiteSpace(sourceEvidenceJson))
+        {
+            throw new ModelPriceInvalidException("수집 단가는 공급자와 근거가 필요합니다");
+        }
+
+        var price = Create(model, inputPerMillion, outputPerMillion, longContextFrom,
+            longInputPerMillion, longOutputPerMillion, effectiveFrom, note, perImage, provider);
+        price.AllowHistoricalFallback = false;
+        price.SourceEvidenceJson = sourceEvidenceJson;
         return price;
     }
 
@@ -125,8 +149,11 @@ public sealed class ModelPrice
         decimal? longOutputPerMillion,
         DateTimeOffset effectiveFrom,
         string note,
-        decimal? perImage = null)
+        decimal? perImage = null,
+        string? provider = null)
     {
+        // 구형 수정 입력의 공급자·서버 소유 메타데이터 보존
+        Provider = provider?.Trim().ToLowerInvariant() ?? Provider;
         PerImage = perImage;
         InputPerMillion = inputPerMillion;
         OutputPerMillion = outputPerMillion;
@@ -145,6 +172,11 @@ public sealed class ModelPrice
     /// </summary>
     private void Validate()
     {
+        if (Provider is not null && Provider is not ("openai" or "anthropic" or "google" or "tripo" or "meshy"))
+        {
+            throw new ModelPriceInvalidException("지원하지 않는 공급자입니다");
+        }
+
         if (string.IsNullOrWhiteSpace(Model))
         {
             throw new ModelPriceInvalidException("모델 id 가 비어 있습니다");

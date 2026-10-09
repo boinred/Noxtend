@@ -191,13 +191,17 @@ public sealed record ModelPriceResponse(
     DateTimeOffset EffectiveFrom,
     string Note,
     /// <summary>이미지 1장당 USD. 토큰 과금 모델이면 `null` (사이클 #7 · Plan D-8).</summary>
-    decimal? PerImage)
+    decimal? PerImage,
+    string? Provider = null,
+    bool AllowHistoricalFallback = true,
+    string? SourceEvidenceJson = null)
 {
     public static ModelPriceResponse From(ModelPrice price)
         => new(
             price.Id, price.Model, price.InputPerMillion, price.OutputPerMillion,
             price.LongContextFrom, price.LongInputPerMillion, price.LongOutputPerMillion,
-            price.EffectiveFrom, price.Note, price.PerImage);
+            price.EffectiveFrom, price.Note, price.PerImage, price.Provider,
+            price.AllowHistoricalFallback, price.SourceEvidenceJson);
 }
 
 /// <summary>단가 작성·수정 요청. 수정 시 <see cref="Model"/> 은 무시된다.</summary>
@@ -210,11 +214,12 @@ public sealed record ModelPriceRequest(
     decimal? LongOutputPerMillion,
     DateTimeOffset EffectiveFrom,
     string? Note,
-    decimal? PerImage)
+    decimal? PerImage,
+    string? Provider = null)
 {
     public ModelPriceInput ToInput()
         => new(
             Model ?? string.Empty, InputPerMillion, OutputPerMillion,
             LongContextFrom, LongInputPerMillion, LongOutputPerMillion, EffectiveFrom, Note,
-            PerImage);
+            PerImage, Provider);
 }

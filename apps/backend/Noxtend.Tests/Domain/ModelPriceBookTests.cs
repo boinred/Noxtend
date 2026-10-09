@@ -18,6 +18,30 @@ public sealed class ModelPriceBookTests
 
     private static ModelPriceBook Book(params ModelPrice[] prices) => new(prices);
 
+    private static ModelPrice Collected(string model, DateTimeOffset from)
+    {
+        return ModelPrice.CreateCollected(model, 2m, 3m, null, null, null, from,
+            "테스트", null, "openai", "[]");
+    }
+
+    [Fact]
+    public void CollectedFirstPrice_PreservesHistoricalUnknown()
+    {
+        var book = Book(Collected("new-model", Aug));
+        Assert.Null(book.Estimate("new-model", Jan, 1_000_000, 0));
+        Assert.False(book.IsKnown("new-model", Jan));
+        Assert.Equal(2m, book.Estimate("new-model", Aug, 1_000_000, 0));
+    }
+
+    [Fact]
+    public void FutureDatedVersion_DoesNotHideLegacyAlias()
+    {
+        var book = Book(Price("claude-opus-4-5", 1m, 5m, Jan),
+            Collected("claude-opus-4-5-20251101", Aug));
+        Assert.Equal(1m, book.Estimate("claude-opus-4-5-20251101", Jan, 1_000_000, 0));
+        Assert.Equal(2m, book.Estimate("claude-opus-4-5-20251101", Aug, 1_000_000, 0));
+    }
+
     [Fact]
     public void KnownModel_Estimates()
     {
