@@ -9,6 +9,34 @@ public sealed class PriceCandidateComparisonTests
     private static readonly DateTimeOffset At = DateTimeOffset.Parse("2026-10-09T00:00:00Z");
     private static readonly OfficialPriceTerms Terms = new(3, 15);
 
+    [Theory]
+    [InlineData("1.1234567", true)]
+    [InlineData("1000000000000", true)]
+    [InlineData("0.0000001", true)]
+    [InlineData("999999999999.999999", false)]
+    [InlineData("0.000001", false)]
+    [InlineData("1.1234560", false)]
+    [InlineData("0", false)]
+    public void Collected_rates_require_exact_sql_representation_in_every_field(string value, bool blocked)
+    {
+        var rate = decimal.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
+        foreach (var terms in new[]
+        {
+            Terms with { InputPerMillion = rate }, Terms with { OutputPerMillion = rate },
+            Terms with { LongContextFrom = 100, LongInputPerMillion = rate, LongOutputPerMillion = 20 },
+            Terms with { LongContextFrom = 100, LongInputPerMillion = 4, LongOutputPerMillion = rate },
+            Terms with { PerImage = rate },
+        })
+        {
+            var source = Collection("known");
+            source = source with { Candidates = [source.Candidates[0] with { Terms = terms }] };
+            var candidate = Assert.Single(Compare([source], [Price("known", 2)]).Candidates);
+            Assert.Equal(blocked, candidate.BlockedReason is not null);
+            Assert.Equal(terms, candidate.Terms);
+            Assert.Equal(2m, candidate.CurrentTerms!.InputPerMillion);
+        }
+    }
+
     [Fact]
     public void Identical_observations_merge_configs_and_evidence_once()
     {

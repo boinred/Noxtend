@@ -15,6 +15,61 @@ public sealed class PriceUpdateStoreTests(SqlServerFixture sql)
     private readonly string connectionString = sql.FreshDatabase(nameof(PriceUpdateStoreTests));
     private readonly AcceptanceClock clock = new();
 
+    [Theory]
+    [InlineData("1.1234567")]
+    [InlineData("1000000000000")]
+    [InlineData("0.0000001")]
+    public async Task UnrepresentableSelectedRate_RejectsWholeBundleAndPreservesExistingPrice(string value)
+    {
+        var preview = Preview("valid-sibling", "invalid-rate");
+        var bad = preview.Candidates[1] with
+        {
+            Terms = preview.Candidates[1].Terms! with { InputPerMillion = decimal.Parse(value, System.Globalization.CultureInfo.InvariantCulture) },
+        };
+        preview = preview with { Candidates = [preview.Candidates[0], bad] };
+        await Initialize(preview);
+        await using (var db = Context())
+        {
+            db.ModelPrices.Add(ModelPrice.Create("existing-price", 1.234567m, 2, null, null, null, clock.GetUtcNow().AddDays(-1), "preserve"));
+            await db.SaveChangesAsync();
+            var result = await new EfPriceUpdateStore(db, clock).ApplyAsync(preview.Id,
+                new(Guid.NewGuid(), preview.Candidates.Select(c => c.Id).ToArray(), null), default);
+            Assert.Equal(ErrorCode.PriceUpdateInvalid, result.ErrorCode);
+        }
+        await using var check = Context();
+        var existing = Assert.Single(await check.ModelPrices.ToListAsync());
+        Assert.Equal("existing-price", existing.Model);
+        Assert.Equal(1.234567m, existing.InputPerMillion);
+        Assert.Empty(await check.Set<PriceUpdateRequestReceipt>().ToListAsync());
+    }
+
+    [Theory]
+    [InlineData("999999999999.999999")]
+    [InlineData("0.000001")]
+    [InlineData("1.1234560")]
+    public async Task ExactlyRepresentableRates_RoundTripWithoutChangingCollectedValues(string value)
+    {
+        var rate = decimal.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
+        var preview = Preview("exact-rate");
+        var terms = new OfficialPriceTerms(rate, rate, 100, rate, rate, rate);
+        preview = preview with { Candidates = [preview.Candidates[0] with { Terms = terms }] };
+        await Initialize(preview);
+        await using (var db = Context())
+        {
+            var result = await new EfPriceUpdateStore(db, clock).ApplyAsync(preview.Id,
+                new(Guid.NewGuid(), preview.Candidates.Select(c => c.Id).ToArray(), null), default);
+            Assert.True(result.IsSuccess, result.ErrorMessage);
+        }
+        await using var check = Context();
+        var saved = Assert.Single(await check.ModelPrices.ToListAsync());
+        Assert.Equal(terms.InputPerMillion, saved.InputPerMillion);
+        Assert.Equal(terms.OutputPerMillion, saved.OutputPerMillion);
+        Assert.Equal(terms.LongInputPerMillion, saved.LongInputPerMillion);
+        Assert.Equal(terms.LongOutputPerMillion, saved.LongOutputPerMillion);
+        Assert.Equal(terms.PerImage, saved.PerImage);
+        Assert.Single(await check.Set<PriceUpdateRequestReceipt>().ToListAsync());
+    }
+
     [Fact]
     public async Task ConcurrentSameRequest_ReplaysOneReceiptAndSurvivesFreshContext()
     {

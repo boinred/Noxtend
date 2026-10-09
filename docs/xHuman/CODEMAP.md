@@ -2,7 +2,7 @@
 
 AI 에이전트가 작업에 필요한 코드와 테스트를 찾는 첫 안내서다. 사람용 소개는 루트 `README.md`에 있다. 탐색 출발점일 뿐 코드 분석을 대신하지 않는다. 수정 전에는 실제 선언·호출·테스트를 확인하고, 작업 규칙은 [AGENTS.md](../../AGENTS.md)를 따른다.
 
-마지막 확인: 2026-10-08, revision `d2cad8d`
+마지막 확인: 2026-10-09, 모델·단가 수집 경로는 revision `9566b76`와 통합 보완 diff로 확인. 나머지 영역의 기준은 각 지도에 기록한다.
 
 ## 저장소 구성
 
@@ -24,7 +24,7 @@ AI 에이전트가 작업에 필요한 코드와 테스트를 찾는 첫 안내�
 | --- | --- |
 | Backend 계층·작업 흐름·2D sprite·HTTP 계약 | [backend.md](backend.md) |
 | 작업 접수·큐·Worker·재시도·SQL·Blob·migration·3D 메시 | [job-execution.md](job-execution.md) |
-| 텍스트·이미지 공급자, 프롬프트 버전, 호출 기록·비용, 공급자 설정 API | [providers-and-prompts.md](providers-and-prompts.md) |
+| 텍스트·이미지 공급자, 프롬프트 버전, 호출 기록·비용, 공식 모델·단가 수집·선택 적용, 공급자 설정 API | [providers-and-prompts.md](providers-and-prompts.md) |
 | 프롬프트 회귀·AI 출력 품질 비교 | [prompt-evaluation.md](prompt-evaluation.md), [agentic-eval](../../.agents/skills/agentic-eval/SKILL.md) |
 | Frontend 화면·쿼리·API 연동 | [frontend.md](frontend.md) |
 | HTTP 계약 변경 | backend.md와 frontend.md 양쪽 |

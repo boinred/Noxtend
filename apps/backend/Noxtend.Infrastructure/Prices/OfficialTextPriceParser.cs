@@ -18,27 +18,40 @@ internal static class OfficialTextPriceParser
         var document = new HtmlParser().ParseDocument(Encoding.UTF8.GetString(body));
         foreach (var element in document.QuerySelectorAll("script, style")) element.Remove();
         var sha = Convert.ToHexStringLower(SHA256.HashData(body));
-        var effective = EffectiveDate(document);
-        return models.Distinct(StringComparer.Ordinal).Select(model =>
+        DateTimeOffset? effective = null;
+        string? dateBlocked = null;
+        try { effective = EffectiveDate(document); }
+        catch (FormatException) { dateBlocked = "공식 시행일 상충 확인 필요"; }
+        return models.Distinct(StringComparer.Ordinal).SelectMany(model =>
         {
-            var parsed = provider switch
+            var matches = (provider switch
             {
                 "openai" => OpenAi(document, model),
                 "anthropic" => Anthropic(document, model),
                 "google" => Google(document, model),
-                _ => null,
-            };
-            var area = parsed?.Area ?? "text";
-            var conditions = parsed?.Conditions ?? Standard;
-            var terms = parsed?.Terms;
-            if (terms is not null) terms = terms with { OfficialEffectiveFrom = effective };
-            return new OfficialPriceCandidate(model, area, area, conditions, terms,
-                [new OfficialPriceEvidence(url, collectedAt, sha, parsed?.Evidence ?? "정확한 모델·Standard 요금·단위 확인 필요")],
-                parsed?.BlockedReason ?? (parsed is null ? "정확한 모델·Standard 요금·단위 확인 필요" : null));
+                _ => [],
+            }).ToArray();
+            if (matches.Length == 0)
+                matches = [new("text", Standard, null, "정확한 모델·Standard 요금·단위 확인 필요",
+                    "정확한 모델·Standard 요금·단위 확인 필요")];
+            return matches.GroupBy(match => (match.Area, match.Conditions)).Select(group =>
+            {
+                var first = group.First();
+                var conflicting = group.Select(match => (match.Terms, match.BlockedReason)).Distinct().Count() > 1;
+                var terms = conflicting || dateBlocked is not null ? null : first.Terms;
+                if (terms is not null) terms = terms with { OfficialEffectiveFrom = effective };
+                return new OfficialPriceCandidate(model, first.Area, first.Area, first.Conditions, terms,
+                    group.Select(match => new OfficialPriceEvidence(url, collectedAt, sha, match.Evidence))
+                        .Concat(dateBlocked is null ? [] : document.QuerySelectorAll("time[datetime]")
+                            .Where(t => Text(t.ParentElement).StartsWith("All prices on this page become effective from", StringComparison.Ordinal))
+                            .Select(t => new OfficialPriceEvidence(url, collectedAt, sha, Text(t.ParentElement))))
+                        .Distinct().ToArray(),
+                    dateBlocked ?? (conflicting ? "공식 문서 내 동일 요금 조건 상충 확인 필요" : first.BlockedReason));
+            });
         }).ToList();
     }
 
-    private static Parsed? OpenAi(IDocument document, string model)
+    private static IEnumerable<Parsed> OpenAi(IDocument document, string model)
     {
         var heading = "";
         var section = "";
@@ -71,17 +84,17 @@ internal static class OfficialTextPriceParser
                     var evidence = heading + "; Standard; " + string.Join(" / ", headers) + "; " + Text(row);
                     if (textRow is not null && Text(textRow.Children.FirstOrDefault()) == "Text")
                         evidence += "; Text input: " + Text(textRow);
-                    return new Parsed("image", Standard + "; mixed text/image modalities", null,
+                    yield return new Parsed("image", Standard + "; mixed text/image modalities", null,
                         evidence, "텍스트·이미지 입력별 토큰 요금 계산 지원 필요");
+                    continue;
                 }
                 if (!Money(Text(cells[inputIndex]), out var input) || !Money(Text(cells[outputIndex]), out var output)) continue;
-                return new Parsed("text", Standard, new(input, output), heading + "; Standard; " + Text(row), null);
+                yield return new Parsed("text", Standard, new(input, output), heading + "; Standard; " + Text(row), null);
             }
         }
-        return null;
     }
 
-    private static Parsed? Anthropic(IDocument document, string model)
+    private static IEnumerable<Parsed> Anthropic(IDocument document, string model)
     {
         var heading = "";
         foreach (var element in document.QuerySelectorAll("h2, table"))
@@ -107,14 +120,16 @@ internal static class OfficialTextPriceParser
                 if (exactId != model) continue;
                 if (!TokenMoney(Text(cells[1]), out var input) || !TokenMoney(Text(cells[2]), out var output)) continue;
                 if (cells[0].GetAttribute("rowspan") is not (null or "1"))
-                    return new Parsed("text", Standard, null, Text(row), "컨텍스트 구간별 요금 확인 필요");
-                return new Parsed("text", Standard, new(input, output), "Model pricing; Base tokens; " + Text(row), null);
+                {
+                    yield return new Parsed("text", Standard, null, Text(row), "컨텍스트 구간별 요금 확인 필요");
+                    continue;
+                }
+                yield return new Parsed("text", Standard, new(input, output), "Model pricing; Base tokens; " + Text(row), null);
             }
         }
-        return null;
     }
 
-    private static Parsed? Google(IDocument document, string model)
+    private static IEnumerable<Parsed> Google(IDocument document, string model)
     {
         var currentModel = "";
         var elements = document.QuerySelectorAll("h2, table, p").ToArray();
@@ -127,16 +142,26 @@ internal static class OfficialTextPriceParser
             var headers = element.QuerySelectorAll("thead th").Select(Text).ToArray();
             var paidIndex = Array.FindIndex(headers, h => h == "Paid Tier, per 1M tokens in USD");
             if (paidIndex < 0) continue;
-            string? inputText = null, outputText = null;
+            var inputs = new List<string>();
+            var outputs = new List<string>();
             foreach (var row in element.QuerySelectorAll("tbody tr"))
             {
                 var cells = row.Children.ToArray();
                 if (cells.Length != headers.Length) continue;
                 var label = Text(cells[0]);
-                if (label.StartsWith("Input price", StringComparison.Ordinal)) inputText = TextWithBreaks(cells[paidIndex]);
-                if (label.StartsWith("Output price", StringComparison.Ordinal)) outputText = TextWithBreaks(cells[paidIndex]);
+                if (label.StartsWith("Input price", StringComparison.Ordinal)) inputs.Add(TextWithBreaks(cells[paidIndex]));
+                if (label.StartsWith("Output price", StringComparison.Ordinal)) outputs.Add(TextWithBreaks(cells[paidIndex]));
             }
-            if (inputText is null || outputText is null) continue;
+            if (inputs.Count == 0 || outputs.Count == 0) continue;
+            if (inputs.Distinct().Count() != 1 || outputs.Distinct().Count() != 1)
+            {
+                yield return new Parsed("text", Standard, null,
+                    "Standard; Paid Tier; input=" + string.Join(" / ", inputs) + "; output=" + string.Join(" / ", outputs),
+                    "공식 표 내 입력·출력 요금 상충 확인 필요");
+                continue;
+            }
+            var inputText = inputs[0];
+            var outputText = outputs[0];
             if (Regex.IsMatch(outputText, @"^\$\d+(?:\.\d+)? per image\*?$"))
             {
                 if (!GoogleInput(inputText, "text / image", out var input, out _) || !Money(outputText.Split(' ')[0], out var perImage)) continue;
@@ -147,15 +172,15 @@ internal static class OfficialTextPriceParser
                 var size = Regex.Match(note, @"up to (\d+x\d+)px");
                 if (!size.Success || !note.Contains("per 1,000,000 tokens", StringComparison.Ordinal)) continue;
                 var evidence = $"input={input.ToString("0.00", CultureInfo.InvariantCulture)} USD/1M text/image tokens; output={perImage.ToString(CultureInfo.InvariantCulture)} USD/image; size<={size.Groups[1].Value}; {note}";
-                return new Parsed("image", Standard + "; text/image input + image output", null, evidence,
+                yield return new Parsed("image", Standard + "; text/image input + image output", null, evidence,
                     "입력 토큰·출력 이미지 혼합 요금 계산 지원 필요");
+                continue;
             }
             if (!GoogleInput(inputText, "text / image / video", out var textInput, out var mixedInput) || !Money(outputText, out var textOutput)) continue;
-            return new Parsed("text", Standard + "; text/image/video input" + (inputText.Contains("(audio)", StringComparison.Ordinal) ? "; audio input" : ""), new(textInput, textOutput),
+            yield return new Parsed("text", Standard + "; text/image/video input" + (inputText.Contains("(audio)", StringComparison.Ordinal) ? "; audio input" : ""), new(textInput, textOutput),
                 "Standard; Paid Tier, per 1M tokens in USD; input=" + inputText + "; output=" + outputText,
                 mixedInput ? "입력 모달리티별 서로 다른 요금 계산 지원 필요" : null);
         }
-        return null;
     }
 
     private static bool GoogleInput(string value, string modalities, out decimal money, out bool mixedInput)

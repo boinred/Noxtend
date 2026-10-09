@@ -47,6 +47,14 @@ React 19·Vite·React Router·TanStack Query·Tailwind·shadcn/ui(Radix) 구성�
 | 장면 조립·유사도 | `BackgroundStudioScreen`의 `useSceneLayout` → `SceneAssemblyView`·`ModelViewerCanvas`(`@react-three/fiber`), `SimilarityInspector` → `useSimilarity` | `src/domain/job/scene*.test.ts`, `tests/e2e/scene-*.spec.ts`, `tests/e2e/similarity.spec.ts` |
 | 공급자 관리 | `ProviderList`·`ProviderForm` → `useProviders.ts` → `providerApi.ts` | `src/infra/api/providerApi.test.ts` |
 | 프롬프트·골든·단가·호출 내역 | `features/screens/admin/*Screen.tsx` → `useTuning.ts` → `tuningApi.ts` | `src/domain/tuning/*.test.ts`, `tests/e2e/decomposition-admin.spec.ts`, `tests/e2e/prompts-category.spec.ts`, `tests/e2e/prices-admin.spec.ts` |
+| 공식 모델·단가 수집·선택 적용 | `features/screens/admin/PricesScreen.tsx`·`PriceUpdatePanel.tsx` → `app/queries/usePriceUpdates.ts` → `infra/api/priceUpdateApi.ts` | `src/domain/tuning/priceUpdate.test.ts`, `src/infra/api/priceUpdateApi.test.ts`, `tests/e2e/model-price-update-acceptance.spec.ts`, `tests/e2e/price-update-flow.spec.ts` |
+
+## 단가 수집 화면
+
+- `PriceProviderFilter.tsx`는 기존 `components/ui/select.tsx` 프리미티브를 사용한다. 기존 단가 목록과 수집 후보는 독립 필터를 갖고 `domain/tuning/priceUpdate.ts`의 `matchesPriceProvider`로 전체·공급자·미분류를 구분한다. 전체/표시 개수를 함께 표시하며 수집 공급자 요약은 후보 필터 밖에 둔다.
+- `PriceUpdatePanel.tsx`는 활성 공급자 설정 선택 → 버튼 수집 → 서버 preview 검토 → 선택 적용을 연결한다. 적용 가능 여부는 서버의 terms·changeKind·blockedReason과 `canApplyPrice`로 판정한다. 필터/재수집 때 선택을 해제하고, 제출 직전에 현재 표시된 적용 가능 후보로 선택을 다시 제한한다. 실행 지원 표시는 단가 등록과 구분한다.
+- `usePriceUpdates.ts`는 수집·적용 mutation의 자동 재시도를 끈다. 적용 성공 후 단가·호출 통계·작업·유사도 캐시를 무효화한다. 응답 유실/5xx/malformed 때 `PriceUpdatePanel`은 같은 requestId·후보·시행일을 재전송하도록 원래 입력을 보존하고 재수집·필터·선택을 잠근다. 만료·단가 충돌은 재수집을 요구한다.
+- `priceUpdateApi.ts`는 preview·receipt의 필수 shape·ID·날짜·공급자·근거를 검증한다. 혼합 이미지·3D의 nullable 요금은 그대로 읽고 malformed 응답을 빈 성공으로 바꾸지 않는다. 서버 흐름·저장 정책은 [공급자와 프롬프트](providers-and-prompts.md#공식-모델단가-수집선택-적용)에서 확인한다.
 
 ## 서버 상태와 계약
 
@@ -97,5 +105,6 @@ React 19·Vite·React Router·TanStack Query·Tailwind·shadcn/ui(Radix) 구성�
 
 ## 확인 기준과 미확인
 
+- 모델·단가 수집 확인: 2026-10-09, revision `9566b76`와 통합 보완 diff. 위 화면·hook·reader·필터 호출을 확인하고 native Select 가드와 단가 domain/API reader 순수 테스트를 실행했다. 통합 보완 E2E·전체 회귀는 별도 실행 기록에서 확인하며 실제 Backend 연결/실 공급자 확인으로 확대하지 않는다.
 - 마지막 확인: 2026-10-08, revision `d2cad8d`. 코드 지도 도입 때 문서의 코드 경로와 상대 링크 존재를 자동 대조했다. 서술된 규칙 전체를 코드와 다시 대조하지는 않았다.
 - 미확인: 실제 Backend와 연결한 화면 동작. E2E는 `tests/e2e/fakeApi.ts` 가짜 API 기준이며 `.test.tsx`는 수집되지 않는다.

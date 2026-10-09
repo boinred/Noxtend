@@ -49,6 +49,8 @@ public sealed class EfPriceUpdateStore(NoxtendDbContext db, TimeProvider clock) 
                 var selected = preview.Candidates.Where(c => ids.Contains(c.Id)).OrderBy(c => c.Id).ToArray();
                 if (selected.Length != ids.Count || selected.Any(c => c.BlockedReason is not null || c.Terms is null || c.ChangeKind is not ("newModel" or "priceChanged")))
                     return Failure(ErrorCode.PriceUpdateInvalid, "적용할 수 없는 후보가 포함되었습니다");
+                if (selected.Any(c => !PriceCandidateComparison.CanStore(c.Terms!)))
+                    return Failure(ErrorCode.PriceUpdateInvalid, "수집 단가를 SQL decimal(18,6)에 정확히 저장할 수 없습니다");
                 if (selected.Select(c => c.Model).Distinct(StringComparer.OrdinalIgnoreCase).Count() != selected.Length)
                     return Failure(ErrorCode.PriceUpdateInvalid, "같은 단가 저장 키를 중복 선택했습니다");
                 var current = await db.ModelPrices.AsNoTracking().ToListAsync(ct);

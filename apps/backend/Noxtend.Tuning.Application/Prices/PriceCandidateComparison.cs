@@ -48,7 +48,8 @@ public static class PriceCandidateComparison
             candidates.Add(new(Guid.NewGuid(), group.Key.Provider, first.Model, first.Area, first.Operation, first.Conditions,
                 configIds, currentTerms, terms, evidence, kind,
                 supportedModels.Contains((group.Key.Provider, first.Model, first.Area)) ? "supported" : "unverified",
-                conflicting ? "설정별 공식 요금·시행일 상충 확인 필요" : providerConflict ? "기존 저장 모델의 공급자 상충 확인 필요" : first.BlockedReason,
+                conflicting ? "설정별 공식 요금·시행일 상충 확인 필요" : providerConflict ? "기존 저장 모델의 공급자 상충 확인 필요" :
+                    terms is not null && !CanStore(terms) ? "수집 단가를 SQL decimal(18,6)에 정확히 저장할 수 없습니다" : first.BlockedReason,
                 Fingerprint(group.Key.Provider, first.Model, prices)));
         }
 
@@ -91,6 +92,11 @@ public static class PriceCandidateComparison
         });
         return Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { Provider = provider, Model = model, Rows = rows })));
     }
+
+    public static bool CanStore(OfficialPriceTerms terms)
+        => new[] { terms.InputPerMillion, terms.OutputPerMillion, terms.LongInputPerMillion,
+            terms.LongOutputPerMillion, terms.PerImage }.All(value => value is null ||
+            value >= 0 && value <= 999999999999.999999m && decimal.Round(value.Value, 6) == value.Value);
 
     private static IReadOnlyList<ModelPrice> RelatedPrices(string provider, string model, IReadOnlyList<ModelPrice> prices)
         => prices.Where(p => (p.Provider is null || p.Provider == provider) &&
