@@ -72,9 +72,9 @@ test.describe('프롬프트 관리 (§4.2 #16~19)', () => {
     await installFakeApi(page)
     await page.goto('/admin/prompts')
 
-    // 기본 슬롯 5개와 배경 전용 분석·생성·평가 슬롯
+    // 기본 슬롯 5개와 배경 전용 분석·생성·기준 생성·평가 슬롯
     const rows = page.getByTestId('prompt-row')
-    await expect(rows).toHaveCount(8)
+    await expect(rows).toHaveCount(9)
     expect(
       await rows.evaluateAll((elements) =>
         elements.map((element) => element.getAttribute('data-kind')).sort(),
@@ -86,15 +86,26 @@ test.describe('프롬프트 관리 (§4.2 #16~19)', () => {
       'extract',
       'generate',
       'generateSprite',
+      'generateSpriteSource',
       'rewriteDescriptions',
       'similarityEvaluate',
     ])
-    await expect(page.getByTestId('prompt-cell-dedicated')).toHaveCount(8)
+    await expect(page.getByTestId('prompt-cell-dedicated')).toHaveCount(9)
 
     // 편집 화면이 쓸 수 있는 변수를 보여준다 — 격자가 아니라 여기서
     await page.goto('/admin/prompts/decompose')
     await expect(page.getByTestId('prompt-variables-hint')).toContainText('{{scene}}')
     await expect(page.getByTestId('prompt-variables-hint')).toContainText('{{parts}}')
+
+    await page.goto('/admin/prompts')
+    await page
+      .getByTestId('prompt-row')
+      .filter({ hasText: '2D 배경 기준 생성' })
+      .getByTestId('prompt-cell-dedicated')
+      .click()
+    await expect(page).toHaveURL(/\/admin\/prompts\/generateSpriteSource\?category=background$/)
+    await expect(page.getByTestId('prompt-variables-hint')).toContainText('{{prompt}}')
+    await expect(page.getByTestId('prompt-user-input')).toHaveValue('{{prompt}}')
   })
 
   test('#A4 새 버전은 비활성으로 저장된다 — 저장이 활성화가 아니다', async ({ page }) => {

@@ -9,6 +9,7 @@ using Noxtend.Domain.Ports;
 using Noxtend.Domain.Provider;
 using Noxtend.Domain.Sprites;
 using Noxtend.Infrastructure.Image;
+using SkiaSharp;
 
 namespace Noxtend.Tests.Application;
 
@@ -162,6 +163,48 @@ public sealed class SpriteProviderRequestTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Recording_SourceGenerationKeepsJoblessCorrelationOnSuccessAndFailure(bool fails)
+    {
+        var sourceGenerationId = Guid.NewGuid();
+        var request = Request(false, ImageBackground.Opaque) with
+        {
+            Context = ImageCallContext.ForSourceGeneration(
+                sourceGenerationId, Context.PromptVersionId, Context.ProviderConfigId, Model),
+        };
+        var recorder = new CapturingRecorder();
+        var provider = new RecordingImageProvider(
+            fails ? FakeImageProvider.Failing(new ProviderCallFailedException("failure", isTransient: false))
+                : FakeImageProvider.Succeeding(), recorder, NullLogger<RecordingImageProvider>.Instance);
+
+        if (fails)
+            await Assert.ThrowsAsync<ProviderCallFailedException>(() => provider.GenerateAsync(request, CancellationToken.None));
+        else
+        {
+            var result = await provider.GenerateAsync(request, CancellationToken.None);
+            using var bitmap = SKBitmap.Decode(result.Bytes);
+            Assert.NotNull(bitmap);
+            Assert.Equal(1536, bitmap.Width);
+            Assert.Equal(768, bitmap.Height);
+        }
+
+        var entry = Assert.Single(recorder.Entries);
+        Assert.Equal(LlmOperationKind.GenerateSpriteSource, entry.Context.Kind);
+        Assert.Equal(sourceGenerationId, entry.Context.SourceGenerationId);
+        Assert.Null(entry.Context.JobId);
+        Assert.Null(entry.Context.TaskId);
+        Assert.Null(entry.Context.SimilarityEvaluationId);
+        Assert.Equal(Context.PromptVersionId, entry.Context.PromptVersionId);
+        Assert.Equal(Context.ProviderConfigId, entry.Context.ProviderConfigId);
+        Assert.Equal(Model, entry.Context.Model);
+        Assert.Equal(!fails, entry.Succeeded);
+        Assert.Equal(fails ? null : 1, entry.OutputImages);
+        Assert.Equal(fails ? null : 1_120, entry.InputTokens);
+        Assert.Equal(fails ? null : 1_120, entry.OutputTokens);
+    }
+
+    [Theory]
     [InlineData(256, 128, 1536, 768)]
     [InlineData(128, 256, 768, 1536)]
     [InlineData(640, 360, 1536, 864)]
@@ -197,6 +240,7 @@ public sealed class SpriteProviderRequestTests
     {
         Assert.Equal(Context.JobId, entry.Context.JobId);
         Assert.Equal(Context.TaskId, entry.Context.TaskId);
+        Assert.Null(entry.Context.SourceGenerationId);
         Assert.Equal(Context.PromptVersionId, entry.Context.PromptVersionId);
         Assert.Equal(Context.ProviderConfigId, entry.Context.ProviderConfigId);
         Assert.Equal(Model, entry.Context.Model);

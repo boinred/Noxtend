@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Noxtend.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using Noxtend.Infrastructure.Persistence;
 namespace Noxtend.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(NoxtendDbContext))]
-    partial class NoxtendDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261008040836_SeedSpriteSourcePrompt")]
+    partial class SeedSpriteSourcePrompt
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -470,7 +473,7 @@ namespace Noxtend.Infrastructure.Persistence.Migrations
                     b.Property<int?>("InputTokens")
                         .HasColumnType("int");
 
-                    b.Property<Guid?>("JobId")
+                    b.Property<Guid>("JobId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Kind")
@@ -508,9 +511,6 @@ namespace Noxtend.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("SimilarityEvaluationId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("SourceGenerationId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<bool>("Succeeded")
                         .HasColumnType("bit");
 
@@ -521,15 +521,13 @@ namespace Noxtend.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("JobId");
 
-                    b.HasIndex("SourceGenerationId");
-
                     b.HasIndex("TaskId");
 
                     b.HasIndex("Kind", "At");
 
                     b.ToTable("LlmCalls", null, t =>
                         {
-                            t.HasCheckConstraint("CK_LlmCalls_ExactlyOneCorrelation", "([JobId] IS NOT NULL AND [TaskId] IS NOT NULL AND [SimilarityEvaluationId] IS NULL AND [SourceGenerationId] IS NULL) OR ([JobId] IS NOT NULL AND [TaskId] IS NULL AND [SimilarityEvaluationId] IS NOT NULL AND [SourceGenerationId] IS NULL) OR ([JobId] IS NULL AND [TaskId] IS NULL AND [SimilarityEvaluationId] IS NULL AND [SourceGenerationId] IS NOT NULL)");
+                            t.HasCheckConstraint("CK_LlmCalls_ExactlyOneCorrelation", "([TaskId] IS NULL AND [SimilarityEvaluationId] IS NOT NULL) OR ([TaskId] IS NOT NULL AND [SimilarityEvaluationId] IS NULL)");
                         });
                 });
 

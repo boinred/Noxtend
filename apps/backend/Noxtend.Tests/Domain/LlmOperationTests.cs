@@ -68,6 +68,24 @@ public sealed class LlmOperationTests
     }
 
     [Fact]
+    public void ForSourceGeneration_CarriesOnlySourceGenerationCorrelation()
+    {
+        var sourceGenerationId = Guid.NewGuid();
+        var promptVersionId = Guid.NewGuid();
+        var providerConfigId = Guid.NewGuid();
+        var context = LlmCallContext.ForSourceGeneration(sourceGenerationId, promptVersionId, providerConfigId, "m");
+
+        Assert.Equal(LlmOperationKind.GenerateSpriteSource, context.Kind);
+        Assert.Null(context.JobId);
+        Assert.Null(context.TaskId);
+        Assert.Null(context.SimilarityEvaluationId);
+        Assert.Equal(sourceGenerationId, context.SourceGenerationId);
+        Assert.Equal(promptVersionId, context.PromptVersionId);
+        Assert.Equal(providerConfigId, context.ProviderConfigId);
+        Assert.Equal("m", context.Model);
+    }
+
+    [Fact]
     public void ForSimilarityEvaluation_CarriesTheEvaluationAndNoTask()
     {
         var evaluationId = Guid.NewGuid();

@@ -40,7 +40,7 @@ React 19·Vite·React Router·TanStack Query·Tailwind·shadcn/ui(Radix) 구성�
 | --- | --- | --- |
 | 작업 생성·조회·폴링 | 화면 → `useJob`·`useStartJob`·`useJobList` → `jobApi.ts` → `client.ts` | `src/infra/api/jobApi.test.ts`, `src/domain/job/progress.test.ts`, `tests/e2e/home-active-job.spec.ts` |
 | 2D 계약·접수·검수·내보내기 | `domain/sprites/types.ts`의 wire 타입·reader, `rules.ts`의 `productionModeOf`·square/diamond `tileOffsets`·`playback.ts`의 `frameAt` → `useSprites.ts` → `spriteApi.ts`; 상세는 기존 `useJob` 공유 | `src/domain/sprites/rules.test.ts`, `src/infra/api/spriteApi.test.ts`, `src/app/queries/useSprites.test.ts`, `tests/e2e/sprites-static.spec.ts`, `src/domain/sprites/playback.test.ts`, `tests/e2e/sprites-animation.spec.ts` |
-| 이미지 업로드 | 스튜디오 화면의 `ImageDropzone` → 화면의 `useUpload` → `uploadApi.ts`, 검증은 `domain/job/rules.ts` | `src/domain/job/rules.test.ts` |
+| 이미지 업로드·원본 생성 | 스튜디오 화면의 `ImageDropzone` → `useUpload` → `uploadApi.ts`; 원본 생성은 `useGenerateSpriteSource` → `uploadApi.generateSpriteSource` → `POST /api/uploads/generate`, 업로드 검증은 `domain/job/rules.ts` | `src/domain/job/rules.test.ts`, `src/infra/api/uploadApi.test.ts` |
 | 검수 게이트·설명 확인 | `ReviewGate`·`DescriptionsReview` → `useReview.ts` → `reviewApi.ts` | `tests/e2e/review-gate.spec.ts`, `features/screens/background/descriptionReview.test.ts` |
 | 파츠 이미지 생성·재시도 | 스튜디오 화면·`PartGallery` → `useJob.ts`의 mutation(`useRetryTask`·`useGenerateSelectedViews` 등) → `jobApi.ts` | `tests/e2e/part-generation-*.spec.ts`, `src/domain/job/generation.test.ts` |
 | 3D 메시 결과·다운로드 | `MeshTile`·`MeshViewerDialog`(`@google/model-viewer`), `MeshDownloadMenu` | `src/domain/job/mesh*.test.ts`, `tests/e2e/mesh*.spec.ts` |
@@ -72,7 +72,8 @@ React 19·Vite·React Router·TanStack Query·Tailwind·shadcn/ui(Radix) 구성�
 
 ## 2D 배경 스튜디오
 
-- `SpriteInput.tsx`는 기존 `ImageDropzone`·`ProviderSelect`·`ModelSelect`·`useUpload`를 재사용한다. 시점과 결과 유형은 필수 선택이며, 이미지 모델의 확인된 `sprite.supportsTransparency`와 모든 양수 `sprite.sizes`가 필요하다. 최종 타일 너비로 모델 요청 크기를 필터링하지 않는다.
+- `SpriteInput.tsx`는 공유 `ModeTabs`를 프롬프트·이미지 순서로 표시한다. 새 진입은 프롬프트, `sourceJobId`·`sourceGeneratedImageId` 중 하나라도 있으면 이미지 탭이 기본이다. 설명·생성 결과·선택은 입력 화면이 소유해 탭 전환에도 유지하고, 표시 전용 `SpritePromptPanel.tsx`가 설명과 결과 선택을 그린다. `useGenerateSpriteSource`로 `POST /api/uploads/generate`에 trim 후 1~1000자 설명과 이미지 공급자·모델을 보내고, 선택한 결과의 업로드 ID로 파일 재업로드 없이 작업을 시작한다. 생성 실패는 기존 결과·선택을 유지하며 사용자 재시도만 허용한다. 이탈 후 복원은 지원하지 않는다. 탭·요청·오류·busy·캐시 조회 실패 검증은 `tests/e2e/sprites-static.spec.ts`, 새 기준 생성 프롬프트의 관리자 슬롯·편집 변수 통합 검증은 `tests/e2e/decomposition-admin.spec.ts`에 있다.
+- 이미지 입력은 기존 `ImageDropzone`·`ProviderSelect`·`ModelSelect`·`useUpload`를 재사용한다. 시점과 결과 유형은 작업 시작 시 필수 선택이며, 이미지 모델의 확인된 `sprite.supportsTransparency`와 모든 양수 `sprite.sizes`가 필요하다. 원본 생성에는 텍스트 모델을 요구하지 않는다. 재조회 오류가 나면 캐시된 이미지 모델은 이전 선택 안내로 표시하고 생성·시작을 막는다. 최종 타일 너비로 모델 요청 크기를 필터링하지 않는다.
 - 기존 결과 진입은 `routes/paths.ts`의 `spriteBackgroundWithSourcePath(sourceJobId, sourceGeneratedImageId)`와 `readSpriteSource(params)`로 GUID 쌍을 전달한다. 쿼리 이름은 `sourceJobId`·`sourceGeneratedImageId`이며 외부 URL·Blob 키는 원본 정체로 받지 않는다. 작업 주소는 `spriteBackgroundJobPath(jobId)`다. 공유 `background/PartGallery.tsx`의 현재 방향 이미지 dialog에서 이 헬퍼로 2D 입력에 이동하므로 배경·캐릭터 결과 모두 같은 ID 쌍을 전달한다.
 - `SpritePlanReview.tsx`의 원본 ROI는 기존 3D 분석·검수와 같은 `background/PartsOverlay.tsx`로 표시한다. 미저장 이름·좌표를 번호 라벨·대상별 색상 박스·앵커 점에 즉시 반영하며 호버·키보드 포커스·클릭 고정을 공유한다. 2D 계획 검수의 ROI 박스는 항상 표시한다. 공통 칩은 720px 이하에서 이미지 아래 줄바꿈 목록으로 배치하며, 좌표 박스·앵커·드래그 프레임은 이미지 크기를 유지한다.
 - `SpritePlanReview.tsx`는 원본 ROI·이름·깊이 순서·투명 배경·루프 opt-in·4/8프레임(기본8)·FPS 1..30(기본8)·동작 설명 최대500자·대상 추가/삭제를 편집한다. 정적 대상은 계획 frameCount와 무관하게 1프레임이다. 생성 후에도 기존 계획 전체 목록으로 편집을 저장한다. 이름·순서·FPS 저장은 AI 생성 요청을 추가하지 않으며 생성 입력 변경은 서버의 계획 재검수 전이를 따른다. 실행 중인 대상 입력은 현재 frame.currentTaskId로 잠근다. 1..12개·최대 64프레임·원본 내부의 유한한 양수 ROI·중복 없는 순서를 확인하고 모델/생성 수/미확인 비용을 승인 전에 표시한다. draft의 baseline revision을 보존하고 외부 revision 변화 중 미저장 편집은 유지한다. 최신 계획은 명시적으로 다시 불러오며 receipt revision을 draft에 복사하지 않는다.
@@ -93,3 +94,8 @@ React 19·Vite·React Router·TanStack Query·Tailwind·shadcn/ui(Radix) 구성�
 - 성공 요약은 아이콘·이름·개수를 한 줄에 표시하고 원본 분석을 왼쪽, 배경 생성을 오른쪽 끝에 배치한다. 루프 작업의 후속 프레임 지표와 좁은 화면에서 필요한 줄바꿈을 유지하고, 단위 설명은 스크린 리더용으로 제공한다.
 - 상태 헤더의 새로고침·작업 취소는 접근성 이름과 `title`이 있는 원형 아이콘 버튼이다. 작업 취소는 기존 홈·관리 화면과 같은 브라우저 `confirm`을 사용하며 수락한 경우에만 `useCancelJob` 요청을 전송한다. 확인창 취소·닫기는 요청을 보내지 않고 현재 결과를 유지한다. 저장된 PNG·ZIP 유지와 취소 후 생성·검수 중단을 안내한다.
 - `tests/e2e/fakeApi.ts`의 선택 `sprites` 옵션만 새 `spriteFakeApi.ts`에 연결된다. dedicated Fake는 GUID·출력 크기/실제 알파가 맞는 디코딩 PNG·프레임/시트/manifest가 일치하는 ZIP과 요청 기록을 제공한다. 기존 3D fixture는 유지한다.
+
+## 확인 기준과 미확인
+
+- 마지막 확인: 2026-10-08, revision `d2cad8d`. 코드 지도 도입 때 문서의 코드 경로와 상대 링크 존재를 자동 대조했다. 서술된 규칙 전체를 코드와 다시 대조하지는 않았다.
+- 미확인: 실제 Backend와 연결한 화면 동작. E2E는 `tests/e2e/fakeApi.ts` 가짜 API 기준이며 `.test.tsx`는 수집되지 않는다.

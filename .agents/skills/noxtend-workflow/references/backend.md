@@ -2,7 +2,7 @@
 
 파일 경로는 `apps/backend/` 기준이고 `apps/`로 시작하는 경로는 저장소 루트 기준이다. 명령은 저장소 루트에서 실행한다. 상시 계층·상태·보안 규칙은 `apps/backend/AGENTS.md`를 따른다.
 
-LLM·AI 공급자·프롬프트·호출 기록 작업은 [LLM 개발 안내](../../../../docs/xHuman/README.md)에서 관련 참조 문서를 선택한다.
+LLM·AI 공급자·프롬프트·호출 기록 작업은 [공급자와 프롬프트 지도](../../../../docs/xHuman/providers-and-prompts.md)부터 읽는다.
 
 ## 변경 전 확인
 

@@ -56,44 +56,60 @@ public sealed partial class OpenAiImageProvider(HttpClient http, string apiKey, 
                 isTransient: await ProviderHttp.IsOpenAiTransientAsync(response, ct));
         }
 
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
-        var root = document.RootElement;
-        var data = root.GetProperty("data");
+        var result = ParseResponse(await response.Content.ReadAsStringAsync(ct));
+        return result with
+        {
+            RateLimitRemainingRequests = RateLimitRemaining(response.Headers, "x-ratelimit-remaining-requests"),
+            RateLimitResetAfter = RateLimitResetAfter(response.Headers, "x-ratelimit-reset-requests"),
+            RateLimitRemainingTokens = RateLimitRemaining(response.Headers, "x-ratelimit-remaining-tokens"),
+            RateLimitResetTokensAfter = RateLimitResetAfter(response.Headers, "x-ratelimit-reset-tokens"),
+        };
+    }
 
-        // 실제 청구 근거. 편집 경로(참조 동반)는 입력 이미지 토큰이 여기 잡힌다 —
-        // 고정밀 입력 토큰율이 적용되므로 장당 정액으로는 하한만 나온다 (D-5)
-        int? Tokens(string name) =>
-            root.TryGetProperty("usage", out var usage)
-            && usage.TryGetProperty(name, out var value)
-            && value.TryGetInt32(out var n)
-                ? n
+    private static ImageResult ParseResponse(string payload)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(payload);
+            var root = document.RootElement;
+            var data = root.GetProperty("data");
+
+            // 실제 청구 근거. 편집 경로(참조 동반)는 입력 이미지 토큰이 여기 잡힌다 —
+            // 고정밀 입력 토큰율이 적용되므로 장당 정액으로는 하한만 나온다 (D-5)
+            int? Tokens(string name) =>
+                root.TryGetProperty("usage", out var usage)
+                && usage.TryGetProperty(name, out var value)
+                && value.TryGetInt32(out var n)
+                    ? n
+                    : null;
+
+            if (data.GetArrayLength() == 0)
+            {
+                throw new ProviderBadResponseException("응답에 이미지가 없습니다");
+            }
+
+            var base64 = data[0].TryGetProperty("b64_json", out var encoded)
+                ? encoded.GetString()
                 : null;
 
-        if (data.GetArrayLength() == 0)
-        {
-            throw new ProviderBadResponseException("응답에 이미지가 없습니다");
+            if (string.IsNullOrEmpty(base64))
+            {
+                throw new ProviderBadResponseException("응답에 이미지 바이트가 없습니다");
+            }
+
+            // 장 수는 응답이 말한다 — 과금 단위이므로 1 이라고 가정하지 않는다 (§3.2)
+            return new ImageResult(
+                Convert.FromBase64String(base64),
+                "image/png",
+                data.GetArrayLength(),
+                Tokens("input_tokens"),
+                Tokens("output_tokens"));
         }
-
-        var base64 = data[0].TryGetProperty("b64_json", out var encoded)
-            ? encoded.GetString()
-            : null;
-
-        if (string.IsNullOrEmpty(base64))
+        catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
         {
-            throw new ProviderBadResponseException("응답에 이미지 바이트가 없습니다");
+            // 외부 응답 파싱 오류의 원문 노출 차단
+            throw new ProviderBadResponseException("이미지 공급자 응답 형식이 올바르지 않습니다");
         }
-
-        // 장 수는 응답이 말한다 — 과금 단위이므로 1 이라고 가정하지 않는다 (§3.2)
-        return new ImageResult(
-            Convert.FromBase64String(base64),
-            "image/png",
-            data.GetArrayLength(),
-            Tokens("input_tokens"),
-            Tokens("output_tokens"),
-            RateLimitRemaining(response.Headers, "x-ratelimit-remaining-requests"),
-            RateLimitResetAfter(response.Headers, "x-ratelimit-reset-requests"),
-            RateLimitRemaining(response.Headers, "x-ratelimit-remaining-tokens"),
-            RateLimitResetAfter(response.Headers, "x-ratelimit-reset-tokens"));
     }
 
     // generation-rate-limiting §3① / 후속(TPM) — 값을 저장·판단하지 않고 그대로 실어

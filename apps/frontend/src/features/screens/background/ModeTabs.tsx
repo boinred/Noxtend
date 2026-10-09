@@ -1,5 +1,5 @@
 /**
- * Design Ref: §5.1 · §5.4 — 이미지 모드(기본) / 프롬프트 모드.
+ * Design Ref: §5.1 · §5.4 — 프롬프트 / 이미지 모드, 기본값은 화면에서 선택.
  */
 import { backgroundStyles as styles } from './backgroundStyles'
 
@@ -11,8 +11,8 @@ export interface ModeTabsProps {
 }
 
 const TABS: ReadonlyArray<{ value: StudioMode; label: string }> = [
-  { value: 'image', label: '이미지 모드' },
   { value: 'prompt', label: '프롬프트 모드' },
+  { value: 'image', label: '이미지 모드' },
 ]
 
 export function ModeTabs({ mode, onChange }: ModeTabsProps) {

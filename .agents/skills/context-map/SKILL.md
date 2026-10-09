@@ -12,7 +12,7 @@ license: MIT
 
 ## 탐색 범위
 
-- 루트·해당 영역의 `AGENTS.md`와 `$noxtend-workflow`에서 관련 자료만 선택한다. 코드 탐색·리뷰는 `$karpathy-guidelines`를 따른다.
+- `docs/xHuman/CODEMAP.md`와 해당 영역 지도에서 출발하고, 루트·해당 영역의 `AGENTS.md`와 `$noxtend-workflow`에서 관련 자료만 선택한다. 코드 탐색·리뷰는 `$karpathy-guidelines`를 따른다.
 - Backend 진입점·DTO·handler·Domain 상태·Port·Infrastructure 저장/공급자 연결, Frontend API·타입·query/hook·화면 중 요청에 필요한 경로만 추적한다.
 - 공유 함수는 실제 호출부와 실패·취소·재시도 경로를 확인한다. HTTP·상태·저장 형식 변경이면 반대편 소비 코드·기존 데이터 읽기·관련 테스트까지 연결한다.
 - `rg`로 심볼·import·route를 찾고 유사한 기존 구현을 확인한다. 파일명이나 과거 설계만으로 연결을 만들지 않는다. 동적 등록·소비 코드를 찾지 못한 부분은 미확인으로 남긴다.

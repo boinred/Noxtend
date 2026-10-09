@@ -56,6 +56,8 @@ public sealed class PipelineFixture
             Jobs, Orchestrator, Clock, Scheduler, NullLogger<TaskExecution>.Instance);
 
         RateLimitGate = new RateLimitGate(RateLimiter, Clock);
+        GenerateSpriteSource = new GenerateSpriteSourceHandler(Providers, Catalog, Prompts,
+            new StubImageProviderFactory(Images_), RateLimitGate, Upload);
         Run = new RunTaskHandler(
             Images, Blobs, new StubProviderFactory(Llm), Prompts,
             new StageRegistry(
@@ -144,6 +146,7 @@ public sealed class PipelineFixture
 
     public JobOrchestrator Orchestrator { get; }
     public CreateUploadHandler Upload { get; }
+    public GenerateSpriteSourceHandler GenerateSpriteSource { get; }
     public StartJobHandler Start { get; }
     public SpriteCommandsHandler SpriteCommands { get; }
     public RunSpritePackTaskHandler RunSpritePack { get; }
@@ -424,6 +427,7 @@ public sealed class StubPromptCatalog : IPromptCatalog
 
     private readonly Dictionary<LlmOperationKind, PromptSnapshot> _active = new()
     {
+        [LlmOperationKind.GenerateSpriteSource] = Snapshot(LlmOperationKind.GenerateSpriteSource, "2D 기준 장면", "{{prompt}}"),
         [LlmOperationKind.GenerateSprite] = Snapshot(LlmOperationKind.GenerateSprite, "{{settings}}", "{{asset}}\n{{frame}}\n{{sourceCanvas}}\n{{outputCanvas}}"),
         [LlmOperationKind.AnalyzeSprites] = Snapshot(LlmOperationKind.AnalyzeSprites, "2D 분석", "{{settings}} {{sourceCanvas}}"),
         [LlmOperationKind.Analyze] = Snapshot(LlmOperationKind.Analyze, "장면을 분석하라", string.Empty),

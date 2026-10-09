@@ -463,6 +463,7 @@ export async function installFakeApi(page: Page, options: FakeApiOptions = {}) {
   const ALLOWED_VARIABLES: Record<string, string[]> = {
     analyze: [],
     analyzeSprites: ['settings', 'sourceCanvas'],
+    generateSpriteSource: ['prompt'],
     generateSprite: ['settings', 'asset', 'frame', 'sourceCanvas', 'outputCanvas'],
     // gender·partHints 는 캐릭터 고유 변수다 (character-studio §D-03). 종류는 추출, 개수는 분해로 흐른다
     extract: ['scene', 'gender', 'partHints'],
@@ -526,6 +527,20 @@ export async function installFakeApi(page: Page, options: FakeApiOptions = {}) {
     isActive: true,
     allowedVariables: ALLOWED_VARIABLES.generateSprite!,
     createdAt: new Date(Date.UTC(2026, 9, 6)).toISOString(),
+  })
+
+  prompts.push({
+    id: 'prompt-seed-sprite-source',
+    kind: 'generateSpriteSource',
+    category: 'background',
+    version: 1,
+    system: '장면 설명으로 2D 배경 기준 이미지를 생성하라',
+    user: '{{prompt}}',
+    jsonSchema: '{}',
+    note: '초기 버전',
+    isActive: true,
+    allowedVariables: ALLOWED_VARIABLES.generateSpriteSource!,
+    createdAt: new Date(Date.UTC(2026, 9, 8)).toISOString(),
   })
 
   // 유사도 평가 슬롯 — 실제 시드처럼 Background 전용 활성이다 (background-similarity-tuning §15.1)
@@ -1603,27 +1618,31 @@ export async function installFakeApi(page: Page, options: FakeApiOptions = {}) {
       const activeExact = (kind: string, category: string | null) =>
         prompts.find((p) => p.kind === kind && p.category === category && p.isActive)
 
-      const rows = [...PROMPT_STAGES, 'similarityEvaluate', 'analyzeSprites', 'generateSprite'].map(
-        (kind) => ({
-          kind,
-          cells: [null, ...PROMPT_CATEGORIES].map((category) => {
-            const dedicated = activeExact(kind, category)
-            if (dedicated) {
-              return {
-                category,
-                status: 'dedicated',
-                version: dedicated.version,
-                versionId: dedicated.id,
-              }
+      const rows = [
+        ...PROMPT_STAGES,
+        'similarityEvaluate',
+        'analyzeSprites',
+        'generateSprite',
+        'generateSpriteSource',
+      ].map((kind) => ({
+        kind,
+        cells: [null, ...PROMPT_CATEGORIES].map((category) => {
+          const dedicated = activeExact(kind, category)
+          if (dedicated) {
+            return {
+              category,
+              status: 'dedicated',
+              version: dedicated.version,
+              versionId: dedicated.id,
             }
-            // 기본 열은 폴백이 없다 — 전용이 없으면 실행 불가
-            const fallback = category === null ? undefined : activeExact(kind, null)
-            return fallback
-              ? { category, status: 'fallback', version: fallback.version, versionId: fallback.id }
-              : { category, status: 'unavailable', version: null, versionId: null }
-          }),
+          }
+          // 기본 열은 폴백이 없다 — 전용이 없으면 실행 불가
+          const fallback = category === null ? undefined : activeExact(kind, null)
+          return fallback
+            ? { category, status: 'fallback', version: fallback.version, versionId: fallback.id }
+            : { category, status: 'unavailable', version: null, versionId: null }
         }),
-      )
+      }))
 
       return ok(route, { rows })
     }

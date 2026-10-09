@@ -18,6 +18,7 @@ test.describe('스튜디오 — 입력', () => {
     await installFakeApi(page)
     await page.goto('/background')
 
+    await expect(page.getByRole('tab')).toHaveText(['프롬프트 모드', '이미지 모드'])
     await expect(page.getByTestId('background-studio')).toBeVisible()
     await expect(page.getByTestId('mode-tab-image')).toHaveAttribute('aria-selected', 'true')
     await expect(page.getByTestId('image-dropzone')).toBeVisible()

@@ -23,7 +23,7 @@ public sealed class LlmCall
 
     private LlmCall(
         Guid id,
-        Guid jobId,
+        Guid? jobId,
         Guid? taskId,
         Guid? similarityEvaluationId,
         LlmOperationKind kind,
@@ -38,12 +38,14 @@ public sealed class LlmCall
         int latencyMs,
         bool succeeded,
         string? failureReason,
-        DateTimeOffset at)
+        DateTimeOffset at,
+        Guid? sourceGenerationId = null)
     {
         Id = id;
         JobId = jobId;
         TaskId = taskId;
         SimilarityEvaluationId = similarityEvaluationId;
+        SourceGenerationId = sourceGenerationId;
         Kind = kind;
         PromptVersionId = promptVersionId;
         ProviderConfigId = providerConfigId;
@@ -60,11 +62,12 @@ public sealed class LlmCall
     }
 
     public Guid Id { get; private set; }
-    public Guid JobId { get; private set; }
-    /// <summary>상관관계는 공정 또는 유사도 평가 정확히 하나 (§7.3) — DB check constraint 가 지킨다.</summary>
+    public Guid? JobId { get; private set; }
+    /// <summary>상관관계는 공정·유사도 평가·원본 생성 중 정확히 하나 — DB check constraint 가 지킨다.</summary>
     public Guid? TaskId { get; private set; }
 
     public Guid? SimilarityEvaluationId { get; private set; }
+    public Guid? SourceGenerationId { get; private set; }
 
     public LlmOperationKind Kind { get; private set; }
 
@@ -119,7 +122,7 @@ public sealed class LlmCall
     public DateTimeOffset At { get; private set; }
 
     public static LlmCall Success(
-        Guid jobId,
+        Guid? jobId,
         Guid? taskId,
         Guid? similarityEvaluationId,
         LlmOperationKind kind,
@@ -132,13 +135,14 @@ public sealed class LlmCall
         int? outputTokens,
         int latencyMs,
         DateTimeOffset at,
-        int? outputImages = null)
+        int? outputImages = null,
+        Guid? sourceGenerationId = null)
         => new(Guid.NewGuid(), jobId, taskId, similarityEvaluationId, kind, promptVersionId, providerConfigId, model,
             requestPayload, responsePayload, inputTokens, outputTokens, outputImages, latencyMs,
-            succeeded: true, failureReason: null, at);
+            succeeded: true, failureReason: null, at, sourceGenerationId);
 
     public static LlmCall Failure(
-        Guid jobId,
+        Guid? jobId,
         Guid? taskId,
         Guid? similarityEvaluationId,
         LlmOperationKind kind,
@@ -148,8 +152,9 @@ public sealed class LlmCall
         string requestPayload,
         string failureReason,
         int latencyMs,
-        DateTimeOffset at)
+        DateTimeOffset at,
+        Guid? sourceGenerationId = null)
         => new(Guid.NewGuid(), jobId, taskId, similarityEvaluationId, kind, promptVersionId, providerConfigId, model,
             requestPayload, responsePayload: null, inputTokens: null, outputTokens: null,
-            outputImages: null, latencyMs, succeeded: false, failureReason, at);
+            outputImages: null, latencyMs, succeeded: false, failureReason, at, sourceGenerationId);
 }

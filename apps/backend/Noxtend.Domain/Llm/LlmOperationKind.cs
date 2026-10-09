@@ -23,6 +23,7 @@ public enum LlmOperationKind
     Generate = 4,
     AnalyzeSprites = 5,
     GenerateSprite = 6,
+    GenerateSpriteSource = 7,
     SimilarityEvaluate = 100,
 }
 

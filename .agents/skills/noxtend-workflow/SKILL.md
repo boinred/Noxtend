@@ -10,7 +10,7 @@ description: Select Noxtend-specific implementation, UI skill routing, infrastru
 | 작업 | 읽을 자료 |
 | --- | --- |
 | Backend 구현·리뷰·계약·Worker·영속성 | [references/backend.md](references/backend.md) |
-| LLM·AI 공급자·프롬프트·호출 기록 | [LLM 개발 안내](../../../docs/xHuman/README.md)와 해당 작업의 Backend 자료 |
+| LLM·AI 공급자·프롬프트·호출 기록 | [공급자와 프롬프트 지도](../../../docs/xHuman/providers-and-prompts.md)와 해당 작업의 Backend 자료 |
 | Frontend 구현·UI·모션 스킬 선택·API 연동 | [references/frontend.md](references/frontend.md) |
 | 로컬 인프라·Azure·Kubernetes·루트 CI | [references/deployment.md](references/deployment.md) |
 | 테스트·스타일 설정·문서 검증·완료 보고 | [references/verification.md](references/verification.md) |

@@ -8,7 +8,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { useUpload } from '@/app/queries/useUpload'
+import { useGenerateSpriteSource, useUpload, type UploadResult } from '@/app/queries/useUpload'
 import { useProviders, useProviderModels, useProviderImageModels } from '@/app/queries/useProviders'
 import { useStartSpriteJob } from '@/app/queries/useSprites'
 import { apiErrorMessage, apiErrorStatus } from '@/app/queries/errors'
@@ -17,6 +17,8 @@ import type { SpriteView, SpriteOutputKind, SpriteRepeat } from '@/domain/sprite
 import { spriteOutputKindLabel, spriteRepeatLabel, spriteViewLabel } from '@/domain/sprites/labels'
 import { ProviderSelect } from '../background/ProviderSelect'
 import { ModelSelect } from '../background/ModelSelect'
+import { ModeTabs, type StudioMode } from '../background/ModeTabs'
+import { SpritePromptPanel } from './SpritePromptPanel'
 import { ImageDropzone } from '../background/ImageDropzone'
 import { spriteStyles as styles } from './spriteStyles'
 
@@ -24,6 +26,12 @@ export function SpriteInput() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const source = readSpriteSource(params)
+  const hasSourceQuery = params.has('sourceJobId') || params.has('sourceGeneratedImageId')
+  const [mode, setMode] = useState<StudioMode>(hasSourceQuery ? 'image' : 'prompt')
+  const [prompt, setPrompt] = useState('')
+  const [generated, setGenerated] = useState<UploadResult[]>([])
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [generateError, setGenerateError] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [view, setView] = useState<SpriteView | ''>('')
   const [kind, setKind] = useState<SpriteOutputKind | ''>('')
@@ -59,8 +67,42 @@ export function SpriteInput() {
     )
   const upload = useUpload()
   const start = useStartSpriteJob()
+  const generate = useGenerateSpriteSource()
   const [uploadError, setUploadError] = useState<string | null>(null)
-  const busy = upload.isPending || start.isPending
+  const promptLength = prompt.trim().length
+  const busy = upload.isPending || start.isPending || generate.isPending
+  const hasSource = mode === 'prompt' ? selectedId !== null : !!file || !!source
+  const canGenerate =
+    promptLength >= 1 &&
+    promptLength <= 1000 &&
+    !!imageProvider &&
+    !!imageModel &&
+    supported &&
+    !providers.isError &&
+    !imageModels.errorMessage &&
+    !busy
+  function generateSource() {
+    if (!canGenerate || !imageProvider || !imageModel) return
+    generate.mutate(
+      {
+        requestId: crypto.randomUUID(),
+        prompt: prompt.trim(),
+        imageProviderConfigId: imageProvider.id,
+        imageModel: imageModel.id,
+      },
+      {
+        onSuccess: (result) => {
+          setGenerated((results) => [...results, result])
+          setSelectedId(result.id)
+          setGenerateError(null)
+        },
+        onError: (error) =>
+          setGenerateError(
+            apiErrorMessage(error, '기준 이미지 생성에 실패했습니다. 다시 시도해 주세요'),
+          ),
+      },
+    )
+  }
   async function submit() {
     if (
       !view ||
@@ -69,12 +111,17 @@ export function SpriteInput() {
       !imageProvider ||
       !textModel ||
       !imageModel ||
-      (!file && !source)
+      !hasSource
     )
       return
     setUploadError(null)
     try {
-      const identity = file ? { uploadId: (await upload.mutateAsync(file)).id } : source!
+      const identity =
+        mode === 'prompt'
+          ? { uploadId: selectedId! }
+          : file
+            ? { uploadId: (await upload.mutateAsync(file)).id }
+            : source!
       start.mutate(
         {
           requestId: crypto.randomUUID(),
@@ -93,18 +140,36 @@ export function SpriteInput() {
   }
   return (
     <div className={styles.stack}>
-      <section className={styles.panel} aria-label="이미지 입력">
-        {source ? (
-          <p className={styles.hint}>
-            기존 작업 결과를 원본으로 사용합니다. 새 이미지를 선택하면 선택한 이미지로 시작합니다.
-          </p>
-        ) : null}
-        {(params.has('sourceJobId') || params.has('sourceGeneratedImageId')) && !source ? (
-          <p role="alert" className={styles.error}>
-            원본 작업·결과 ID 쌍이 유효하지 않습니다. 이미지를 선택해 주세요.
-          </p>
-        ) : null}
-        <ImageDropzone file={file} onSelect={setFile} />
+      <section className={styles.panel} aria-label="원본 입력">
+        <ModeTabs mode={mode} onChange={setMode} />
+        {mode === 'prompt' ? (
+          <SpritePromptPanel
+            prompt={prompt}
+            onPromptChange={setPrompt}
+            results={generated}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            canGenerate={canGenerate}
+            generating={generate.isPending}
+            error={generateError}
+            onGenerate={generateSource}
+          />
+        ) : (
+          <>
+            {source ? (
+              <p className={styles.hint}>
+                기존 작업 결과를 원본으로 사용합니다. 새 이미지를 선택하면 선택한 이미지로
+                시작합니다.
+              </p>
+            ) : null}
+            {hasSourceQuery && !source ? (
+              <p role="alert" className={styles.error}>
+                원본 작업·결과 ID 쌍이 유효하지 않습니다. 이미지를 선택해 주세요.
+              </p>
+            ) : null}
+            <ImageDropzone file={file} onSelect={setFile} />
+          </>
+        )}
       </section>
       <section className={styles.panel} aria-label="제작 설정">
         <div className={styles.grid}>
@@ -264,6 +329,9 @@ export function SpriteInput() {
             ) : null}
           </>
         )}
+        {(providers.isError || imageModels.errorMessage) && imageModel ? (
+          <p className={styles.hint}>이전 이미지 모델 선택: {imageModel.displayName}</p>
+        ) : null}
       </section>
       {uploadError ? (
         <p role="alert" className={styles.error}>
@@ -302,7 +370,7 @@ export function SpriteInput() {
           providers.isError ||
           !view ||
           !kind ||
-          (!file && !source) ||
+          !hasSource ||
           !supported ||
           !textModel ||
           !!textModels.errorMessage ||

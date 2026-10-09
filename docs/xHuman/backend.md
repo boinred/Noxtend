@@ -20,12 +20,15 @@ API와 Worker는 같은 ASP.NET Core 호스트에서 실행된다. 프로젝트 
 | 변경 대상 | 코드 흐름 | 관련 테스트 시작점 |
 | --- | --- | --- |
 | 텍스트 공정 | `TaskWorker` → `RunTaskHandler` → `StageRegistry`·`IStage`의 변수·스키마·응답 처리 → `ILlmProvider` | `Noxtend.Tests/Application/RunTaskHandlerTests.cs`, 단계별 테스트 |
+| 2D 기준 이미지 생성 | `UploadsController.GenerateAsync` → `GenerateSpriteSourceHandler` → `IImageProvider` → `CreateUploadHandler` | `Noxtend.Tests/Application/SpriteSourceGenerationTests.cs`, `Api/SpriteApiTests.cs` |
 | 파츠 이미지 생성 | Worker → `RunGenerationTaskHandler` → `GenerationStage` → `IImageProvider` | `Noxtend.Tests/Application/RunGenerationTaskHandlerTests.cs`, `ImageProviderUsageTests.cs` |
 | 유사도 평가 | `EvaluateSimilarityHandler` → `ILlmProvider` | `Noxtend.Tests/Application/SimilarityEvaluateHandlerTests.cs`, `SimilarityStartHandlerTests.cs` |
 | 공급자 관리 | `ProvidersController` → `ProviderHandlers` → Provider 도메인·Repository | `Noxtend.Tests/Application/ProviderHandlerTests.cs`, API 공급자 테스트 |
 | 프롬프트·호출 내역·단가 | Tuning Controller → Tuning Application → Tuning Domain·Infrastructure adapter | `PromptGridTests.cs`, `TuningTests.cs`, `RecordingLlmProviderTests.cs`, 가격 관련 테스트 |
+| 장면 배치·revision | `SceneLayoutController` → `GetSceneLayoutHandler`·`SceneRevisionHandlers.cs` → `ISceneLayoutRepository` | `Noxtend.Tests/Application/SceneLayoutHandlerTests.cs`, `Infrastructure/SceneLayoutPersistenceTests.cs` |
+| 작업 접수·큐·Worker·재시도·3D 메시 | [작업 실행·저장소 지도](job-execution.md) | 해당 지도의 관련 테스트 |
 
-LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계산을 함께 바꿀 때는 [공급자와 프롬프트](providers-and-prompts.md)를 읽는다.
+LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계산을 함께 바꿀 때는 [공급자와 프롬프트](providers-and-prompts.md)를 읽는다. `JobId` null 원본 생성 기록은 작업 삭제 대상이 아니며 전체 통계에만 포함한다. `EfJobRepository.DeleteIfTerminalAsync`와 `EfLlmCallRepository.ListByJobAsync`는 해당 JobId의 호출만 대상으로 삼는다.
 
 ## 2D 배경 도메인 기반
 
@@ -71,10 +74,15 @@ LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계�
 
 ## 2D 배경 HTTP 계약
 
+`UploadsController.GenerateAsync`의 `POST /api/uploads/generate`는 `GenerateSpriteSourceRequest { requestId, prompt, imageProviderConfigId, imageModel }`을 받아 동기 생성 후 201 `ApiResponse<UploadResponse>`를 반환한다. `GenerateSpriteSourceHandler`는 설명을 trim 후 1~1000자로 제한하고 활성 Background 기준 프롬프트·투명 지원·양의 생성 크기가 확인된 모델을 요구한다. 너비 ≥ 높이인 크기 중 최대 면적을 선택하고 해당 크기가 없으면 전체 최대 면적을 사용한다. 참조 없이 opaque 한 장을 생성하고 `CreateUploadHandler`의 기존 PNG·JPEG·WebP, 12 MiB 업로드 규칙과 Blob 우선 저장을 재사용하며 이름은 `sprite-prompt`다. 생성 요청은 2D 작업을 만들지 않으며 `requestId`는 호출 기록의 `SourceGenerationId`로만 사용한다.
+
+설정 오류는 `SpriteSettingsInvalid`(400), 공급자 없음·중지는 `JobImageProviderNotFound`·`JobImageProviderDisabled`(400), 미확인 모델은 `JobImageModelUnavailable`(400), 활성 프롬프트 누락은 `PromptNotActive`(409)다. 공급자 호출·응답 실패와 한 장이 아닌 응답·업로드 규칙 위반은 `ProviderCallFailed`·`ProviderBadResponse`(502)로 반환한다. handler 진입부터 표준 `TimeProvider`의 180초 linked 취소 토큰을 조회·대기·생성·저장에 전달하며 서버 제한만 502로 변환하고 요청 취소는 전파한다. 반환 직후 취소 확인으로 토큰을 무시한 의존 호출도 다음 단계로 넘어가지 않는다. 공급자 응답 뒤 실패는 기존 recorder의 성공·실제 사용량을 보존하며 응답 전 취소는 사용량을 추정하지 않는다. 기록의 `CancellationToken.None`과 Blob 우선 저장을 유지하므로 협력적 제한이며 저장 도중 취소의 원자적 롤백·미사용 Blob 정리를 제공하지 않는다.
+
 `Noxtend.Api/Controllers/SpriteJobsController.cs`는 기존 `StartSpriteJobHandler`·`SpriteCommandsHandler`를 호출한다. `Contracts/SpriteContracts.cs`는 요청과 안전한 응답 DTO이며 엔티티·Blob 키·공급자 주소·fingerprint를 공개하지 않는다. 접수와 모든 검수 mutation은 기존 `{ data, error }` 봉투의 202와 `{ id, status, revision, taskIds }`를 반환한다.
 
 | 경로 | 본문·결과 |
 | --- | --- |
+| `POST /api/uploads/generate` | `requestId`, `prompt`, `imageProviderConfigId`, `imageModel` → 201 `UploadResponse` |
 | `POST /api/jobs/sprites` | `requestId`, `uploadId` 또는 `sourceJobId`·`sourceGeneratedImageId`, 분석·이미지 공급자/모델, `settings` |
 | `PUT /api/jobs/{id}/sprites/plan` | `requestId`, `expectedRevision`, `assets` 계획 배열 |
 | `POST /api/jobs/{id}/sprites/plan/approve` | `requestId`, `expectedRevision` |
@@ -112,3 +120,8 @@ LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계�
 - API 계약이 바뀌면 Frontend의 API 파서·타입·화면 사용처도 확인하고 양쪽 스택을 검증한다.
 - Backend 명령·Docker 요구·유료 smoke 조건은 [검증 절차](../../.agents/skills/noxtend-workflow/references/verification.md)를 따른다. 유료 smoke가 조건 미충족으로 건너뛴 경우 실 공급자 성공으로 보고하지 않는다.
 - 인프라·키 보존·실제 DB 적용을 건드리면 [배포 지침](../../deploy/AGENTS.md)도 확인한다.
+
+## 확인 기준과 미확인
+
+- 마지막 확인: 2026-10-08, revision `d2cad8d`. 코드 지도 도입 때 문서의 코드 경로와 상대 링크 존재를 자동 대조했다. 서술된 규칙 전체를 코드와 다시 대조하지는 않았다.
+- 미확인: configured `Program.cs` 호스트를 관통하는 동작, 실제 SQL Server의 migration 적용, 유료 공급자 품질. Fake·격리 SQL 테스트 범위 밖이며 실환경 확인이 필요하다.

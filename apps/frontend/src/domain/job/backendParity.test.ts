@@ -118,11 +118,13 @@ describe('백엔드 열거형과 프론트 유니온이 일치한다', () => {
           .map(toWire)
           .filter((kind) => !['reconstruct', 'synthesize', 'packSprites'].includes(kind)),
         'similarityEvaluate',
+        'generateSpriteSource',
       ].sort(),
     )
     for (const kind of operations) expect(promptKindLabel(kind as PromptKind)).toBeTruthy()
     expect(promptKindCategories('analyzeSprites')).toEqual(['background'])
     expect(promptKindCategories('generateSprite')).toEqual(['background'])
+    expect(promptKindCategories('generateSpriteSource')).toEqual(['background'])
   })
 
   it('ViewDirection — 방향이 바뀌면 파츠 이미지 타일이 비게 된다', () => {

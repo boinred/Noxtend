@@ -19,6 +19,16 @@ public sealed class SeedPromptVariableTests
 {
     private static readonly Regex Placeholder = new(@"\{\{(\w+)\}\}", RegexOptions.Compiled);
 
+    [Fact]
+    public void SpriteSourceSeedUsesOnlyPromptVariable()
+    {
+        var (system, user, _, _) = SeedPrompts.GenerateSpriteSource();
+        var used = Placeholder.Matches(system + user).Select(m => m.Groups[1].Value).ToHashSet();
+
+        Assert.Equal(new[] { "prompt" }, used.OrderBy(v => v));
+        Assert.Equal(PromptTemplate.AllowedVariables(LlmOperationKind.GenerateSpriteSource).OrderBy(v => v), used.OrderBy(v => v));
+    }
+
     /// <summary>
     /// 단계가 만드는 변수는 전부 프롬프트 어딘가에 쓰여야 한다.
     ///

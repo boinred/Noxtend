@@ -7,6 +7,11 @@ export const spriteStyles = {
   row: 'flex flex-wrap items-center gap-3',
   grid: 'grid min-w-0 grid-cols-2 gap-5 max-[720px]:grid-cols-1',
   field: 'flex min-w-0 flex-col gap-1.5 text-sm text-muted-foreground',
+  textarea:
+    'min-h-[120px] w-full resize-y rounded-lg border border-border bg-[var(--sunken-bg)] px-3 py-[9px] text-sm text-foreground focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-1',
+  results: 'grid grid-cols-3 gap-3 max-[720px]:grid-cols-2',
+  result:
+    'cursor-pointer overflow-hidden rounded-lg border border-border bg-[var(--sunken-bg)] p-1 aria-pressed:ring-2 aria-pressed:ring-primary focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2',
   preview: 'relative w-full overflow-hidden rounded-lg border border-border',
   asset: 'flex min-w-0 flex-col gap-3 rounded-lg border border-border p-4',
   image: 'h-48 w-full object-contain',
