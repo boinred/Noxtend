@@ -51,6 +51,7 @@ public sealed class PricesController(
             await update.HandleAsync(id, request.ToInput(), ct), ModelPriceResponse.From);
 
     [HttpPost("update-previews")]
+    [PriceUpdateInput]
     public async Task<IActionResult> CollectUpdateAsync([FromBody] JsonElement request, CancellationToken ct)
     {
         if (!TryIds(request, "providerConfigIds", out var ids)) return InvalidUpdate();
@@ -58,6 +59,7 @@ public sealed class PricesController(
     }
 
     [HttpPost("update-previews/{id:guid}/apply")]
+    [PriceUpdateInput]
     public async Task<IActionResult> ApplyUpdateAsync(Guid id, [FromBody] JsonElement request, CancellationToken ct)
     {
         if (request.ValueKind != JsonValueKind.Object || !request.TryGetProperty("requestId", out var requestId)
