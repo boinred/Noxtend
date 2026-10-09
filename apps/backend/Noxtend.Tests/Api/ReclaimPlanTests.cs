@@ -12,8 +12,6 @@ namespace Noxtend.Tests.Api;
 /// **`TaskWorkerRegistration.Stages` 와 같은 이유로 값으로 꺼낸다.** 스위퍼는 타이머를
 /// 도는 백그라운드 서비스라 그 안에서 확인할 수 없는데, 빠뜨린 종류는 예외도 로그도
 /// 없이 조용히 쌓이기만 한다. 등록에서 그랬듯 여기서도 개수로 고정한다.
-///
-/// 지금은 Extract 하나로 고정돼 있어 Generate 의 미확인 메시지가 영원히 남는다.
 /// </summary>
 public sealed class ReclaimPlanTests
 {
