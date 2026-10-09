@@ -43,7 +43,6 @@ public sealed class ReclaimPlanTests
         var generation = new GenerationOptions { LeaseSeconds = 400 };
 
         var mesh = new MeshGenerationOptions { LeaseSeconds = 1000 };
-
         var plan = ReclaimPlan.For(job, generation, mesh).ToDictionary(s => s.Kind, s => s.IdleLongerThan);
 
         Assert.Equal(TimeSpan.FromSeconds(200), plan[TaskKind.Extract]);
