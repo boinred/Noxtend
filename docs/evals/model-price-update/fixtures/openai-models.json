@@ -1,0 +1,29 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "gpt-5.3-codex",
+      "object": "model",
+      "created": 1700000000,
+      "owned_by": "openai"
+    },
+    {
+      "id": "gpt-image-2.5-sunburst",
+      "object": "model",
+      "created": 1700000000,
+      "owned_by": "openai"
+    },
+    {
+      "id": "fixture-unpriced-openai",
+      "object": "model",
+      "created": 1700000000,
+      "owned_by": "openai"
+    },
+    {
+      "id": "gpt-5.3-codex",
+      "object": "model",
+      "created": 1700000000,
+      "owned_by": "openai"
+    }
+  ]
+}

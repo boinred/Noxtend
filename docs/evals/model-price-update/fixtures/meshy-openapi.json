@@ -1,0 +1,5936 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Meshy API",
+    "version": "1.0.0",
+    "termsOfService": "https://www.meshy.ai/terms-of-use",
+    "summary": "AI-powered 3D asset generation REST API.",
+    "description": "The Meshy API lets you programmatically generate 3D models, textures, images, and character rigs/animations.\nScope: this specification covers the core generation, post-processing, printing and account endpoints. The Creative Lab APIs (keychain, fridge magnet, figure, vinyl figure, brick figure, lamp, keycap, collapsible fidget, fidget pixel) and the Text to Motion API are documented only on their pages at https://docs.meshy.ai/api/creative-lab-keychain and https://docs.meshy.ai/api/text-to-motion (see https://docs.meshy.ai/llms.txt for the full index); they are not part of this file.\n**Authentication.** All requests require an API key sent as a Bearer token: `Authorization: Bearer msy_YOUR_API_KEY`. Create keys at https://www.meshy.ai/settings/api.\n**Asynchronous model.** Generation endpoints do not return the result directly. A `POST` creates a task and returns `202 Accepted` with a task ID in `result`. Retrieve the outcome by polling `GET .../{id}` until `status` is terminal (`SUCCEEDED` / `FAILED` / `CANCELED`), or by connecting to the `GET .../{id}/stream` Server-Sent Events endpoint.\n**Base URL.** `https://api.meshy.ai/openapi`. This document is served at https://docs.meshy.ai/openapi.yaml (and `.json`); the human-readable reference lives at https://docs.meshy.ai.\n**Scope.** This specification covers the generally-available public endpoints. Endpoints still in development, partner-specific surfaces (creative-lab, d5), and legacy `/v1`,`/v2` path aliases are intentionally omitted.\n",
+    "contact": {
+      "name": "Meshy API Support",
+      "url": "https://docs.meshy.ai"
+    }
+  },
+  "externalDocs": {
+    "description": "Meshy API documentation",
+    "url": "https://docs.meshy.ai"
+  },
+  "servers": [
+    {
+      "url": "https://api.meshy.ai/openapi",
+      "description": "Production"
+    }
+  ],
+  "security": [
+    {
+      "ApiKeyAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Text to 3D",
+      "description": "Generate a 3D model from a text prompt."
+    },
+    {
+      "name": "Image to 3D",
+      "description": "Generate a 3D model from a single image."
+    },
+    {
+      "name": "Multi-Image to 3D",
+      "description": "Generate a 3D model from up to four images of one object."
+    },
+    {
+      "name": "Retexture",
+      "description": "Generate new textures for an existing model."
+    },
+    {
+      "name": "Remesh",
+      "description": "Re-topologize, resize, and re-export an existing model."
+    },
+    {
+      "name": "Convert",
+      "description": "Convert a model between file formats."
+    },
+    {
+      "name": "Resize",
+      "description": "Resize a model to a target real-world size."
+    },
+    {
+      "name": "UV Unwrap",
+      "description": "Generate a UV layout for a model."
+    },
+    {
+      "name": "Rigging",
+      "description": "Rig a humanoid or quadruped model with a skeleton."
+    },
+    {
+      "name": "Animation",
+      "description": "Apply a library animation to a rigged model."
+    },
+    {
+      "name": "Text to Image",
+      "description": "Generate a 2D image from a text prompt."
+    },
+    {
+      "name": "Image to Image",
+      "description": "Edit or restyle images from reference images."
+    },
+    {
+      "name": "3D Print",
+      "description": "Prepare, repair, and analyze models for 3D printing."
+    },
+    {
+      "name": "Account",
+      "description": "Account, credit-balance, and usage information."
+    }
+  ],
+  "paths": {
+    "/v2/text-to-3d": {
+      "post": {
+        "tags": [
+          "Text to 3D"
+        ],
+        "operationId": "createTextTo3DTask",
+        "summary": "Create a Text to 3D task",
+        "description": "Creates a Text to 3D task. Use `mode: preview` to generate geometry, then `mode: refine` (with `preview_task_id`) to texture it; or omit `mode` and set `should_texture: true` for a single fused geometry+texture call. The `202` body additively includes the universal task object alongside `result`. Consumes credits (varies by model and options); see https://docs.meshy.ai for pricing.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TextTo3DRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/TaskCreated"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Text to 3D"
+        ],
+        "operationId": "listTextTo3DTasks",
+        "summary": "List Text to 3D tasks",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageNum"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/SortBy"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of tasks, newest first by default.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TextTo3DTask"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v2/text-to-3d/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Text to 3D"
+        ],
+        "operationId": "getTextTo3DTask",
+        "summary": "Retrieve a Text to 3D task",
+        "responses": {
+          "200": {
+            "description": "The task.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/PollRetryAfter"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TextTo3DTask"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Text to 3D"
+        ],
+        "operationId": "deleteTextTo3DTask",
+        "summary": "Delete a Text to 3D task",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskDeleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v2/text-to-3d/{id}/stream": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Text to 3D"
+        ],
+        "operationId": "streamTextTo3DTask",
+        "summary": "Stream a Text to 3D task (SSE)",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskStream"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/image-to-3d": {
+      "post": {
+        "tags": [
+          "Image to 3D"
+        ],
+        "operationId": "createImageTo3DTask",
+        "summary": "Create an Image to 3D task",
+        "description": "Provide exactly one of `image_url` or `input_task_id`. Consumes credits (varies by model and options); see https://docs.meshy.ai for pricing.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageTo3DRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/TaskCreated"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Image to 3D"
+        ],
+        "operationId": "listImageTo3DTasks",
+        "summary": "List Image to 3D tasks",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageNum"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/SortBy"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of tasks, newest first by default.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Task"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/image-to-3d/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Image to 3D"
+        ],
+        "operationId": "getImageTo3DTask",
+        "summary": "Retrieve an Image to 3D task",
+        "responses": {
+          "200": {
+            "description": "The task.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/PollRetryAfter"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Image to 3D"
+        ],
+        "operationId": "deleteImageTo3DTask",
+        "summary": "Delete an Image to 3D task",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskDeleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/image-to-3d/{id}/stream": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Image to 3D"
+        ],
+        "operationId": "streamImageTo3DTask",
+        "summary": "Stream an Image to 3D task (SSE)",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskStream"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/multi-image-to-3d": {
+      "post": {
+        "tags": [
+          "Multi-Image to 3D"
+        ],
+        "operationId": "createMultiImageTo3DTask",
+        "summary": "Create a Multi-Image to 3D task",
+        "description": "Provide 1-4 images of the same object via `image_urls`, or reuse a prior task's images via `input_task_id`. Only Meshy 5 and newer are supported. Consumes credits (varies by model and options); see https://docs.meshy.ai for pricing.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MultiImageTo3DRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/TaskCreated"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Multi-Image to 3D"
+        ],
+        "operationId": "listMultiImageTo3DTasks",
+        "summary": "List Multi-Image to 3D tasks",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageNum"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/SortBy"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of tasks, newest first by default.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Task"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/multi-image-to-3d/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Multi-Image to 3D"
+        ],
+        "operationId": "getMultiImageTo3DTask",
+        "summary": "Retrieve a Multi-Image to 3D task",
+        "responses": {
+          "200": {
+            "description": "The task.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/PollRetryAfter"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Multi-Image to 3D"
+        ],
+        "operationId": "deleteMultiImageTo3DTask",
+        "summary": "Delete a Multi-Image to 3D task",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskDeleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/multi-image-to-3d/{id}/stream": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Multi-Image to 3D"
+        ],
+        "operationId": "streamMultiImageTo3DTask",
+        "summary": "Stream a Multi-Image to 3D task (SSE)",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskStream"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/retexture": {
+      "post": {
+        "tags": [
+          "Retexture"
+        ],
+        "operationId": "createRetextureTask",
+        "summary": "Create a Retexture task",
+        "description": "Provide exactly one of `input_task_id` or `model_url` (a GLB). Provide exactly one style source: `text_style_prompt`, `image_style_url`, or `multiview_image_urls`. Consumes credits (varies by model and resolution); see https://docs.meshy.ai for pricing.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetextureRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/TaskCreated"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Retexture"
+        ],
+        "operationId": "listRetextureTasks",
+        "summary": "List Retexture tasks",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageNum"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/SortBy"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of tasks, newest first by default.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Task"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/retexture/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Retexture"
+        ],
+        "operationId": "getRetextureTask",
+        "summary": "Retrieve a Retexture task",
+        "responses": {
+          "200": {
+            "description": "The task.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/PollRetryAfter"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Retexture"
+        ],
+        "operationId": "deleteRetextureTask",
+        "summary": "Delete a Retexture task",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskDeleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/retexture/{id}/stream": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Retexture"
+        ],
+        "operationId": "streamRetextureTask",
+        "summary": "Stream a Retexture task (SSE)",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskStream"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/remesh": {
+      "post": {
+        "tags": [
+          "Remesh"
+        ],
+        "operationId": "createRemeshTask",
+        "summary": "Create a Remesh task",
+        "description": "Provide exactly one of `input_task_id` or `model_url`. Consumes credits; see https://docs.meshy.ai for pricing.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemeshRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/TaskCreated"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Remesh"
+        ],
+        "operationId": "listRemeshTasks",
+        "summary": "List Remesh tasks",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageNum"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/SortBy"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of tasks, newest first by default.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Task"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/remesh/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Remesh"
+        ],
+        "operationId": "getRemeshTask",
+        "summary": "Retrieve a Remesh task",
+        "responses": {
+          "200": {
+            "description": "The task.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/PollRetryAfter"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Remesh"
+        ],
+        "operationId": "deleteRemeshTask",
+        "summary": "Delete a Remesh task",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskDeleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/remesh/{id}/stream": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Remesh"
+        ],
+        "operationId": "streamRemeshTask",
+        "summary": "Stream a Remesh task (SSE)",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskStream"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/convert": {
+      "post": {
+        "tags": [
+          "Convert"
+        ],
+        "operationId": "createConvertTask",
+        "summary": "Create a Convert task",
+        "description": "Convert a model to one or more formats. Provide exactly one of `input_task_id` or `model_url`; `target_formats` is required. Consumes credits; see https://docs.meshy.ai for pricing.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConvertRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/TaskCreated"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Convert"
+        ],
+        "operationId": "listConvertTasks",
+        "summary": "List Convert tasks",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageNum"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/SortBy"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of tasks, newest first by default.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Task"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/convert/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Convert"
+        ],
+        "operationId": "getConvertTask",
+        "summary": "Retrieve a Convert task",
+        "responses": {
+          "200": {
+            "description": "The task.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/PollRetryAfter"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Convert"
+        ],
+        "operationId": "deleteConvertTask",
+        "summary": "Delete a Convert task",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskDeleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/convert/{id}/stream": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Convert"
+        ],
+        "operationId": "streamConvertTask",
+        "summary": "Stream a Convert task (SSE)",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskStream"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/resize": {
+      "post": {
+        "tags": [
+          "Resize"
+        ],
+        "operationId": "createResizeTask",
+        "summary": "Create a Resize task",
+        "description": "Provide exactly one of `input_task_id` or `model_url`, and at least one of `resize_height`, `resize_longest_side`, or `auto_size`. Consumes credits; see https://docs.meshy.ai for pricing.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResizeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/TaskCreated"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Resize"
+        ],
+        "operationId": "listResizeTasks",
+        "summary": "List Resize tasks",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageNum"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/SortBy"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of tasks, newest first by default.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Task"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/resize/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Resize"
+        ],
+        "operationId": "getResizeTask",
+        "summary": "Retrieve a Resize task",
+        "responses": {
+          "200": {
+            "description": "The task.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/PollRetryAfter"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Resize"
+        ],
+        "operationId": "deleteResizeTask",
+        "summary": "Delete a Resize task",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskDeleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/resize/{id}/stream": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Resize"
+        ],
+        "operationId": "streamResizeTask",
+        "summary": "Stream a Resize task (SSE)",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskStream"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/uv-unwrap": {
+      "post": {
+        "tags": [
+          "UV Unwrap"
+        ],
+        "operationId": "createUvUnwrapTask",
+        "summary": "Create a UV Unwrap task",
+        "description": "Generate a UV layout for a GLB. Provide exactly one of `input_task_id` or `model_url` (a GLB). Availability is limited; high-poly inputs must be remeshed first. Consumes credits; see https://docs.meshy.ai for pricing.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UvUnwrapRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/TaskCreated"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "UV Unwrap"
+        ],
+        "operationId": "listUvUnwrapTasks",
+        "summary": "List UV Unwrap tasks",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageNum"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/SortBy"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of tasks, newest first by default.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Task"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/uv-unwrap/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "UV Unwrap"
+        ],
+        "operationId": "getUvUnwrapTask",
+        "summary": "Retrieve a UV Unwrap task",
+        "responses": {
+          "200": {
+            "description": "The task.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/PollRetryAfter"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "UV Unwrap"
+        ],
+        "operationId": "deleteUvUnwrapTask",
+        "summary": "Delete a UV Unwrap task",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskDeleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/uv-unwrap/{id}/stream": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "UV Unwrap"
+        ],
+        "operationId": "streamUvUnwrapTask",
+        "summary": "Stream a UV Unwrap task (SSE)",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskStream"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/rigging": {
+      "post": {
+        "tags": [
+          "Rigging"
+        ],
+        "operationId": "createRiggingTask",
+        "summary": "Create a Rigging task",
+        "description": "Rig a model with a skeleton. Provide exactly one of `input_task_id` or `model_url` (a GLB). Models above 320,000 faces are rejected; remesh to a `target_polycount` of 300,000 or less first. Consumes credits; see https://docs.meshy.ai for pricing.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RiggingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/TaskCreated"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Rigging"
+        ],
+        "operationId": "listRiggingTasks",
+        "summary": "List Rigging tasks",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageNum"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/SortBy"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of tasks, newest first by default.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RiggingTask"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/rigging/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Rigging"
+        ],
+        "operationId": "getRiggingTask",
+        "summary": "Retrieve a Rigging task",
+        "responses": {
+          "200": {
+            "description": "The task.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/PollRetryAfter"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RiggingTask"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Rigging"
+        ],
+        "operationId": "deleteRiggingTask",
+        "summary": "Delete a Rigging task",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskDeleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/rigging/{id}/stream": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Rigging"
+        ],
+        "operationId": "streamRiggingTask",
+        "summary": "Stream a Rigging task (SSE)",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskStream"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/animations": {
+      "post": {
+        "tags": [
+          "Animation"
+        ],
+        "operationId": "createAnimationTask",
+        "summary": "Create an Animation task",
+        "description": "Apply a library animation to a rigged model. `rig_task_id` must reference a completed Rigging task. See the Animation Library for valid `action_id` values. Consumes credits; see https://docs.meshy.ai for pricing.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnimationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/TaskCreated"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Animation"
+        ],
+        "operationId": "listAnimationTasks",
+        "summary": "List Animation tasks",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageNum"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/SortBy"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of tasks, newest first by default.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AnimationTask"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/animations/library": {
+      "get": {
+        "tags": [
+          "Animation"
+        ],
+        "operationId": "listAnimationLibrary",
+        "summary": "List the animation library",
+        "description": "Return every preset action that can be applied via `action_id`, each with an animated GIF preview. Free; consumes no credits. The whole library comes back in one response rather than paginated, so a single call can populate a picker.\n",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Case-insensitive substring match on `name` or `key`. Matched literally, so `%` and `_` are ordinary characters rather than wildcards.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "description": "Exact match on `category`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "WalkAndRun",
+                "BodyMovements",
+                "DailyActions",
+                "Fighting",
+                "Dancing"
+              ]
+            }
+          },
+          {
+            "name": "sub_category",
+            "in": "query",
+            "description": "Exact match on `sub_category`. Accepted on its own; sub-category names are not unique across categories.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action_ids",
+            "in": "query",
+            "description": "Comma-separated `action_id` values to return, at most 200. Ids that no animation carries are absent from the response.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The animation library.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AnimationLibraryItem"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/animations/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Animation"
+        ],
+        "operationId": "getAnimationTask",
+        "summary": "Retrieve an Animation task",
+        "responses": {
+          "200": {
+            "description": "The task.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/PollRetryAfter"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnimationTask"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Animation"
+        ],
+        "operationId": "deleteAnimationTask",
+        "summary": "Delete an Animation task",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskDeleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/animations/{id}/stream": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Animation"
+        ],
+        "operationId": "streamAnimationTask",
+        "summary": "Stream an Animation task (SSE)",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskStream"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/text-to-image": {
+      "post": {
+        "tags": [
+          "Text to Image"
+        ],
+        "operationId": "createTextToImageTask",
+        "summary": "Create a Text to Image task",
+        "description": "Generate a 2D image from a prompt. Consumes credits; see https://docs.meshy.ai for pricing.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TextToImageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/TaskCreated"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Text to Image"
+        ],
+        "operationId": "listTextToImageTasks",
+        "summary": "List Text to Image tasks",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageNum"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/SortBy"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of tasks, newest first by default.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ImageGenerationTask"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/text-to-image/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Text to Image"
+        ],
+        "operationId": "getTextToImageTask",
+        "summary": "Retrieve a Text to Image task",
+        "responses": {
+          "200": {
+            "description": "The task.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/PollRetryAfter"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageGenerationTask"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Text to Image"
+        ],
+        "operationId": "deleteTextToImageTask",
+        "summary": "Delete a Text to Image task",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskDeleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/text-to-image/{id}/stream": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Text to Image"
+        ],
+        "operationId": "streamTextToImageTask",
+        "summary": "Stream a Text to Image task (SSE)",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskStream"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/image-to-image": {
+      "post": {
+        "tags": [
+          "Image to Image"
+        ],
+        "operationId": "createImageToImageTask",
+        "summary": "Create an Image to Image task",
+        "description": "Edit or restyle from 1-5 reference images, supplied directly or chained from a prior image task with input_task_id. Consumes credits; see https://docs.meshy.ai for pricing.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageToImageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/TaskCreated"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Image to Image"
+        ],
+        "operationId": "listImageToImageTasks",
+        "summary": "List Image to Image tasks",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageNum"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/SortBy"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of tasks, newest first by default.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ImageGenerationTask"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/image-to-image/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Image to Image"
+        ],
+        "operationId": "getImageToImageTask",
+        "summary": "Retrieve an Image to Image task",
+        "responses": {
+          "200": {
+            "description": "The task.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/PollRetryAfter"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageGenerationTask"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Image to Image"
+        ],
+        "operationId": "deleteImageToImageTask",
+        "summary": "Delete an Image to Image task",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskDeleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/image-to-image/{id}/stream": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Image to Image"
+        ],
+        "operationId": "streamImageToImageTask",
+        "summary": "Stream an Image to Image task (SSE)",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskStream"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/print/multi-color": {
+      "post": {
+        "tags": [
+          "3D Print"
+        ],
+        "operationId": "createPrintMultiColorTask",
+        "summary": "Create a Multi-Color Print task",
+        "description": "Generate a multi-color 3MF for color 3D printing. Provide exactly one of `input_task_id` or `model_url` (GLB or FBX). Availability is limited. Consumes credits; see https://docs.meshy.ai for pricing.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrintMultiColorRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/TaskCreated"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "3D Print"
+        ],
+        "operationId": "listPrintMultiColorTasks",
+        "summary": "List Multi-Color Print tasks",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageNum"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/SortBy"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of tasks, newest first by default.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Task"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/print/multi-color/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "3D Print"
+        ],
+        "operationId": "getPrintMultiColorTask",
+        "summary": "Retrieve a Multi-Color Print task",
+        "responses": {
+          "200": {
+            "description": "The task. On success, `model_urls.3mf` holds the result.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/PollRetryAfter"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "3D Print"
+        ],
+        "operationId": "deletePrintMultiColorTask",
+        "summary": "Delete a Multi-Color Print task",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskDeleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/print/multi-color/{id}/stream": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "3D Print"
+        ],
+        "operationId": "streamPrintMultiColorTask",
+        "summary": "Stream a Multi-Color Print task (SSE)",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskStream"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/print/split": {
+      "post": {
+        "tags": [
+          "3D Print"
+        ],
+        "operationId": "createPrintSplitTask",
+        "summary": "Create an Auto Split task",
+        "description": "Split the Meshy 6 / Meshy 7 model of a prior task into separately printable parts — automatically, by named parts, or by color region — with optional connectors (thin regions are always reinforced). The result is untextured: the cut rebuilds the surfaces and drops any input texture. Consumes credits; see https://docs.meshy.ai for pricing.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrintSplitRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/TaskCreated"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "3D Print"
+        ],
+        "operationId": "listPrintSplitTasks",
+        "summary": "List Auto Split tasks",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageNum"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/SortBy"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of tasks, newest first by default.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Task"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/print/split/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "3D Print"
+        ],
+        "operationId": "getPrintSplitTask",
+        "summary": "Retrieve an Auto Split task",
+        "responses": {
+          "200": {
+            "description": "The task. On success, `model_urls` holds one URL per requested format, `part_count` the number of printable parts. Auto Split tasks omit the generation-prompt fields, `model_url` and `texture_urls`, which they never populate.\n",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/PollRetryAfter"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "3D Print"
+        ],
+        "operationId": "deletePrintSplitTask",
+        "summary": "Delete an Auto Split task",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskDeleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/print/split/{id}/stream": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "3D Print"
+        ],
+        "operationId": "streamPrintSplitTask",
+        "summary": "Stream an Auto Split task (SSE)",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskStream"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/print/repair": {
+      "post": {
+        "tags": [
+          "3D Print"
+        ],
+        "operationId": "createPrintRepairTask",
+        "summary": "Create a Print Repair task",
+        "description": "Repair a model for printing; the repaired asset is returned in the input format. Provide exactly one of `input_task_id` or `model_url` (GLB, glTF, OBJ, FBX, or STL). Consumes credits; see https://docs.meshy.ai for pricing.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrintRepairRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/TaskCreated"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "3D Print"
+        ],
+        "operationId": "listPrintRepairTasks",
+        "summary": "List Print Repair tasks",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageNum"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/SortBy"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of tasks, newest first by default.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Task"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/print/repair/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "3D Print"
+        ],
+        "operationId": "getPrintRepairTask",
+        "summary": "Retrieve a Print Repair task",
+        "responses": {
+          "200": {
+            "description": "The task.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/PollRetryAfter"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "3D Print"
+        ],
+        "operationId": "deletePrintRepairTask",
+        "summary": "Delete a Print Repair task",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskDeleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/print/repair/{id}/stream": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "3D Print"
+        ],
+        "operationId": "streamPrintRepairTask",
+        "summary": "Stream a Print Repair task (SSE)",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskStream"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/print/analyze": {
+      "post": {
+        "tags": [
+          "3D Print"
+        ],
+        "operationId": "createPrintAnalyzeTask",
+        "summary": "Create a Printability Analysis task",
+        "description": "Analyze a model's printability (watertightness, manifold edges, holes, etc.). Provide exactly one of `input_task_id` or `model_url` (GLB, glTF, OBJ, FBX, or STL). This endpoint is free (no credits).\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrintAnalyzeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/TaskCreated"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "3D Print"
+        ],
+        "operationId": "listPrintAnalyzeTasks",
+        "summary": "List Printability Analysis tasks",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageNum"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/SortBy"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of tasks, newest first by default.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PrintAnalyzeTask"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/print/analyze/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "3D Print"
+        ],
+        "operationId": "getPrintAnalyzeTask",
+        "summary": "Retrieve a Printability Analysis task",
+        "responses": {
+          "200": {
+            "description": "The task.",
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/PollRetryAfter"
+              },
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/XRateLimitLimit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/XRateLimitRemaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/XRateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrintAnalyzeTask"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "3D Print"
+        ],
+        "operationId": "deletePrintAnalyzeTask",
+        "summary": "Delete a Printability Analysis task",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskDeleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/print/analyze/{id}/stream": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TaskId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "3D Print"
+        ],
+        "operationId": "streamPrintAnalyzeTask",
+        "summary": "Stream a Printability Analysis task (SSE)",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TaskStream"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/balance": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "getBalance",
+        "summary": "Get credit balance",
+        "description": "Returns the total available credit balance for the API key's account.",
+        "responses": {
+          "200": {
+            "description": "The current balance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BalanceResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/v1/usage/tasks": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "listUsageRecords",
+        "summary": "List usage records",
+        "description": "Returns one page of the team's API tasks with the credits each one consumed, newest first by default. Requires an API key belonging to a Studio or Enterprise team. Records cover tasks that have reached a terminal status; with no explicit time range the window is the last 30 days.\n",
+        "parameters": [
+          {
+            "name": "page_num",
+            "in": "query",
+            "required": false,
+            "description": "Page number (1-based).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 255,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "description": "Items per page (max 100).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10
+            }
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "required": false,
+            "description": "Sort key; `created_at` is the only sortable column.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "+created_at",
+                "-created_at"
+              ],
+              "default": "-created_at"
+            }
+          },
+          {
+            "name": "start_time",
+            "in": "query",
+            "required": false,
+            "description": "Start of the `created_at` window, RFC 3339. Defaults to 30 days before `end_time`. The window may span at most 1 year.\n",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "end_time",
+            "in": "query",
+            "required": false,
+            "description": "End of the `created_at` window, RFC 3339. Defaults to the current time.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "endpoints",
+            "in": "query",
+            "required": false,
+            "description": "Comma-separated endpoint names to include, using the same values the `endpoint` response field carries (e.g. `image-to-3d,animate`). Omit to include every endpoint; an unknown name is rejected with 400.\n",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Filter by terminal task status. Omit to include both.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "SUCCEEDED",
+                "FAILED"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of usage records, newest first by default.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UsageRecord"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Send your API key as a Bearer token: `Authorization: Bearer msy_YOUR_API_KEY`. Keys are created at https://www.meshy.ai/settings/api and have the form `msy_<random>`.\n"
+      }
+    },
+    "parameters": {
+      "TaskId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Task ID (UUID).",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "PageNum": {
+        "name": "page_num",
+        "in": "query",
+        "required": false,
+        "description": "Page number (1-based).",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        }
+      },
+      "PageSize": {
+        "name": "page_size",
+        "in": "query",
+        "required": false,
+        "description": "Items per page (max 10).",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 3
+        }
+      },
+      "SortBy": {
+        "name": "sort_by",
+        "in": "query",
+        "required": false,
+        "description": "Sort key; a leading `-` sorts descending (e.g. `-created_at`). The sortable columns depend on the endpoint.\n",
+        "schema": {
+          "type": "string",
+          "default": "-created_at"
+        }
+      }
+    },
+    "headers": {
+      "XRateLimitLimit": {
+        "description": "Requests allowed per second on the caller's tier.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "XRateLimitRemaining": {
+        "description": "Requests left in the current second.",
+        "schema": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "XRateLimitReset": {
+        "description": "Seconds until the request budget is full again.",
+        "schema": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "RetryAfter": {
+        "description": "Seconds to wait before retrying. Sent with a request-rate 429.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "PollRetryAfter": {
+        "description": "Seconds to wait before polling again. Sent while the task is PENDING or IN_PROGRESS.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "responses": {
+      "TaskCreated": {
+        "description": "Task accepted for processing.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CreateTaskResponse"
+            }
+          }
+        }
+      },
+      "TaskDeleted": {
+        "description": "Task deleted.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "TaskStream": {
+        "description": "A Server-Sent Events stream. Each `message` event's `data` is a JSON task object of the same shape returned by the corresponding `GET .../{id}`, emitted as the task progresses until a terminal status.\n",
+        "content": {
+          "text/event-stream": {
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "BadRequest": {
+        "description": "Invalid request parameters.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Missing or invalid API key.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "PaymentRequired": {
+        "description": "Insufficient credits or plan tier.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "The API key's team plan does not include this endpoint, or the key has no team.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found (or the feature is not available to this account).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "The resource exists but its current state does not allow the operation. Returned when deleting a task that is already IN_PROGRESS: credits for work the worker has started are not refundable, so the task is left running rather than deleted for nothing. Retry once the task reaches SUCCEEDED, FAILED or CANCELED.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "UnprocessableEntity": {
+        "description": "The request was well-formed but could not be processed (e.g. pose estimation failed).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "TooManyRequests": {
+        "description": "Rate limit exceeded.",
+        "headers": {
+          "Retry-After": {
+            "$ref": "#/components/headers/RetryAfter"
+          },
+          "X-RateLimit-Limit": {
+            "$ref": "#/components/headers/XRateLimitLimit"
+          },
+          "X-RateLimit-Remaining": {
+            "$ref": "#/components/headers/XRateLimitRemaining"
+          },
+          "X-RateLimit-Reset": {
+            "$ref": "#/components/headers/XRateLimitReset"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "description": "Standard error body for the public API.",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Human-readable error message."
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "CreateTaskResponse": {
+        "type": "object",
+        "description": "Returned with `202 Accepted` when a task is created. `result` is the new task ID. (On `POST /v2/text-to-3d` the body additively includes the full universal task object alongside `result`.)\n",
+        "properties": {
+          "result": {
+            "type": "string",
+            "description": "The created task's ID."
+          }
+        },
+        "required": [
+          "result"
+        ]
+      },
+      "TaskStatus": {
+        "type": "string",
+        "description": "Task lifecycle status.",
+        "enum": [
+          "PENDING",
+          "IN_PROGRESS",
+          "SUCCEEDED",
+          "FAILED",
+          "CANCELED"
+        ]
+      },
+      "TaskError": {
+        "type": "object",
+        "description": "Populated when a task fails.",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "doc_url": {
+            "type": "string",
+            "description": "Link to relevant documentation."
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "ModelURLs": {
+        "type": "object",
+        "description": "Download URLs for the generated model, keyed by format. Only produced formats are present.",
+        "properties": {
+          "glb": {
+            "type": "string",
+            "format": "uri"
+          },
+          "fbx": {
+            "type": "string",
+            "format": "uri"
+          },
+          "gltf": {
+            "type": "string",
+            "format": "uri"
+          },
+          "usdz": {
+            "type": "string",
+            "format": "uri"
+          },
+          "obj": {
+            "type": "string",
+            "format": "uri"
+          },
+          "mtl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "vox": {
+            "type": "string",
+            "format": "uri"
+          },
+          "blend": {
+            "type": "string",
+            "format": "uri"
+          },
+          "stl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "3mf": {
+            "type": "string",
+            "format": "uri"
+          },
+          "pre_remeshed_glb": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      },
+      "TextureURL": {
+        "type": "object",
+        "description": "A set of PBR texture map URLs.",
+        "properties": {
+          "base_color": {
+            "type": "string",
+            "format": "uri"
+          },
+          "metallic": {
+            "type": "string",
+            "format": "uri"
+          },
+          "roughness": {
+            "type": "string",
+            "format": "uri"
+          },
+          "normal": {
+            "type": "string",
+            "format": "uri"
+          },
+          "emission": {
+            "type": "string",
+            "format": "uri"
+          },
+          "metallic_roughness": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "base_color"
+        ]
+      },
+      "ExperimentalParams": {
+        "type": "object",
+        "description": "Experimental toggles. Subject to change.",
+        "properties": {
+          "turbo": {
+            "type": "boolean",
+            "description": "Turbo (fast) mode."
+          },
+          "enable_tsr": {
+            "type": "boolean",
+            "description": "Fast-mode TSR option (only meaningful with turbo)."
+          },
+          "optimize_texture_seams": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Fast-mode texture-seam optimization (only meaningful with turbo)."
+          }
+        }
+      },
+      "TextTo3DRequest": {
+        "type": "object",
+        "description": "Text to 3D request. `prompt` is required when `mode: preview` (or for a one-call textured task). `preview_task_id` is required when `mode: refine`.\n",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "preview",
+              "refine"
+            ],
+            "description": "Phase. `preview` generates geometry; `refine` textures a preview. Omit and set `should_texture: true` for a single fused call.\n"
+          },
+          "prompt": {
+            "type": "string",
+            "maxLength": 800,
+            "description": "Text description of the object. Required for preview / fused tasks."
+          },
+          "negative_prompt": {
+            "type": "string",
+            "maxLength": 800,
+            "description": "What to avoid."
+          },
+          "texture_prompt": {
+            "type": "string",
+            "maxLength": 800,
+            "description": "Texture description."
+          },
+          "texture_image_url": {
+            "type": "string",
+            "description": "Texture reference image URL."
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "Task name."
+          },
+          "preview_task_id": {
+            "type": "string",
+            "description": "Parent preview task ID. Required when mode=refine."
+          },
+          "art_style": {
+            "type": "string",
+            "enum": [
+              "realistic"
+            ],
+            "description": "Art style."
+          },
+          "texture_richness": {
+            "type": "string",
+            "enum": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ],
+            "default": "high",
+            "description": "Texture detail level."
+          },
+          "ai_model": {
+            "type": "string",
+            "enum": [
+              "meshy-6",
+              "meshy-6-lite",
+              "meshy-7",
+              "meshy-7.1",
+              "latest",
+              "meshy-t2"
+            ],
+            "default": "latest",
+            "description": "Model to use. `latest` resolves server-side to `meshy-7.1`. `meshy-7`, `meshy-7.1`, and `meshy-t2` require account entitlement. `meshy-7` is deprecated, superseded by `meshy-7.1` (same parameters, same cost). The aliases `meshy-standard-latest` and `meshy-smart-topology-latest` are also accepted and normalized server-side. The `latest` default applies to `mode: preview` and to fused single-call tasks; on `mode: refine`, omitting this inherits the preview task's model instead.\n"
+          },
+          "model_type": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "lowpoly",
+              "smart-topology"
+            ],
+            "default": "standard",
+            "description": "Pipeline. `smart-topology` implies the meshy-t2 model family. `lowpoly` is deprecated and will be retired on 2026-10-30; after that date it returns an error. Use `smart-topology` (Meshy T2) instead.\n"
+          },
+          "topology": {
+            "type": "string",
+            "enum": [
+              "quad",
+              "triangle"
+            ],
+            "default": "triangle",
+            "description": "Output mesh topology. `quad` is not supported for meshy-t2."
+          },
+          "target_polycount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 100,
+            "maximum": 300000,
+            "description": "Target polygon count. Defaults to 30000 (meshy-t2 uses a smaller model-specific default).\n"
+          },
+          "should_remesh": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Remesh after the draft stage. Default depends on model."
+          },
+          "should_texture": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "One-call textured path (requires account entitlement; ignored otherwise)."
+          },
+          "enable_pbr": {
+            "type": "boolean",
+            "default": false,
+            "description": "Produce PBR texture maps."
+          },
+          "moderation": {
+            "type": "boolean",
+            "default": false,
+            "description": "Run content moderation."
+          },
+          "pose_mode": {
+            "type": "string",
+            "enum": [
+              "a-pose",
+              "t-pose"
+            ],
+            "description": "Force a rest pose for characters."
+          },
+          "symmetry_mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "auto",
+              "on"
+            ],
+            "deprecated": true,
+            "description": "Deprecated; has no effect."
+          },
+          "is_a_t_pose": {
+            "type": "boolean",
+            "deprecated": true,
+            "description": "Deprecated; use `pose_mode`."
+          },
+          "seed": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "RNG seed; randomized when 0."
+          },
+          "origin_at": {
+            "type": "string",
+            "enum": [
+              "bottom",
+              "center"
+            ],
+            "description": "Where to place the model origin."
+          },
+          "decimation_mode": {
+            "type": "integer",
+            "enum": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "description": "Decimation algorithm selector."
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 4,
+            "description": "Number of candidates to generate. Not supported for meshy-t2 or fused tasks."
+          },
+          "model_id": {
+            "type": "string",
+            "description": "Optional client-supplied identifier for batch requests."
+          },
+          "target_formats": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "glb",
+                "obj",
+                "fbx",
+                "stl",
+                "usdz",
+                "3mf"
+              ]
+            },
+            "description": "Additional export formats."
+          },
+          "texture_resolution": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "2k",
+              "4k",
+              "8k"
+            ],
+            "description": "Texture resolution tier. Only valid when mode=refine."
+          },
+          "hd_texture": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "deprecated": true,
+            "description": "Deprecated; equivalent to texture_resolution: 4k."
+          },
+          "ultra_mode": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "deprecated": true,
+            "description": "Deprecated; equivalent to geometry_resolution: 2k."
+          },
+          "geometry_resolution": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "2k",
+              "4k"
+            ],
+            "default": "standard",
+            "description": "Geometry detail tier, preview stage only. `2k` is equivalent to the deprecated `ultra_mode: true`. Requires `meshy-7.1` or `latest`. Either Ultra tier adds 5 credits and requires account entitlement.\n"
+          },
+          "remove_lighting": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Remove baked lighting from textures."
+          },
+          "auto_size": {
+            "type": "boolean",
+            "default": false,
+            "description": "Auto-estimate real-world size."
+          },
+          "experimental": {
+            "$ref": "#/components/schemas/ExperimentalParams"
+          },
+          "alpha_thumbnail": {
+            "type": "boolean",
+            "default": false,
+            "description": "Opt in to a transparent-background preview."
+          }
+        }
+      },
+      "ImageTo3DRequest": {
+        "type": "object",
+        "description": "Image to 3D request. Provide exactly one of `image_url` or `input_task_id`.",
+        "properties": {
+          "image_url": {
+            "type": "string",
+            "description": "Input image as an http(s) URL or a data URI."
+          },
+          "input_task_id": {
+            "type": "string",
+            "description": "Reuse the input image from a prior task."
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "Task name."
+          },
+          "ai_model": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "meshy-6",
+              "meshy-6-lite",
+              "meshy-7",
+              "meshy-7.1",
+              "latest",
+              "meshy-t2"
+            ],
+            "default": "latest",
+            "description": "Model to use. `latest` resolves to `meshy-7.1`. `meshy-t2` requires `model_type: smart-topology`. `meshy-7` and `meshy-7.1` require account entitlement. `meshy-7` is deprecated, superseded by `meshy-7.1` (same parameters, same cost).\n"
+          },
+          "model_type": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "lowpoly",
+              "smart-topology"
+            ],
+            "description": "Pipeline selector. `lowpoly` is deprecated and will be retired on 2026-10-30; after that date it returns an error. Use `smart-topology` (Meshy T2) instead.\n"
+          },
+          "topology": {
+            "type": "string",
+            "enum": [
+              "quad",
+              "triangle"
+            ],
+            "default": "triangle",
+            "description": "Output mesh topology. `quad` is not supported for meshy-t2."
+          },
+          "target_polycount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 100,
+            "maximum": 300000,
+            "description": "Target polygon count. Defaults to 30000 (meshy-t2 uses a smaller default)."
+          },
+          "should_remesh": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Remesh after the draft stage. Default depends on model."
+          },
+          "should_texture": {
+            "type": "boolean",
+            "default": true,
+            "description": "Run the texture stage."
+          },
+          "enable_pbr": {
+            "type": "boolean",
+            "default": false,
+            "description": "Produce PBR texture maps."
+          },
+          "ultra_mode": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "deprecated": true,
+            "description": "Deprecated; equivalent to geometry_resolution: 2k."
+          },
+          "geometry_resolution": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "2k",
+              "4k"
+            ],
+            "default": "standard",
+            "description": "Geometry detail tier. `2k` is equivalent to the deprecated `ultra_mode: true`. Requires `meshy-7.1` or `latest`. Either Ultra tier adds 5 credits and requires account entitlement.\n"
+          },
+          "texture_prompt": {
+            "type": "string",
+            "maxLength": 800,
+            "description": "Texture description."
+          },
+          "texture_image_url": {
+            "type": "string",
+            "description": "Texture reference image URL."
+          },
+          "image_enhancement": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Enhance the input image. Not supported under smart-topology."
+          },
+          "remove_lighting": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Remove baked lighting. Not supported under smart-topology."
+          },
+          "moderation": {
+            "type": "boolean",
+            "default": false,
+            "description": "Run content moderation."
+          },
+          "pose_mode": {
+            "type": "string",
+            "enum": [
+              "a-pose",
+              "t-pose"
+            ],
+            "description": "Force a rest pose for characters."
+          },
+          "surface_mode": {
+            "type": "string",
+            "enum": [
+              "organic",
+              "hard"
+            ],
+            "deprecated": true,
+            "description": "Deprecated; use `ai_model`."
+          },
+          "symmetry_mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "auto",
+              "on"
+            ],
+            "deprecated": true,
+            "description": "Deprecated; has no effect."
+          },
+          "is_a_t_pose": {
+            "type": "boolean",
+            "deprecated": true,
+            "description": "Deprecated; use `pose_mode`."
+          },
+          "save_pre_remeshed_model": {
+            "type": "boolean",
+            "default": false,
+            "description": "Also return the pre-remesh model."
+          },
+          "auto_size": {
+            "type": "boolean",
+            "default": false,
+            "description": "Auto-estimate real-world size."
+          },
+          "origin_at": {
+            "type": "string",
+            "enum": [
+              "bottom",
+              "center"
+            ],
+            "description": "Where to place the model origin."
+          },
+          "decimation_mode": {
+            "type": "integer",
+            "enum": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "description": "Decimation algorithm selector."
+          },
+          "target_formats": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "glb",
+                "obj",
+                "fbx",
+                "stl",
+                "usdz",
+                "3mf"
+              ]
+            },
+            "description": "Additional export formats."
+          },
+          "texture_resolution": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "2k",
+              "4k",
+              "8k"
+            ],
+            "description": "Texture resolution tier."
+          },
+          "hd_texture": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "deprecated": true,
+            "description": "Deprecated; equivalent to texture_resolution: 4k."
+          },
+          "multi_view_thumbnails": {
+            "type": "boolean",
+            "default": false,
+            "description": "Render front/right/back/left thumbnails (single image only)."
+          },
+          "experimental": {
+            "$ref": "#/components/schemas/ExperimentalParams"
+          },
+          "alpha_thumbnail": {
+            "type": "boolean",
+            "default": false,
+            "description": "Opt in to a transparent-background preview."
+          }
+        }
+      },
+      "MultiImageTo3DRequest": {
+        "type": "object",
+        "description": "Multi-image to 3D request. Provide 1-4 images of one object via `image_urls`, or reuse a prior task via `input_task_id`.\n",
+        "properties": {
+          "image_urls": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4,
+            "items": {
+              "type": "string",
+              "description": "http(s) URL or data URI."
+            },
+            "description": "1-4 images of the same object."
+          },
+          "input_task_id": {
+            "type": "string",
+            "description": "Reuse images from a prior task."
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "Task name."
+          },
+          "ai_model": {
+            "type": "string",
+            "enum": [
+              "meshy-6",
+              "meshy-6-lite",
+              "meshy-7",
+              "meshy-7.1",
+              "latest"
+            ],
+            "default": "latest",
+            "description": "Model to use. Meshy 5 and newer only. `latest` resolves to `meshy-7.1`. `meshy-7` is deprecated, superseded by `meshy-7.1` (same parameters, same cost).\n"
+          },
+          "ultra_mode": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "deprecated": true,
+            "description": "Deprecated; equivalent to geometry_resolution: 2k."
+          },
+          "geometry_resolution": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "2k"
+            ],
+            "default": "standard",
+            "description": "Geometry detail tier. `2k` is equivalent to the deprecated `ultra_mode: true` and adds 5 credits (requires entitlement). Requires `meshy-7.1` or `latest`.\n"
+          },
+          "topology": {
+            "type": "string",
+            "enum": [
+              "quad",
+              "triangle"
+            ],
+            "default": "triangle",
+            "description": "Output mesh topology."
+          },
+          "target_polycount": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 300000,
+            "default": 30000,
+            "description": "Target polygon count."
+          },
+          "should_remesh": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Remesh after the draft stage. Default depends on model."
+          },
+          "should_texture": {
+            "type": "boolean",
+            "default": true,
+            "description": "Run the texture stage."
+          },
+          "enable_pbr": {
+            "type": "boolean",
+            "default": false,
+            "description": "Produce PBR texture maps."
+          },
+          "texture_prompt": {
+            "type": "string",
+            "maxLength": 800,
+            "description": "Texture description. Mutually exclusive with texture_image_url(s)."
+          },
+          "texture_image_url": {
+            "type": "string",
+            "description": "Single texture reference. Mutually exclusive with texture_prompt and texture_image_urls."
+          },
+          "texture_image_urls": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "string",
+              "description": "http(s) URL or data URI."
+            },
+            "description": "1-4 texture reference views (primary first). Requires should_texture and an effective Meshy 7 model. Mutually exclusive with texture_image_url/texture_prompt.\n"
+          },
+          "image_enhancement": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Enhance the input images."
+          },
+          "remove_lighting": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Remove baked lighting."
+          },
+          "moderation": {
+            "type": "boolean",
+            "default": false,
+            "description": "Run content moderation."
+          },
+          "pose_mode": {
+            "type": "string",
+            "enum": [
+              "a-pose",
+              "t-pose"
+            ],
+            "description": "Force a rest pose for characters."
+          },
+          "symmetry_mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "auto",
+              "on"
+            ],
+            "deprecated": true,
+            "description": "Deprecated; has no effect."
+          },
+          "is_a_t_pose": {
+            "type": "boolean",
+            "deprecated": true,
+            "description": "Deprecated; use `pose_mode`."
+          },
+          "save_pre_remeshed_model": {
+            "type": "boolean",
+            "default": false,
+            "description": "Also return the pre-remesh model."
+          },
+          "auto_size": {
+            "type": "boolean",
+            "default": false,
+            "description": "Auto-estimate real-world size."
+          },
+          "origin_at": {
+            "type": "string",
+            "enum": [
+              "bottom",
+              "center"
+            ],
+            "description": "Where to place the model origin."
+          },
+          "decimation_mode": {
+            "type": "integer",
+            "enum": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "description": "Decimation algorithm selector."
+          },
+          "target_formats": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "glb",
+                "obj",
+                "fbx",
+                "stl",
+                "usdz",
+                "3mf"
+              ]
+            },
+            "description": "Additional export formats."
+          },
+          "texture_resolution": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "2k",
+              "4k",
+              "8k"
+            ],
+            "description": "Texture resolution tier."
+          },
+          "hd_texture": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "deprecated": true,
+            "description": "Deprecated; equivalent to texture_resolution: 4k."
+          },
+          "multi_view_thumbnails": {
+            "type": "boolean",
+            "default": false,
+            "description": "Render front/right/back/left thumbnails."
+          },
+          "alpha_thumbnail": {
+            "type": "boolean",
+            "default": false,
+            "description": "Opt in to a transparent-background preview."
+          }
+        }
+      },
+      "RetextureRequest": {
+        "type": "object",
+        "description": "Retexture request. Provide exactly one of `input_task_id` or `model_url` (a GLB), and exactly one style source: `text_style_prompt`, `image_style_url`, or `multiview_image_urls`.\n",
+        "properties": {
+          "input_task_id": {
+            "type": "string",
+            "description": "Prior task to retexture."
+          },
+          "model_url": {
+            "type": "string",
+            "description": "GLB as an http(s) URL or data URI."
+          },
+          "text_style_prompt": {
+            "type": "string",
+            "maxLength": 800,
+            "description": "Text style description. Mutually exclusive with multiview_image_urls."
+          },
+          "image_style_url": {
+            "type": "string",
+            "description": "Style reference image. Mutually exclusive with multiview_image_urls."
+          },
+          "multiview_image_urls": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4,
+            "items": {
+              "type": "string",
+              "description": "http(s) URL or data URI."
+            },
+            "description": "1-4 views of the same object (primary first). Requires an explicit `ai_model: meshy-7` (with entitlement). Mutually exclusive with the prompt/style-image inputs.\n"
+          },
+          "name": {
+            "type": "string",
+            "description": "Task name."
+          },
+          "ai_model": {
+            "type": "string",
+            "enum": [
+              "meshy-6",
+              "meshy-6-lite",
+              "meshy-7",
+              "latest"
+            ],
+            "default": "latest",
+            "description": "Model to use."
+          },
+          "art_style": {
+            "type": "string",
+            "enum": [
+              "realistic",
+              "cartoon"
+            ],
+            "default": "realistic",
+            "description": "Art style."
+          },
+          "enable_original_uv": {
+            "type": "boolean",
+            "default": false,
+            "description": "Reuse the source mesh UVs."
+          },
+          "enable_pbr": {
+            "type": "boolean",
+            "default": false,
+            "description": "Produce PBR texture maps."
+          },
+          "remove_lighting": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Remove baked lighting (model-dependent support)."
+          },
+          "target_formats": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "glb",
+                "obj",
+                "fbx",
+                "stl",
+                "usdz",
+                "3mf"
+              ]
+            },
+            "description": "Additional export formats."
+          },
+          "texture_resolution": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "2k",
+              "4k",
+              "8k"
+            ],
+            "description": "Texture resolution tier (defaults to 2k)."
+          },
+          "hd_texture": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "deprecated": true,
+            "description": "Deprecated; equivalent to texture_resolution: 4k."
+          },
+          "alpha_thumbnail": {
+            "type": "boolean",
+            "default": false,
+            "description": "Opt in to a transparent-background preview."
+          }
+        }
+      },
+      "RemeshRequest": {
+        "type": "object",
+        "description": "Remesh request. Provide exactly one of `input_task_id` or `model_url`.",
+        "properties": {
+          "input_task_id": {
+            "type": "string",
+            "description": "Prior task to remesh."
+          },
+          "model_url": {
+            "type": "string",
+            "description": "Model as an http(s) URL or data URI."
+          },
+          "target_formats": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "glb",
+                "obj",
+                "fbx",
+                "stl",
+                "usdz",
+                "blend",
+                "3mf"
+              ]
+            },
+            "description": "Output formats. Defaults to [\"glb\"]."
+          },
+          "topology": {
+            "type": "string",
+            "enum": [
+              "quad",
+              "triangle"
+            ],
+            "default": "triangle",
+            "description": "Output mesh topology."
+          },
+          "target_polycount": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 300000,
+            "default": 30000,
+            "description": "Target polygon count."
+          },
+          "decimation_mode": {
+            "type": "integer",
+            "enum": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "description": "Decimation algorithm selector."
+          },
+          "resize_height": {
+            "type": "number",
+            "format": "float",
+            "description": "Target height (meters). Mutually exclusive with resize_longest_side and auto_size."
+          },
+          "resize_longest_side": {
+            "type": "number",
+            "format": "float",
+            "description": "Target longest side (meters). Mutually exclusive with the other sizing options."
+          },
+          "auto_size": {
+            "type": "boolean",
+            "default": false,
+            "description": "Auto-estimate real-world size. Mutually exclusive with resize_height."
+          },
+          "origin_at": {
+            "type": "string",
+            "enum": [
+              "bottom",
+              "center"
+            ],
+            "description": "Where to place the model origin."
+          },
+          "convert_format_only": {
+            "type": "boolean",
+            "default": false,
+            "description": "Only re-export formats (no remesh). When true, sizing/topology/polycount are ignored."
+          },
+          "alpha_thumbnail": {
+            "type": "boolean",
+            "default": false,
+            "description": "Opt in to a transparent-background preview."
+          }
+        }
+      },
+      "ConvertRequest": {
+        "type": "object",
+        "description": "Convert request. Provide exactly one of `input_task_id` or `model_url`. `target_formats` is required.",
+        "properties": {
+          "input_task_id": {
+            "type": "string",
+            "description": "Prior task to convert."
+          },
+          "model_url": {
+            "type": "string",
+            "description": "Model as an http(s) URL or data URI."
+          },
+          "target_formats": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "enum": [
+                "glb",
+                "obj",
+                "fbx",
+                "stl",
+                "usdz",
+                "blend",
+                "3mf"
+              ]
+            },
+            "description": "Output formats (at least one)."
+          }
+        },
+        "required": [
+          "target_formats"
+        ]
+      },
+      "ResizeRequest": {
+        "type": "object",
+        "description": "Resize request. Provide exactly one of `input_task_id` or `model_url`, and at least one of `resize_height`, `resize_longest_side`, or `auto_size`.\n",
+        "properties": {
+          "input_task_id": {
+            "type": "string",
+            "description": "Prior task to resize."
+          },
+          "model_url": {
+            "type": "string",
+            "description": "Model as an http(s) URL or data URI."
+          },
+          "resize_height": {
+            "type": "number",
+            "format": "float",
+            "minimum": 0,
+            "description": "Target height (meters). Mutually exclusive with auto_size."
+          },
+          "resize_longest_side": {
+            "type": "number",
+            "format": "float",
+            "minimum": 0,
+            "description": "Target longest side (meters). Mutually exclusive with the other sizing options."
+          },
+          "auto_size": {
+            "type": "boolean",
+            "default": false,
+            "description": "Auto-estimate real-world size."
+          },
+          "origin_at": {
+            "type": "string",
+            "enum": [
+              "bottom",
+              "center"
+            ],
+            "default": "bottom",
+            "description": "Where to place the model origin."
+          }
+        }
+      },
+      "UvUnwrapRequest": {
+        "type": "object",
+        "description": "UV Unwrap request. Provide exactly one of `input_task_id` or `model_url` (a GLB).",
+        "properties": {
+          "input_task_id": {
+            "type": "string",
+            "description": "Prior task to UV-unwrap."
+          },
+          "model_url": {
+            "type": "string",
+            "description": "GLB as an http(s) URL or data URI."
+          }
+        }
+      },
+      "RiggingRequest": {
+        "type": "object",
+        "description": "Rigging request. Provide exactly one of `input_task_id` or `model_url` (a GLB).",
+        "properties": {
+          "input_task_id": {
+            "type": "string",
+            "description": "Prior task to rig."
+          },
+          "model_url": {
+            "type": "string",
+            "description": "GLB URL to rig."
+          },
+          "texture_image_url": {
+            "type": "string",
+            "description": "Optional texture PNG (must end in .png)."
+          },
+          "name": {
+            "type": "string",
+            "description": "Task name."
+          },
+          "animation_type": {
+            "type": "string",
+            "enum": [
+              "biped",
+              "quadruped"
+            ],
+            "default": "biped",
+            "description": "Skeleton type."
+          },
+          "height_meters": {
+            "type": "number",
+            "format": "float",
+            "minimum": 0,
+            "default": 1.7,
+            "description": "Target character height (meters)."
+          }
+        }
+      },
+      "AnimationRequest": {
+        "type": "object",
+        "description": "Animation request. Applies library animation(s) to a rigged model. Provide exactly one of `action_id` or `action_ids`.",
+        "properties": {
+          "rig_task_id": {
+            "type": "string",
+            "description": "A completed Rigging task ID."
+          },
+          "name": {
+            "type": "string",
+            "description": "Task name."
+          },
+          "action_id": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 32767,
+            "description": "Animation to apply. Valid IDs are data-driven; see the Animation Library at https://docs.meshy.ai/en/api/animation-library.\n"
+          },
+          "action_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 10,
+            "uniqueItems": true,
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 32767
+            },
+            "description": "Several animations to apply at once, returned as a single file with one clip per action, in the order given here. Costs 3 credits per action. Valid IDs are data-driven; see the Animation Library at https://docs.meshy.ai/en/api/animation-library.\n"
+          },
+          "post_process": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Optional post-processing. Applies to the merged file when action_ids is used.",
+            "properties": {
+              "operation_type": {
+                "type": "string",
+                "enum": [
+                  "change_fps",
+                  "fbx2usdz",
+                  "extract_armature"
+                ],
+                "description": "Post-processing operation."
+              },
+              "fps": {
+                "type": "integer",
+                "enum": [
+                  24,
+                  25,
+                  30,
+                  60
+                ],
+                "default": 30,
+                "description": "Frame rate for change_fps."
+              }
+            }
+          }
+        },
+        "required": [
+          "rig_task_id"
+        ]
+      },
+      "TextToImageRequest": {
+        "type": "object",
+        "description": "Text to Image request.",
+        "properties": {
+          "ai_model": {
+            "type": "string",
+            "enum": [
+              "nano-banana",
+              "nano-banana-pro",
+              "nano-banana-2",
+              "nano-banana-2-lite",
+              "gpt-image-2",
+              "gpt-image-2-5-flare",
+              "gpt-image-2-5-sunburst"
+            ],
+            "description": "Image model to use."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Text prompt."
+          },
+          "generate_multi_view": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Produce a 4-view split image instead of a single image."
+          },
+          "pose_mode": {
+            "type": "string",
+            "enum": [
+              "a-pose",
+              "t-pose"
+            ],
+            "description": "Force a rest pose (may upgrade the model and require a higher tier)."
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "1:1",
+              "16:9",
+              "9:16",
+              "4:3",
+              "3:4",
+              "3:2",
+              "2:3"
+            ],
+            "default": "1:1",
+            "description": "Output aspect ratio. Supported values depend on the model (GPT Image models: 1:1,16:9,9:16,4:3,3:4,3:2,2:3; nano-banana family: 1:1,16:9,9:16,4:3,3:4). Cannot be combined with generate_multi_view.\n"
+          },
+          "remove_background": {
+            "type": "boolean",
+            "default": false,
+            "description": "Return a transparent RGBA cutout (single-image only)."
+          }
+        },
+        "required": [
+          "ai_model",
+          "prompt"
+        ]
+      },
+      "ImageToImageRequest": {
+        "type": "object",
+        "description": "Image to Image request. Provide exactly one of `input_task_id` or `reference_image_urls`; if both are sent, `input_task_id` wins.",
+        "properties": {
+          "ai_model": {
+            "type": "string",
+            "enum": [
+              "nano-banana",
+              "nano-banana-pro",
+              "nano-banana-2",
+              "nano-banana-2-lite",
+              "gpt-image-2",
+              "gpt-image-2-5-flare",
+              "gpt-image-2-5-sunburst"
+            ],
+            "description": "Edit model to use."
+          },
+          "input_task_id": {
+            "type": "string",
+            "description": "SUCCEEDED Text to Image / Image to Image task (multi-view included) of yours whose output images become the reference images. ALL of its images are used, so a multi-view source fills several of the 5 slots. Mutually exclusive with reference_image_urls.\n"
+          },
+          "reference_image_urls": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5,
+            "items": {
+              "type": "string",
+              "description": "http(s) URL or data URI."
+            },
+            "description": "1-5 reference images to edit from. Mutually exclusive with input_task_id."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Edit prompt."
+          },
+          "generate_multi_view": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Produce a 4-view split image instead of a single image."
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "1:1",
+              "16:9",
+              "9:16",
+              "4:3",
+              "3:4",
+              "3:2",
+              "2:3"
+            ],
+            "default": "1:1",
+            "description": "Output aspect ratio (model-dependent; cannot be combined with generate_multi_view)."
+          },
+          "remove_background": {
+            "type": "boolean",
+            "default": false,
+            "description": "Return a transparent RGBA cutout (single-image only)."
+          }
+        },
+        "required": [
+          "ai_model",
+          "prompt"
+        ]
+      },
+      "PrintMultiColorRequest": {
+        "type": "object",
+        "description": "Multi-Color Print request. Provide exactly one of `input_task_id` or `model_url` (GLB or FBX).",
+        "properties": {
+          "input_task_id": {
+            "type": "string",
+            "description": "Prior task whose GLB to use."
+          },
+          "model_url": {
+            "type": "string",
+            "description": "GLB/FBX as an http(s) URL or data URI."
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "realistic",
+              "cartoon"
+            ],
+            "default": "realistic",
+            "description": "Color-placement algorithm."
+          },
+          "max_colors": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16,
+            "default": 4,
+            "description": "Target color count."
+          },
+          "max_depth": {
+            "type": "integer",
+            "minimum": 3,
+            "maximum": 6,
+            "default": 4,
+            "description": "Quadtree depth (realistic style only)."
+          },
+          "printer_brand": {
+            "type": "string",
+            "enum": [
+              "bambu",
+              "anycubic",
+              "creality",
+              "flashforge",
+              "snapmaker",
+              "elegoo",
+              "prusa",
+              "qidi",
+              "ankermake"
+            ],
+            "default": "bambu",
+            "description": "Printer brand whose slicer preset (default printer, 0.4 mm nozzle) is written into the 3MF."
+          }
+        }
+      },
+      "PrintSplitRequest": {
+        "type": "object",
+        "description": "Auto Split request. `input_task_id` must be a succeeded image-to-3d, multi-image-to-3d, text-to-3d (preview), remesh, convert or resize task whose model was generated with Meshy 6 or Meshy 7. A textured input is accepted; the split rebuilds the cut surfaces, so the result is always untextured.\n",
+        "properties": {
+          "input_task_id": {
+            "type": "string",
+            "description": "Prior task whose model to split. A textured model is accepted and its texture is not carried into the result."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "by_parts",
+              "by_color"
+            ],
+            "default": "auto",
+            "description": "auto lets Meshy choose the cuts; by_parts / by_color cut along the parts or color regions named in `prompt`."
+          },
+          "prompt": {
+            "type": "string",
+            "maxLength": 600,
+            "description": "Names the parts to split into (1-10); naming a single part leaves the unnamed remainder as its own part. Required for by_parts / by_color; ignored for auto. A description that asks for no split or names more than 10 parts is rejected with 400 and not charged; one Meshy cannot read at all falls back to auto and the task reports prompt_ignored: true."
+          },
+          "target_formats": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "glb",
+                "obj",
+                "fbx",
+                "stl",
+                "usdz",
+                "blend",
+                "3mf"
+              ]
+            },
+            "default": [
+              "glb"
+            ],
+            "description": "Export formats. Formats that support scene objects carry each part as a separate object; stl fuses all parts into one solid."
+          },
+          "layout": {
+            "type": "string",
+            "enum": [
+              "assembled",
+              "on_plate"
+            ],
+            "default": "assembled",
+            "description": "Arrangement baked into every output format: assembled keeps the source pose; on_plate lays the parts flat and spread on the build plate."
+          },
+          "connectors": {
+            "type": "boolean",
+            "default": false,
+            "description": "Add mortise-and-tenon connectors at each cut."
+          },
+          "connector_type": {
+            "type": "string",
+            "enum": [
+              "cube",
+              "cylinder"
+            ],
+            "default": "cube",
+            "description": "Connector shape (only when connectors is true)."
+          },
+          "connector_size": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 0.8,
+            "default": 0.5,
+            "description": "Connector size relative to the cut surface (only when connectors is true)."
+          },
+          "connector_height": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 0.8,
+            "default": 0.1,
+            "description": "Connector height relative to the cut surface (only when connectors is true)."
+          }
+        },
+        "required": [
+          "input_task_id"
+        ]
+      },
+      "PrintRepairRequest": {
+        "type": "object",
+        "description": "Print Repair request. Provide exactly one of `input_task_id` or `model_url` (GLB, glTF, OBJ, FBX, or STL). At most one of intended_print_height_mm and intended_print_longest_side_mm.",
+        "properties": {
+          "input_task_id": {
+            "type": "string",
+            "description": "Prior task whose model to repair."
+          },
+          "model_url": {
+            "type": "string",
+            "description": "Model as an http(s) URL or data URI."
+          },
+          "alpha_thumbnail": {
+            "type": "boolean",
+            "default": false,
+            "description": "Opt in to a transparent-background preview."
+          },
+          "printer_type": {
+            "type": "string",
+            "enum": [
+              "fdm",
+              "sla",
+              "full_color"
+            ],
+            "description": "Printer that sets the minimum wall thickness for the size-aware check. fdm when a print size is sent without it, unless an analyze task passed as input_task_id supplies the printer."
+          },
+          "intended_print_height_mm": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1000,
+            "description": "Planned print height in millimeters, rounded to a whole mm. GLB input only (a .glb model_url or any input_task_id). Mutually exclusive with intended_print_longest_side_mm."
+          },
+          "intended_print_longest_side_mm": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1000,
+            "description": "Planned print longest side in millimeters, rounded to a whole mm. Mutually exclusive with intended_print_height_mm."
+          }
+        }
+      },
+      "PrintAnalyzeRequest": {
+        "type": "object",
+        "description": "Printability Analysis request. Provide exactly one of `input_task_id` or `model_url` (GLB, glTF, OBJ, FBX, or STL). At most one of intended_print_height_mm and intended_print_longest_side_mm.",
+        "properties": {
+          "input_task_id": {
+            "type": "string",
+            "description": "Prior task to analyze."
+          },
+          "model_url": {
+            "type": "string",
+            "description": "Model as an http(s) URL or data URI."
+          },
+          "printer_type": {
+            "type": "string",
+            "enum": [
+              "fdm",
+              "sla",
+              "full_color"
+            ],
+            "description": "Printer that sets the minimum wall thickness for the size-aware check. fdm when a print size is sent without it."
+          },
+          "intended_print_height_mm": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1000,
+            "description": "Planned print height in millimeters, rounded to a whole mm. GLB input only (a .glb model_url or any input_task_id). Mutually exclusive with intended_print_longest_side_mm."
+          },
+          "intended_print_longest_side_mm": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1000,
+            "description": "Planned print longest side in millimeters, rounded to a whole mm. Mutually exclusive with intended_print_height_mm."
+          }
+        }
+      },
+      "Task": {
+        "type": "object",
+        "description": "A generation task (image-to-3d, multi-image-to-3d, retexture, remesh, convert, resize, uv-unwrap, print/multi-color, print/repair, print/split). Prompt/style fields are echoes of the request and are empty for modes that do not use them.\n",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "description": "Task type."
+          },
+          "name": {
+            "type": "string"
+          },
+          "art_style": {
+            "type": "string"
+          },
+          "object_prompt": {
+            "type": "string"
+          },
+          "style_prompt": {
+            "type": "string"
+          },
+          "negative_prompt": {
+            "type": "string"
+          },
+          "texture_prompt": {
+            "type": "string"
+          },
+          "texture_image_url": {
+            "type": "string"
+          },
+          "text_style_prompt": {
+            "type": "string"
+          },
+          "image_style_url": {
+            "type": "string"
+          },
+          "multiview_image_urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "texture_image_urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaskStatus"
+          },
+          "created_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Creation time (epoch ms)."
+          },
+          "progress": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "preceding_tasks": {
+            "type": "integer",
+            "description": "Queue position while pending."
+          },
+          "started_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Start time (epoch ms; 0 if not started)."
+          },
+          "finished_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Finish time (epoch ms; 0 if not finished)."
+          },
+          "expires_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Asset download deadline (epoch ms)."
+          },
+          "task_error": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TaskError"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Present when the task fails."
+          },
+          "model_url": {
+            "type": "string",
+            "deprecated": true,
+            "description": "Deprecated; use model_urls."
+          },
+          "model_urls": {
+            "$ref": "#/components/schemas/ModelURLs"
+          },
+          "thumbnail_url": {
+            "type": "string"
+          },
+          "alpha_thumbnail_url": {
+            "type": "string",
+            "description": "Transparent-background preview (when opted in)."
+          },
+          "thumbnail_urls": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Cardinal-view thumbnails (image-to-3d only)."
+          },
+          "texture_urls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TextureURL"
+            }
+          },
+          "remove_lighting": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "ultra_mode": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "deprecated": true,
+            "description": "Deprecated; read geometry_resolution instead."
+          },
+          "geometry_resolution": {
+            "type": "string",
+            "description": "Echoed Ultra tier (2k or 4k); omitted when the task did not run an Ultra tier."
+          },
+          "hd_texture": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "deprecated": true,
+            "description": "Deprecated; see texture_resolution."
+          },
+          "texture_resolution": {
+            "type": "string",
+            "description": "Texture tier (e.g. 4k, 8k)."
+          },
+          "consumed_credits": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Credits consumed."
+          },
+          "prompt_ignored": {
+            "type": "boolean",
+            "description": "True when a by_parts / by_color print/split prompt named no parts and Meshy split the model automatically instead; present from PENDING on. Omitted for auto tasks, when the prompt was followed, and for other task types."
+          },
+          "part_count": {
+            "type": "integer",
+            "description": "Number of printable parts a print/split produced; formats that support scene objects carry one object per part, stl fuses them into one solid. Degenerate slivers are removed before export and not counted. Omitted for other task types."
+          },
+          "intended_print": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/IntendedPrint"
+              }
+            ],
+            "description": "print/repair only: the print a size-aware repair ran for (sent, or inherited from a size-aware analyze task); present from PENDING on. Omitted otherwise."
+          },
+          "print_repair_report": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PrintRepairReport"
+              }
+            ],
+            "description": "print/repair only: what a size-aware repair did; present once it has succeeded."
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "created_at",
+          "progress"
+        ]
+      },
+      "IntendedPrint": {
+        "type": "object",
+        "description": "The print a size-aware check or repair ran for, in millimeters. Every key is always present.",
+        "properties": {
+          "printer_type": {
+            "type": "string",
+            "enum": [
+              "fdm",
+              "sla",
+              "full_color"
+            ]
+          },
+          "height_mm": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Print height when sized by height; otherwise null."
+          },
+          "longest_side_mm": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Print longest side; null until measured for a height request."
+          },
+          "wall_thickness_mm": {
+            "type": "number",
+            "description": "Minimum wall thickness for printer_type."
+          },
+          "dimensions_mm": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "[width, depth, height] at this size. GLB input only; null otherwise and until measured."
+          }
+        },
+        "required": [
+          "printer_type",
+          "height_mm",
+          "longest_side_mm",
+          "wall_thickness_mm",
+          "dimensions_mm"
+        ]
+      },
+      "PrintRepairReport": {
+        "type": "object",
+        "description": "Before/after record of a size-aware print repair.",
+        "properties": {
+          "route": {
+            "type": "string",
+            "enum": [
+              "thin_wall",
+              "topology",
+              "topology_unmeasured"
+            ],
+            "description": "thin_wall: walls thickened; topology: walls were thick enough; topology_unmeasured: walls could not be measured."
+          },
+          "applied": {
+            "type": "boolean",
+            "description": "Whether wall thickening changed the mesh (thin_wall route only)."
+          },
+          "faces_before": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Input face count (thin_wall route only)."
+          },
+          "faces_after": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Repaired face count (thin_wall route only)."
+          },
+          "thin_area_ratio_before": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Fraction of the input surface thinner than the minimum wall; omitted if the input could not be measured."
+          },
+          "thin_area_ratio_after": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Same fraction on the repaired model; omitted if not measured."
+          }
+        },
+        "required": [
+          "route"
+        ]
+      },
+      "ThinWalls": {
+        "type": "object",
+        "description": "Wall-thickness result at the size in intended_print.",
+        "properties": {
+          "thin_area_ratio": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Fraction of the surface thinner than the minimum wall; null if not measured."
+          },
+          "has_thin_walls": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "True when any part of the surface is thin. Informational; use status."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "healthy",
+              "error",
+              "unknown"
+            ],
+            "description": "error when thin_area_ratio is above 0.05; unknown when not measured."
+          }
+        },
+        "required": [
+          "thin_area_ratio",
+          "has_thin_walls",
+          "status"
+        ]
+      },
+      "TextTo3DTask": {
+        "type": "object",
+        "description": "A Text to 3D (v2) task.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string",
+            "description": "Legacy preview/refine phase; omitted for one-call fused tasks."
+          },
+          "name": {
+            "type": "string"
+          },
+          "model_type": {
+            "type": "string"
+          },
+          "seed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "art_style": {
+            "type": "string"
+          },
+          "texture_richness": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "negative_prompt": {
+            "type": "string"
+          },
+          "texture_prompt": {
+            "type": "string"
+          },
+          "texture_image_url": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaskStatus"
+          },
+          "created_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Creation time (epoch ms)."
+          },
+          "progress": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "preceding_tasks": {
+            "type": "integer",
+            "description": "Queue position while pending."
+          },
+          "started_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "finished_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "task_error": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TaskError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model_urls": {
+            "$ref": "#/components/schemas/ModelURLs"
+          },
+          "thumbnail_url": {
+            "type": "string"
+          },
+          "alpha_thumbnail_url": {
+            "type": "string"
+          },
+          "video_url": {
+            "type": "string",
+            "deprecated": true,
+            "description": "Deprecated."
+          },
+          "texture_urls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TextureURL"
+            }
+          },
+          "remove_lighting": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "hd_texture": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "deprecated": true
+          },
+          "texture_resolution": {
+            "type": "string"
+          },
+          "ultra_mode": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "deprecated": true,
+            "description": "Deprecated; read geometry_resolution instead."
+          },
+          "geometry_resolution": {
+            "type": "string",
+            "description": "Echoed Ultra tier (2k or 4k); omitted when the task did not run an Ultra tier."
+          },
+          "consumed_credits": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "created_at",
+          "progress"
+        ]
+      },
+      "ImageGenerationTask": {
+        "type": "object",
+        "description": "A Text to Image or Image to Image task.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "ai_model": {
+            "type": "string",
+            "description": "User-facing model name."
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaskStatus"
+          },
+          "progress": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "created_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Creation time (epoch ms)."
+          },
+          "started_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "finished_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "expires_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "preceding_tasks": {
+            "type": "integer"
+          },
+          "task_error": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TaskError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "image_urls": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uri"
+            },
+            "description": "Output image URLs on success."
+          },
+          "consumed_credits": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "created_at",
+          "progress"
+        ]
+      },
+      "RiggingTask": {
+        "type": "object",
+        "description": "A Rigging task.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaskStatus"
+          },
+          "created_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Creation time (epoch ms)."
+          },
+          "progress": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "preceding_tasks": {
+            "type": "integer"
+          },
+          "started_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "finished_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "expires_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "task_error": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TaskError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "result": {
+            "$ref": "#/components/schemas/RiggingResult"
+          },
+          "consumed_credits": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "created_at",
+          "progress"
+        ]
+      },
+      "RiggingResult": {
+        "type": "object",
+        "description": "Rigging output (populated on success).",
+        "properties": {
+          "rigged_character_fbx_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "rigged_character_glb_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "basic_animations": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BasicAnimations"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "BasicAnimations": {
+        "type": "object",
+        "description": "Preset walk/run clips generated alongside the rig.",
+        "properties": {
+          "walking_glb_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "walking_fbx_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "walking_armature_glb_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "running_glb_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "running_fbx_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "running_armature_glb_url": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      },
+      "AnimationTask": {
+        "type": "object",
+        "description": "An Animation task.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaskStatus"
+          },
+          "created_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Creation time (epoch ms)."
+          },
+          "progress": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "preceding_tasks": {
+            "type": "integer"
+          },
+          "started_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "finished_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "expires_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "task_error": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TaskError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "result": {
+            "$ref": "#/components/schemas/AnimationResult"
+          },
+          "consumed_credits": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "created_at",
+          "progress"
+        ]
+      },
+      "AnimationResult": {
+        "type": "object",
+        "description": "Animation output (populated on success).",
+        "properties": {
+          "animation_glb_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "animation_fbx_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "processed_usdz_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "processed_armature_fbx_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "processed_animation_fps_fbx_url": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      },
+      "AnimationLibraryItem": {
+        "type": "object",
+        "description": "One preset action in the animation library.",
+        "properties": {
+          "action_id": {
+            "type": "integer",
+            "description": "Value to pass as `action_id`. Unique and stable, but not contiguous."
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable label. Not unique across animations."
+          },
+          "key": {
+            "type": "string",
+            "description": "Unique stable slug for the animation."
+          },
+          "category": {
+            "type": "string"
+          },
+          "sub_category": {
+            "type": "string"
+          },
+          "preview_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Animated GIF preview of the action."
+          }
+        },
+        "required": [
+          "action_id",
+          "name",
+          "key",
+          "category",
+          "sub_category",
+          "preview_url"
+        ]
+      },
+      "PrintAnalyzeTask": {
+        "type": "object",
+        "description": "A Printability Analysis task.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaskStatus"
+          },
+          "progress": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "created_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Creation time (epoch ms)."
+          },
+          "started_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "finished_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "expires_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "preceding_tasks": {
+            "type": "integer"
+          },
+          "task_error": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TaskError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "printability": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PrintabilityDetail"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Present on success."
+          },
+          "consumed_credits": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "created_at",
+          "progress"
+        ]
+      },
+      "PrintabilityDetail": {
+        "type": "object",
+        "properties": {
+          "_version": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "Printability verdict. For a size-aware task, the worse of the topology verdict and thin_walls.status."
+          },
+          "issue_count": {
+            "type": "integer"
+          },
+          "error_count": {
+            "type": "integer"
+          },
+          "warning_count": {
+            "type": "integer"
+          },
+          "metrics": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PrintabilityMetrics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "intended_print": {
+            "$ref": "#/components/schemas/IntendedPrint"
+          },
+          "thin_walls": {
+            "$ref": "#/components/schemas/ThinWalls"
+          },
+          "evaluated_at": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Evaluation time (epoch ms)."
+          }
+        }
+      },
+      "PrintabilityMetrics": {
+        "type": "object",
+        "properties": {
+          "is_watertight": {
+            "type": "boolean"
+          },
+          "volume": {
+            "type": "number",
+            "format": "double"
+          },
+          "non_manifold_edges": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "degenerate_faces": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "holes": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "BalanceResponse": {
+        "type": "object",
+        "properties": {
+          "balance": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total available credits."
+          }
+        },
+        "required": [
+          "balance"
+        ]
+      },
+      "UsageRecord": {
+        "type": "object",
+        "description": "One task's usage entry: a billing row about a task, metadata only — no request bodies and no asset URLs. To fetch the task itself, pass `task_id` to the corresponding retrieve endpoint.\n",
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the task this record bills."
+          },
+          "endpoint": {
+            "type": "string",
+            "description": "The endpoint the task ran on, e.g. `image-to-3d`. Text to 3D tasks report their phase."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "SUCCEEDED",
+              "FAILED"
+            ],
+            "description": "Terminal task status."
+          },
+          "created_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Task creation time, in unix milliseconds."
+          },
+          "finished_at": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Completion time in unix milliseconds; null when the task carries no completion time."
+          },
+          "consumed_credits": {
+            "type": "integer",
+            "description": "Credits consumed by this task. 0 for FAILED tasks (credits are refunded on failure)."
+          },
+          "api_key_name": {
+            "type": "string",
+            "description": "Display name of the API key that ran the task."
+          },
+          "api_key_suffix": {
+            "type": "string",
+            "description": "Last four characters of that API key."
+          }
+        },
+        "required": [
+          "task_id",
+          "endpoint",
+          "status",
+          "created_at",
+          "finished_at",
+          "consumed_credits",
+          "api_key_name",
+          "api_key_suffix"
+        ]
+      }
+    }
+  }
+}
