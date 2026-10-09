@@ -167,9 +167,9 @@
 - 각 팀의 문서 갱신 작업은 코드 구현 시간과 별도로 기록한다. A에 대한 xHuman 읽기·갱신 제외를 명시하고 그 차이를 비교 결과에 남긴다. 제품에 반영할 결과는 이후 실제 코드 지도와 동기화한다.
 - 결과 보고에는 성공·실패·상한 초과·미실행을 모두 포함한다. 선택한 구현의 보완·문서 동기화·회귀 확인은 별도 통합 단계이며 자동 merge·push를 하지 않는다.
 
-## 진행자용 현재 코드와 재사용 지점
+## 진행자용 설계 당시 코드와 재사용 지점
 
-이 절은 설계 근거이며 참가자에게 동일한 코드 정답 지도를 주는 자료로 사용하지 않는다.
+이 절은 구현 전 설계 근거이며 참가자에게 동일한 코드 정답 지도를 주는 자료로 사용하지 않는다. 구현 결과의 현재 경로·정책은 코드 지도와 실행 기록을 따른다.
 
 - [모델 목록 계약](../../../apps/backend/Noxtend.Domain/Ports/IModelCatalog.cs), [목록·캐시](../../../apps/backend/Noxtend.Infrastructure/Llm/ModelCatalog.cs), [이미지 허용목록](../../../apps/backend/Noxtend.Infrastructure/Image/ImageModels.cs), [3D 고정 목록](../../../apps/backend/Noxtend.Infrastructure/Mesh/MeshModels.cs)
 - [단가 엔티티](../../../apps/backend/Noxtend.Tuning.Domain/Call/ModelPrice.cs), [비용 계산](../../../apps/backend/Noxtend.Tuning.Domain/Call/ModelPriceBook.cs), [단가 유스케이스](../../../apps/backend/Noxtend.Tuning.Application/Prices/PriceHandlers.cs), [단가 API](../../../apps/backend/Noxtend.Api/Controllers/PricesController.cs)
@@ -177,11 +177,11 @@
 - [관리자 단가 화면](../../../apps/frontend/src/features/screens/admin/PricesScreen.tsx), [쿼리](../../../apps/frontend/src/app/queries/useTuning.ts), [HTTP 클라이언트](../../../apps/frontend/src/infra/api/tuningApi.ts), [3D 비용 계산](../../../apps/frontend/src/domain/tuning/usage.ts)
 - [단가 도메인 테스트](../../../apps/backend/Noxtend.Tests/Domain/ModelPriceBookTests.cs), [유스케이스 테스트](../../../apps/backend/Noxtend.Tests/Application/ModelPriceHandlerTests.cs), [SQL 단가 테스트](../../../apps/backend/Noxtend.Tests/Infrastructure/ModelPriceMigrationTests.cs), [Frontend 사용량 테스트](../../../apps/frontend/src/domain/tuning/usage.test.ts)
 
-현재 모델 목록은 일부 원격 조회와 허용목록의 교집합이며, 3D는 고정 목록이다. 단가 키는 공급자 없는 모델 문자열과 시행일이고, 최초 행 이전에도 소급하는 로직이 있다. 3D 화면은 `CreditsConsumed`를 표시하지만 USD는 모델별 `PerImage` 정액으로 계산한다. 따라서 이번 기능의 공급자 식별·조건 구분·비소급 규칙은 UI 추가만으로 완성되지 않는다.
+설계 당시 모델 목록은 일부 원격 조회와 허용목록의 교집합이며, 3D는 고정 목록이다. 단가 키는 공급자 없는 모델 문자열과 시행일이고, 최초 행 이전에도 소급하는 로직이 있다. 3D 화면은 `CreditsConsumed`를 표시하지만 USD는 모델별 `PerImage` 정액으로 계산한다. 따라서 이번 기능의 공급자 식별·조건 구분·비소급 규칙은 UI 추가만으로 완성되지 않는다.
 
-## 설계 검토 및 다음 단계
+## 설계 검토 기록 및 구현 상태
 
-- 조사 에이전트는 코드·가격 자료를 읽기 전용으로 확인했다. 이들은 비교 참가자가 아니며 비교 실험은 아직 실행하지 않았다.
+- 조사 에이전트는 코드·가격 자료를 읽기 전용으로 확인했다. 이들은 비교 참가자가 아니며 이 설계 조사 시점에는 비교 실험을 실행하지 않았다.
 - 독립 설계 리뷰의 계정별 환산 전파·만료 후 재전송·미래 시행일 조기 적용 지적을 반영했다. 변경 없는 행의 적용 제외와 모델 alias의 시행일 회귀 기준도 명시했다.
 - 사용자가 기본 설계를 승인하고 구현 계획 작성과 공급자별 필터를 요청했다. 해당 추가 요구를 이 문서와 구현 계획에 함께 반영한다.
-- fixture·공통 평가 테스트·신규 API·SQL migration·수집기·UI는 아직 구현되지 않았다. 계획 검토 후 실행 요청을 받으면 정해진 Subagent-driven 방식으로 진행한다.
+- 구현 승인 후 fixture·공통 평가 테스트·신규 API·SQL migration·수집기·UI를 Subagent-driven으로 구현했다. 두 조건의 측정을 종료하고 A를 보완 기준선으로 선택했다. [구현 실행 기록](../plans/2026-10-09-model-price-update.md#실행-기록)과 [비교 결과](../../evals/model-price-update/results.md)가 현재 검증 상태·한계의 정본이다.

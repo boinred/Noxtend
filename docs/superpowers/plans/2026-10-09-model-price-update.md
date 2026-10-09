@@ -1,6 +1,6 @@
 # 모델·단가 업데이트 구현 계획
 
-> **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:subagent-driven-development`. 사용자와 정한 실행 방식을 유지하며 작업별 새 구현자·독립 리뷰어를 사용한다. 아래 체크박스는 구현 실행 전이며 완료 표시가 아니다.
+> **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:subagent-driven-development`. 사용자와 정한 실행 방식을 유지하며 작업별 새 구현자·독립 리뷰어를 사용한다. 아래 체크박스와 예시 파일·명령은 구현 전 계획 기록으로 보존한다. 현재 구현 완료 여부·실제 경로·실행 명령은 [실행 기록](#실행-기록)과 [비교 결과](../../evals/model-price-update/results.md)를 따른다.
 
 **Goal:** 5개 공급자의 모델·가격 변경을 수집해 공급자별로 필터링하고, 검토한 항목만 기존 비용을 보존하며 적용한다.
 
@@ -10,7 +10,7 @@
 
 **Spec:** [모델·단가 업데이트 설계](../specs/2026-10-09-model-price-update-design.md)
 
-**기준:** 2026-10-09, `main`의 `1c230beab48f7192d5bd39fa576dc227c819d32f`. 계획 작성만 요청됐으며 코드 구현·실험·DB 적용·유료 호출은 시작하지 않았다. 이 계획은 진행자용이고 A/B 참가자에게 그대로 전달하지 않는다.
+**계획 작성 당시 기준:** 2026-10-09, `main`의 `1c230beab48f7192d5bd39fa576dc227c819d32f`. 당시에는 계획만 요청됐고, 이후 승인된 구현·측정 결과는 아래 실행 기록에 추가했다. 이 계획은 진행자용이며 A/B 참가자는 고정 중립 brief를 사용했다.
 
 ## Global Constraints
 
@@ -168,8 +168,12 @@
 
 ## 실행 기록
 
-- 검토 기준 커밋: `49a98ac`. 커밋 후 목록 미노출·계정 간 후보 중복·공통 실행 검사·필터와 독립된 실패 요약의 누락을 보완했다. 테스트 파일과 패키지 추가는 후속 구현 계획이며 이번 문서 작업에서 실행하지 않았다.
-- 계획 작성: 기본 설계 승인과 공급자 필터 요구를 반영했다. 기본 설계 문서도 같은 동작으로 수정했다.
-- 실행 방식: Subagent-driven. 2026-10-09 사용자 실행 승인 후 독립 worktree `codex/model-price-update`에서 공통 준비 시작. A/B 측정은 공통 자료·검사 확정 후 시작하며 유료 호출·운영 DB 적용은 범위 밖이다.
-- 현재 검증: 두 문서 대상 `pnpm docs:check` 통과, 참조 기존 경로 존재 및 두 문서의 줄 끝 공백 없음 확인. 기능 테스트는 실행하지 않았다.
-- Task 1 공통 준비 진행 중이다. 실행 중 완료·실제 명령 결과·수정·미해결 항목을 이 절에 기록한다.
+- 실행 방식: 사용자 승인에 따라 Subagent-driven. 작업별 새 구현자·독립 리뷰어, 최종 전체 비교 리뷰와 한 번의 통합 보완/재리뷰를 사용했다. 상세 측정·한계·근거는 [비교 결과](../../evals/model-price-update/results.md)에 기록한다.
+- 기준 `49a98ac`, 문서 보완 `0862cc5`, 공통 준비 `f66566a`/`b7c906a`. 원본 checkout의 미커밋 문서는 보존했다. HTTP29/UI8, 공식 원문12/합성27 fixture를 준비·독립 리뷰 후 고정했다. 참가자별 실제 내부 파일/타입 분해는 중립 brief가 허용한 대로 다르며, 계획의 예시 파일명과 다르다는 이유만으로 누락으로 판단하지 않았다.
+- 기준 회귀: Backend 비유료1631/1631, Frontend unit440/440·E2E335/335·lint/typecheck/build 통과. 기능 이전 기준 결과다.
+- Task 1 완료: 공통 초기 HTTP2 PASS/27 expected405 RED, UI8 expected RED. 준비 리뷰 지적3건 수정 후 독립 재리뷰 통과. 준비 약46분은 A/B 구현 시간에서 제외했다.
+- Tasks 2–6 완료: 두 조건 모두 `gpt-6.1-sol/high`, 대화 이력 없는 작업별 구현·리뷰. A `9566b76`, B `f4aa0a9`에서 측정 종료. 각 작업의 지적을 수정·재리뷰했고, 관찰 활성시간 A6467초/B6598초다. clock 일부 누락과 지도 혼합 시간 때문에 정확한 생산성 비율을 주장하지 않는다.
+- Task 7 완료: 원본 B는 Backend1763/1763·unit468/468·E2E350/350·lint/typecheck/build 통과. 원본 A는 Backend1758/1758·unit450통과/1실패(native Select guard)·E2E345/345·lint/typecheck/build 통과다. 자동검사 통과와 최종 코드 리뷰의 교차 계약 발견을 구분했다.
+- 최종 독립 비교는 `gpt-6-astra/high`로 조건/시간/지도 차이를 가린 snapshot을 검토했다. 양쪽 그대로 적용 불가이며 A를 보완 기준선으로 선택했다. 같은 값/조건 중복 상충, SQL 정밀도, 기존 native Select guard3건을 통합에서 수정하기로 했다. B의 nullable DTO/reader·헤더·공식일 보존3건은 비교 기록으로 남긴다.
+- 통합 기준선: `codex/model-price-update`에 A를 fast-forward. 최종 보완 `7862b8b`: 가격 모든 일치 대조, preview/apply decimal(18,6) 방어, 기존 shared Select, 영향 코드 지도4곳. 관련 순수Backend123/123·Frontend7/7·build/lint/typecheck/hook 통과. 독립scoped재리뷰는 C1/C2/C3 해결·새 지적0으로 통과했다. 신규SQL6을 포함한 통합 Backend1780/1780(건너뜀0)·Frontend unit451/451·E2E345/345·lint/typecheck/build가 모두 통과해 실행 조건도 충족했다. 실제 검증 코드 기준은 `7862b8b`다.
+- 실행하지 않은 범위: 실 공급자·유료 생성·운영 DB 적용·main 병합·push·배포. 로컬 기능/검증과 이 외부 행동을 구분한다.

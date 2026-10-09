@@ -105,6 +105,6 @@ React 19·Vite·React Router·TanStack Query·Tailwind·shadcn/ui(Radix) 구성�
 
 ## 확인 기준과 미확인
 
-- 모델·단가 수집 확인: 2026-10-09, revision `9566b76`와 통합 보완 diff. 위 화면·hook·reader·필터 호출을 확인하고 native Select 가드와 단가 domain/API reader 순수 테스트를 실행했다. 통합 보완 E2E·전체 회귀는 별도 실행 기록에서 확인하며 실제 Backend 연결/실 공급자 확인으로 확대하지 않는다.
+- 모델·단가 수집 확인: 2026-10-09, revision `7862b8b`. 위 화면·hook·reader·필터 호출을 확인하고 native Select 가드와 단가 domain/API reader 순수 테스트를 실행했다. 통합 unit451/451·Fake E2E345/345·lint/typecheck/build 통과와 390px dark/1440px light 관찰은 [실행 결과](../evals/model-price-update/results.md#최종-통합-검증)에 기록했다. 실 공급자 end-to-end 확인으로 확대하지 않는다.
 - 마지막 확인: 2026-10-08, revision `d2cad8d`. 코드 지도 도입 때 문서의 코드 경로와 상대 링크 존재를 자동 대조했다. 서술된 규칙 전체를 코드와 다시 대조하지는 않았다.
 - 미확인: 실제 Backend와 연결한 화면 동작. E2E는 `tests/e2e/fakeApi.ts` 가짜 API 기준이며 `.test.tsx`는 수집되지 않는다.
