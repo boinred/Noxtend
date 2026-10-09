@@ -13,7 +13,8 @@ public sealed class OfficialTextPriceSourceTests
     public void Raw_standard_prices_are_parsed(string provider, string model, decimal input, decimal output)
     {
         var candidate = Assert.Single(Parse(provider, model));
-        Assert.Null(candidate.BlockedReason);
+        if (provider == "google") Assert.NotNull(candidate.BlockedReason);
+        else Assert.Null(candidate.BlockedReason);
         Assert.Equal(input, candidate.Terms!.InputPerMillion);
         Assert.Equal(output, candidate.Terms.OutputPerMillion);
         Assert.Contains("Standard", candidate.Conditions);
@@ -43,6 +44,34 @@ public sealed class OfficialTextPriceSourceTests
         Assert.Null(Assert.Single(Parse(provider, model)).Terms!.OfficialEffectiveFrom);
         Assert.Equal(DateTimeOffset.Parse("2099-01-01T00:00:00Z"),
             Assert.Single(Parse(provider, model, "future")).Terms!.OfficialEffectiveFrom);
+    }
+
+    [Fact]
+    public void Different_input_modality_rates_are_blocked_without_losing_display_terms()
+    {
+        var candidate = Assert.Single(Parse("google", "gemini-2.5-flash"));
+        Assert.NotNull(candidate.BlockedReason);
+        Assert.Equal(0.30m, candidate.Terms!.InputPerMillion);
+        Assert.Contains("audio", Assert.Single(candidate.Evidence).Conditions);
+        Assert.DoesNotContain("excludes audio", candidate.Conditions);
+    }
+
+    [Theory]
+    [InlineData("$0.4 (text / image / video)<br>$0.4 (audio)", false)]
+    [InlineData("$0.4 (text / image / video)<br>$0.8 (audio)", true)]
+    [InlineData("$0.4", false)]
+    public void Input_modality_policy_depends_on_rates_not_model_name(string input, bool blocked)
+    {
+        var html = $"""
+            <h2 id="synthetic-google-model">Synthetic input dimensions</h2><section><h3>Standard</h3>
+            <table><thead><tr><th>Price</th><th>Paid Tier, per 1M tokens in USD</th></tr></thead>
+            <tbody><tr><td>Input price</td><td>{input}</td></tr>
+            <tr><td>Output price</td><td>$2</td></tr></tbody></table></section>
+            """;
+        var candidate = Assert.Single(OfficialTextPriceParser.Parse("google", System.Text.Encoding.UTF8.GetBytes(html),
+            "https://official.example/pricing", DateTimeOffset.UtcNow, ["synthetic-google-model"]));
+        Assert.Equal(blocked, candidate.BlockedReason is not null);
+        Assert.Equal(0.4m, candidate.Terms!.InputPerMillion);
     }
 
     [Fact]

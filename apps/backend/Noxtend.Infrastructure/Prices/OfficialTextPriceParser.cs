@@ -139,7 +139,7 @@ internal static class OfficialTextPriceParser
             if (inputText is null || outputText is null) continue;
             if (Regex.IsMatch(outputText, @"^\$\d+(?:\.\d+)? per image\*?$"))
             {
-                if (!GoogleInput(inputText, "text / image", out var input) || !Money(outputText.Split(' ')[0], out var perImage)) continue;
+                if (!GoogleInput(inputText, "text / image", out var input, out _) || !Money(outputText.Split(' ')[0], out var perImage)) continue;
                 var notes = new List<string>();
                 for (var j = i + 1; j < elements.Length && elements[j].LocalName != "h2"; j++)
                     if (elements[j].LocalName == "p") notes.Add(Text(elements[j]));
@@ -150,15 +150,17 @@ internal static class OfficialTextPriceParser
                 return new Parsed("image", Standard + "; text/image input + image output", null, evidence,
                     "입력 토큰·출력 이미지 혼합 요금 계산 지원 필요");
             }
-            if (!GoogleInput(inputText, "text / image / video", out var textInput) || !Money(outputText, out var textOutput)) continue;
-            return new Parsed("text", Standard + "; text/image/video input; excludes audio", new(textInput, textOutput),
-                "Standard; Paid Tier, per 1M tokens in USD; input=" + inputText + "; output=" + outputText, null);
+            if (!GoogleInput(inputText, "text / image / video", out var textInput, out var mixedInput) || !Money(outputText, out var textOutput)) continue;
+            return new Parsed("text", Standard + "; text/image/video input" + (inputText.Contains("(audio)", StringComparison.Ordinal) ? "; audio input" : ""), new(textInput, textOutput),
+                "Standard; Paid Tier, per 1M tokens in USD; input=" + inputText + "; output=" + outputText,
+                mixedInput ? "입력 모달리티별 서로 다른 요금 계산 지원 필요" : null);
         }
         return null;
     }
 
-    private static bool GoogleInput(string value, string modalities, out decimal money)
+    private static bool GoogleInput(string value, string modalities, out decimal money, out bool mixedInput)
     {
+        mixedInput = false;
         if (Money(value, out money)) return true;
         var lines = value.Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         if (lines.Length == 0) return false;
@@ -166,7 +168,13 @@ internal static class OfficialTextPriceParser
         var suffix = " (" + modalities + ")";
         if (!main.EndsWith(suffix, StringComparison.Ordinal)) return false;
         if (lines.Length > 2 || lines.Length == 2 && !Regex.IsMatch(lines[1], @"^\$\d+(?:\.\d+)? \(audio\)$")) return false;
-        return Money(main[..^suffix.Length], out money);
+        if (!Money(main[..^suffix.Length], out money)) return false;
+        if (lines.Length == 2)
+        {
+            if (!Money(lines[1][..^" (audio)".Length], out var audioRate)) return false;
+            mixedInput = audioRate != money;
+        }
+        return true;
     }
 
     private static bool TokenMoney(string value, out decimal money)

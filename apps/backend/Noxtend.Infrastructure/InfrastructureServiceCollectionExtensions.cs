@@ -381,6 +381,10 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<EstimateSimilarityCostHandler>();
 
         services.AddScoped<ListJobCallsHandler>();
+        services.AddSingleton<IPriceUpdateExecutionSupport, ExistingPriceUpdateExecutionSupport>();
+        services.AddScoped<IPriceUpdateStore, EfPriceUpdateStore>();
+        services.AddScoped<CollectPriceUpdateHandler>();
+        services.AddScoped<ApplyPriceUpdateHandler>();
         services.AddScoped<ListModelPricesHandler>();
         services.AddScoped<CreateModelPriceHandler>();
         services.AddScoped<UpdateModelPriceHandler>();
