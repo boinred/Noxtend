@@ -2,8 +2,6 @@
 
 `apps/backend/**`에 적용한다. 루트 `AGENTS.md`를 상속하고 작업 전에 [noxtend-workflow](../../.agents/skills/noxtend-workflow/SKILL.md)의 Backend·검증 자료를 읽는다. C# 코딩 스타일은 기존 파일의 스타일을 유지한다.
 
-LLM·AI 공급자·프롬프트·호출 내역은 코드 탐색 전에 [LLM 에이전트 개발 안내](../../docs/xHuman/README.md)에서 필요한 참조 문서를 고른다.
-
 ## 계층 경계
 
 API와 Worker는 같은 ASP.NET Core 프로세스에서 실행된다. 실제 등록·계약·상태·저장 코드와 `.csproj`를 기준으로 판단한다.

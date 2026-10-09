@@ -25,6 +25,8 @@ API와 Worker는 같은 ASP.NET Core 호스트에서 실행된다. 프로젝트 
 | 유사도 평가 | `EvaluateSimilarityHandler` → `ILlmProvider` | `Noxtend.Tests/Application/SimilarityEvaluateHandlerTests.cs`, `SimilarityStartHandlerTests.cs` |
 | 공급자 관리 | `ProvidersController` → `ProviderHandlers` → Provider 도메인·Repository | `Noxtend.Tests/Application/ProviderHandlerTests.cs`, API 공급자 테스트 |
 | 프롬프트·호출 내역·단가 | Tuning Controller → Tuning Application → Tuning Domain·Infrastructure adapter | `PromptGridTests.cs`, `TuningTests.cs`, `RecordingLlmProviderTests.cs`, 가격 관련 테스트 |
+| 장면 배치·revision | `SceneLayoutController` → `GetSceneLayoutHandler`·`SceneRevisionHandlers.cs` → `ISceneLayoutRepository` | `Noxtend.Tests/Application/SceneLayoutHandlerTests.cs`, `Infrastructure/SceneLayoutPersistenceTests.cs` |
+| 작업 접수·큐·Worker·재시도·3D 메시 | [작업 실행·저장소 지도](job-execution.md) | 해당 지도의 관련 테스트 |
 
 LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계산을 함께 바꿀 때는 [공급자와 프롬프트](providers-and-prompts.md)를 읽는다. `JobId` null 원본 생성 기록은 작업 삭제 대상이 아니며 전체 통계에만 포함한다. `EfJobRepository.DeleteIfTerminalAsync`와 `EfLlmCallRepository.ListByJobAsync`는 해당 JobId의 호출만 대상으로 삼는다.
 
@@ -118,3 +120,8 @@ LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계�
 - API 계약이 바뀌면 Frontend의 API 파서·타입·화면 사용처도 확인하고 양쪽 스택을 검증한다.
 - Backend 명령·Docker 요구·유료 smoke 조건은 [검증 절차](../../.agents/skills/noxtend-workflow/references/verification.md)를 따른다. 유료 smoke가 조건 미충족으로 건너뛴 경우 실 공급자 성공으로 보고하지 않는다.
 - 인프라·키 보존·실제 DB 적용을 건드리면 [배포 지침](../../deploy/AGENTS.md)도 확인한다.
+
+## 확인 기준과 미확인
+
+- 마지막 확인: 2026-10-08, revision `d2cad8d`. 코드 지도 도입 때 문서의 코드 경로와 상대 링크 존재를 자동 대조했다. 서술된 규칙 전체를 코드와 다시 대조하지는 않았다.
+- 미확인: configured `Program.cs` 호스트를 관통하는 동작, 실제 SQL Server의 migration 적용, 유료 공급자 품질. Fake·격리 SQL 테스트 범위 밖이며 실환경 확인이 필요하다.

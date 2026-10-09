@@ -95,3 +95,8 @@
 - 프롬프트 변수·스키마·응답 의미가 바뀌면 `PromptTemplate`, `IStage` 구현과 관련 `PromptVariableInjectionTests`, `PromptCompositionTests`, 단계 테스트를 확인한다.
 - `OpenAiProviderTests.cs`, `GoogleProviderTests.cs`, `ImageProviderUsageTests.cs`의 가짜 HTTP handler 패턴을 따른다. 변경한 어댑터에 기존 격리 테스트가 없으면 해당 프로토콜을 가짜 응답으로 검증한다. 프롬프트 저장·기록은 Fake·테스트 저장소로 검증하며, 일반 회귀에서 유료 실 API를 호출하지 않는다.
 - 권장 테스트 위치: `apps/backend/Noxtend.Tests/Application/`의 handler·provider 테스트, `Noxtend.Tests/Infrastructure/`의 seed·migration·저장소 테스트. 정확한 실행 명령과 Docker·smoke 조건은 [검증 절차](../../.agents/skills/noxtend-workflow/references/verification.md)를 따른다.
+
+## 확인 기준과 미확인
+
+- 마지막 확인: 2026-10-08, revision `d2cad8d`. 코드 지도 도입 때 문서의 코드 경로와 상대 링크 존재를 자동 대조했다. 서술된 규칙 전체를 코드와 다시 대조하지는 않았다.
+- 미확인: 실 공급자의 출력 품질과 응답 형식 변화, 단가 미등록 모델의 실제 비용. 일반 회귀는 Fake·가짜 HTTP 응답만 사용한다.

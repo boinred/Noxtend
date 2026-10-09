@@ -94,3 +94,8 @@ React 19·Vite·React Router·TanStack Query·Tailwind·shadcn/ui(Radix) 구성�
 - 성공 요약은 아이콘·이름·개수를 한 줄에 표시하고 원본 분석을 왼쪽, 배경 생성을 오른쪽 끝에 배치한다. 루프 작업의 후속 프레임 지표와 좁은 화면에서 필요한 줄바꿈을 유지하고, 단위 설명은 스크린 리더용으로 제공한다.
 - 상태 헤더의 새로고침·작업 취소는 접근성 이름과 `title`이 있는 원형 아이콘 버튼이다. 작업 취소는 기존 홈·관리 화면과 같은 브라우저 `confirm`을 사용하며 수락한 경우에만 `useCancelJob` 요청을 전송한다. 확인창 취소·닫기는 요청을 보내지 않고 현재 결과를 유지한다. 저장된 PNG·ZIP 유지와 취소 후 생성·검수 중단을 안내한다.
 - `tests/e2e/fakeApi.ts`의 선택 `sprites` 옵션만 새 `spriteFakeApi.ts`에 연결된다. dedicated Fake는 GUID·출력 크기/실제 알파가 맞는 디코딩 PNG·프레임/시트/manifest가 일치하는 ZIP과 요청 기록을 제공한다. 기존 3D fixture는 유지한다.
+
+## 확인 기준과 미확인
+
+- 마지막 확인: 2026-10-08, revision `d2cad8d`. 코드 지도 도입 때 문서의 코드 경로와 상대 링크 존재를 자동 대조했다. 서술된 규칙 전체를 코드와 다시 대조하지는 않았다.
+- 미확인: 실제 Backend와 연결한 화면 동작. E2E는 `tests/e2e/fakeApi.ts` 가짜 API 기준이며 `.test.tsx`는 수집되지 않는다.
