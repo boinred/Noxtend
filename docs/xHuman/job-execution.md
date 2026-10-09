@@ -49,7 +49,7 @@ TaskKind별 handler는 `TaskWorkerRegistration`의 표가 정본이다. 텍스�
 
 - 원본 계약: `NoxtendDbContext`, `Persistence/Configurations/`, Tuning 저장은 `Repositories/EfTuningRepositories.cs`
 - 생성 코드: `Persistence/Migrations/<timestamp>_<Name>.cs`·`.Designer.cs`·`NoxtendDbContextModelSnapshot.cs`. 설계 시점 context는 `Persistence/DesignTimeDbContextFactory.cs`
-- 생성 명령(저장소 루트): `dotnet ef migrations add <Name> --project apps/backend/Noxtend.Infrastructure --startup-project apps/backend/Noxtend.Infrastructure`. `dotnet-ef`는 저장소 tool manifest에 없으므로 설치 버전을 EF 패키지와 맞춘다.
+- 생성 명령(저장소 루트): `dotnet ef migrations add <Name> --project apps/backend/Noxtend.Infrastructure --startup-project apps/backend/Noxtend.Infrastructure`. 루트 `dotnet-tools.json`에는 csharpier만 있고 `dotnet-ef`는 없으므로 별도 설치하고 버전을 EF 패키지와 맞춘다. `--startup-project apps/backend/Noxtend.Api`는 EF Design 패키지가 없어 실패한다.
 - 이미 적용된 migration은 고치지 않고 후속 migration을 만든다. 개발 DB에 `database update`를 실행하지 않는다.
 
 ## 관련 테스트

@@ -28,6 +28,6 @@ LLM·AI 공급자·프롬프트·호출 기록 작업은 [공급자와 프롬프
 - EF 모델 변경 시 SqlServer migration·snapshot·관련 persistence 테스트를 함께 검토한다.
 - 프롬프트·단가 시드는 `SeedPrompts`·`SeedModelPrices`와 기존 DB 갱신 migration을 함께 확인한다.
 - 저장 JSON은 `Noxtend.Infrastructure/Persistence/Serialization`의 구형 데이터 읽기·새 형식 쓰기를 검증한다.
-- migration 생성은 `DesignTimeDbContextFactory`와 `--project apps/backend/Noxtend.Infrastructure --startup-project apps/backend/Noxtend.Api`를 사용한다. 실제 DB 적용은 별도 승인 범위다.
+- migration 생성은 `DesignTimeDbContextFactory`와 `--project apps/backend/Noxtend.Infrastructure --startup-project apps/backend/Noxtend.Infrastructure`를 사용한다. 실제 DB 적용은 별도 승인 범위다.
 
 검증 명령·Docker 요구·유료 smoke 조건은 [verification.md](verification.md)를 읽는다. 컨테이너·실제 DB에 영향을 주는 작업은 [deployment.md](deployment.md)도 확인한다.
