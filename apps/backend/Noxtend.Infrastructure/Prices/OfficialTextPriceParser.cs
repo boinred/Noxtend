@@ -183,7 +183,7 @@ internal static class OfficialTextPriceParser
             decimal.TryParse(value[1..], NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out money);
     }
 
-    private static DateTimeOffset? EffectiveDate(IDocument document)
+    internal static DateTimeOffset? EffectiveDate(IDocument document)
     {
         var dates = document.QuerySelectorAll("time[datetime]")
             .Where(t => Text(t.ParentElement).StartsWith("All prices on this page become effective from", StringComparison.Ordinal))

@@ -93,7 +93,7 @@ public sealed class ModelPriceBook
     /// 행보다 오래됐으면 소급을 허용하는 **가장 오래된 행**으로 소급한다 — 이 표가 생기기 전의 호출을
     /// 통째로 미등록 처리하는 것보다 낫고, 그때의 단가로는 그 값이 유일한 근거다.
     /// </summary>
-    private ModelPrice? Lookup(string model, DateTimeOffset at)
+    public ModelPrice? Lookup(string model, DateTimeOffset at)
     {
         // 시행 전 비소급 행을 제외한 뒤 가장 구체적인 alias 선택
         var eligible = prices.Where(p => p.EffectiveFrom <= at || p.AllowHistoricalFallback).ToList();
@@ -109,7 +109,7 @@ public sealed class ModelPriceBook
     }
 
     /// <summary>모델 id 가 이 단가 행에 걸리는가 — 정확히 같거나, 날짜 접미사만 더 붙었거나.</summary>
-    private static bool Matches(string model, string key)
+    public static bool Matches(string model, string key)
     {
         if (!model.StartsWith(key, StringComparison.OrdinalIgnoreCase))
         {

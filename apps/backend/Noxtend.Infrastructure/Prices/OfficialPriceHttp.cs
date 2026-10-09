@@ -11,6 +11,8 @@ internal sealed class OfficialPriceHttp(HttpClient http)
         "api.openai.com/v1/models", "developers.openai.com/api/docs/pricing",
         "api.anthropic.com/v1/models", "platform.claude.com/docs/en/about-claude/pricing",
         "generativelanguage.googleapis.com/v1beta/models", "ai.google.dev/gemini-api/docs/pricing",
+        "developers.tripo3d.ai/en/models", "developers.tripo3d.ai/en/models/p1", "developers.tripo3d.ai/en/pricing",
+        "docs.meshy.ai/openapi.json", "docs.meshy.ai/en/api/pricing", "docs.meshy.ai/en/api/multi-image-to-3d",
     ];
 
     public async Task<byte[]> GetAsync(Uri uri, string? provider, string? apiKey, CancellationToken ct)

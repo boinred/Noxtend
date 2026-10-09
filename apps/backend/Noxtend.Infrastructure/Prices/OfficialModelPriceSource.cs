@@ -14,6 +14,7 @@ internal sealed class OfficialModelPriceSource(
         var provider = credential.Kind switch
         {
             ProviderKind.OpenAI => "openai", ProviderKind.Anthropic => "anthropic", ProviderKind.Google => "google",
+            ProviderKind.Tripo => "tripo", ProviderKind.Meshy => "meshy",
             _ => throw new OfficialPriceSourceException("해당 공급자의 공식 수집은 지원하지 않습니다"),
         };
         using var http = clients.CreateClient(OfficialPriceHttp.ClientName);
@@ -23,6 +24,8 @@ internal sealed class OfficialModelPriceSource(
     internal static async Task<OfficialPriceCollection> CollectTextAsync(
         OfficialPriceHttp http, Guid configId, string provider, string apiKey, TimeProvider clock, CancellationToken ct)
     {
+        if (provider is "tripo" or "meshy")
+            return await OfficialMeshPriceSource.CollectAsync(http, configId, provider, clock, ct);
         using var total = CancellationTokenSource.CreateLinkedTokenSource(ct);
         total.CancelAfter(TimeSpan.FromSeconds(120));
         var collectedAt = clock.GetUtcNow();
