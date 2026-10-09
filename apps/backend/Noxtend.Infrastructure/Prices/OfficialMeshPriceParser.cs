@@ -69,19 +69,30 @@ internal static class OfficialMeshPriceParser
         var conversion = publicPricing.QuerySelectorAll("div, span, p").Select(Text)
             .Where(p => hasApiPricing && Regex.IsMatch(p, @"^1 credit = \$(\d+(?:\.\d+)?) USD$")).Distinct(StringComparer.Ordinal).ToArray();
         var rates = conversion.SelectMany(p => Regex.Matches(p, @"1 credit = \$(\d+(?:\.\d+)?) USD"))
-            .Select(m => decimal.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture)).Distinct().ToArray();
+            .Select(m => Number(m.Groups[1].Value, out var value) ? (decimal?)value : null).Distinct().ToArray();
         decimal? usd = rates.Length == 1 ? rates[0] : null;
         evidence.Add(Evidence(detail, "https://developers.tripo3d.ai/en/models/p1", at,
             row is null ? UnknownReason : "Tripo P1; Pricing; Task Type / No Texture / Standard Texture / Detailed Texture; " +
                 string.Join(" / ", row.Children.Select(Text)) + "; USD/credit conversion from https://developers.tripo3d.ai/en/pricing: " + string.Join("; ", conversion),
-            usd is null ? null : credits, usd));
+            credits, usd));
         evidence.Add(Evidence(pricing, "https://developers.tripo3d.ai/en/pricing", at, conversion.Length == 0 ? "API Pricing; USD/credit 확인 필요" : string.Join("; ", conversion), usd: usd));
         var detailDate = OfficialTextPriceParser.EffectiveDate(document);
         var globalDate = OfficialTextPriceParser.EffectiveDate(publicPricing);
         var conflictingDate = detailDate is not null && globalDate is not null && detailDate != globalDate;
         var valid = credits is not null && usd is not null && !conflictingDate;
-        return new(model, "mesh", "multiview-to-3d", TripoConditions,
-            valid ? new(0, 0, PerImage: credits * usd, OfficialEffectiveFrom: detailDate ?? globalDate) : null,
+        OfficialPriceTerms? terms = null;
+        if (valid)
+        {
+            try
+            {
+                terms = new(0, 0, PerImage: credits * usd, OfficialEffectiveFrom: detailDate ?? globalDate);
+            }
+            catch (OverflowException)
+            {
+                valid = false;
+            }
+        }
+        return new(model, "mesh", "multiview-to-3d", TripoConditions, terms,
             evidence, valid ? null : conflictingDate ? "공식 시행일 상충 확인 필요" : UnknownReason);
     }
 

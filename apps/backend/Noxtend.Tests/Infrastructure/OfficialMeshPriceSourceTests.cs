@@ -105,19 +105,53 @@ public sealed class OfficialMeshPriceSourceTests
         Assert.Equal("공식 시행일 상충 확인 필요", candidate.BlockedReason);
     }
 
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("conflicting")]
+    public async Task Unverified_Tripo_conversion_preserves_confirmed_task_credits(string mutation)
+    {
+        var pricing = System.Text.Encoding.UTF8.GetString(Read("tripo-pricing.html"));
+        pricing = mutation == "missing"
+            ? pricing.Replace("1 credit = $0.01 USD", "USD conversion unavailable", StringComparison.Ordinal)
+            : pricing.Replace("</h1>", "</h1><div>1 credit = $0.02 USD</div>", StringComparison.Ordinal);
+        var result = await Collect("tripo", pricingBody: System.Text.Encoding.UTF8.GetBytes(pricing));
+        var candidate = Assert.Single(result.Candidates);
+        Assert.NotNull(result.PriceError);
+        Assert.NotNull(candidate.BlockedReason);
+        Assert.Null(candidate.Terms);
+        Assert.Contains(candidate.Evidence, e => e.CreditsPerTask == 50);
+        Assert.All(candidate.Evidence, e => Assert.Null(e.UsdPerCredit));
+    }
+
+    [Theory]
+    [InlineData("79228162514264337593543950336")]
+    [InlineData("79228162514264337593543950335")]
+    public async Task Tripo_conversion_and_product_overflow_stay_inside_collection_error_boundary(string usd)
+    {
+        var pricing = System.Text.Encoding.UTF8.GetString(Read("tripo-pricing.html"))
+            .Replace("1 credit = $0.01 USD", "1 credit = $" + usd + " USD", StringComparison.Ordinal);
+        var result = await Collect("tripo", pricingBody: System.Text.Encoding.UTF8.GetBytes(pricing));
+        var candidate = Assert.Single(result.Candidates);
+        Assert.Equal("partial", result.Status);
+        Assert.NotNull(result.PriceError);
+        Assert.NotNull(candidate.BlockedReason);
+        Assert.Null(candidate.Terms);
+        Assert.Contains(candidate.Evidence, e => e.CreditsPerTask == 50);
+    }
+
     private static byte[] Read(string file)
         => File.ReadAllBytes(Path.Combine(ModelPriceUpdateAcceptanceHost.FixtureRoot, file));
 
     private static Task<Noxtend.Tuning.Domain.Ports.OfficialPriceCollection> Collect(
-        string provider, string? mutation = null, CancellationToken ct = default)
+        string provider, string? mutation = null, CancellationToken ct = default, byte[]? pricingBody = null)
     {
-        var handler = new Fixtures(mutation);
+        var handler = new Fixtures(mutation, pricingBody);
         var http = new HttpClient(handler);
         return OfficialModelPriceSource.CollectTextAsync(new OfficialPriceHttp(http), Guid.NewGuid(),
             provider, "unused-test-key", TimeProvider.System, ct);
     }
 
-    private sealed class Fixtures(string? mutation) : HttpMessageHandler
+    private sealed class Fixtures(string? mutation, byte[]? pricingBody) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
@@ -138,7 +172,8 @@ public sealed class OfficialMeshPriceSourceTests
                 file = file[..^5] + "-" + mutation + ".html";
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new ByteArrayContent(File.ReadAllBytes(Path.Combine(ModelPriceUpdateAcceptanceHost.FixtureRoot, file))),
+                Content = new ByteArrayContent(file == "tripo-pricing.html" && pricingBody is not null
+                    ? pricingBody : File.ReadAllBytes(Path.Combine(ModelPriceUpdateAcceptanceHost.FixtureRoot, file))),
             });
         }
     }
