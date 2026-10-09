@@ -12,7 +12,7 @@ dotnet test apps/backend/Noxtend.Tests/Noxtend.Tests.csproj --filter FullyQualif
 pnpm --filter @nextend/frontend test:e2e tests/e2e/model-price-update-acceptance.spec.ts
 ```
 
-HTTP 명령은 29건을 수집한다. fixture 무결성 검사는 네트워크 없이 원문/파생 응답의 모든 SHA를 검증한다. 나머지 검사는 기존 SQL 공유 컨테이너에서 검사마다 새 DB를 만들고 host가 migration을 수행한다. 기존 단가 삭제/사전 등록 역시 HTTP를 사용한다. 개발/운영 DB로 대체하지 않는다. Worker를 해제하고 키는 ephemeral Data Protection으로 보호하며 일회용 DB 연결을 우선한다. 서버 시간을 주입한 TimeProvider로 이동해 30분 만료를 기다리지 않고 검증한다.
+HTTP 명령은 29건을 수집한다. fixture 무결성 검사는 네트워크 없이 원문/파생 응답의 모든 SHA를 검증한다. 기존 CRUD sanity는 주입된 outbound boundary의 설정별 A/B 목록, B401, B부분 페이지 뒤401도 확인한다. 이 직접 GET은 host routing 확인이며 제품 수집기 합격 증거가 아니다. 나머지 검사는 기존 SQL 공유 컨테이너에서 검사마다 새 DB를 만들고 host가 migration을 수행한다. 기존 단가 삭제/사전 등록 역시 HTTP를 사용한다. 개발/운영 DB로 대체하지 않는다. Worker를 해제하고 키는 ephemeral Data Protection으로 보호하며 일회용 DB 연결을 우선한다. 서버 시간을 주입한 TimeProvider로 이동해 30분 만료를 기다리지 않고 검증한다.
 
 outbound handler는 지정 공식 host/경로의 GET만 허용하며 미등록 URL/POST는 즉시 실패한다. API 모델 목록의 합성 응답도 가격과 별개로 원문 fixture에 저장한다. 공급자 API 키는 테스트 전용 비밀 아닌 문자열이다. 실제 계정 키·실 API·유료 생성·업로드·모델 호환성 시험은 호출하지 않는다. 참가자가 새 HTTP 구성을 사용하면 평가자는 **host의 연결만** 동일하게 조정하고 변경/해시/이유를 기록한다. 기대값/판정 코드를 구현에 맞춰 바꾸지 않는다.
 
@@ -21,20 +21,20 @@ outbound handler는 지정 공식 host/경로의 GET만 허용하며 미등록 U
 | 분류 | 건수 | 관찰 |
 | --- | ---: | --- |
 | fixture integrity / 기존 CRUD | 2 | SHA 일치 / 실제 API와 일회용 SQL 저장 |
-| 정상 5개 공급자 | 5 | 정확한 원문 가격·Standard 조건·원문 해시·단위·unknown/3D 보류 |
+| 정상 5개 공급자 | 5 | 정확한 원문 가격·Standard 조건·원문 해시·단위·Google 혼합 이미지 적용400/저장0·Tripo USD0.5 적용/재조회·Meshy 계정 환산 보류 |
 | 선택·재전송·성공 후 만료 | 1 | 선택된 신규 행만 저장, 서버 근거/비소급, 같은 receipt/시행일, 다른 본문409 |
 | blocked·중복·없는 후보 묶음 | 1 | 400, 묶음 전체 저장0 |
 | 동시 적용 | 1 | 200 하나 +409 하나, SQL 신규 행1 |
 | 검토 후 현재 값 변경 | 1 | fingerprint conflict409, 추가 저장0 |
 | 미적용 만료 | 1 | 30분 TTL/409, 기존 값 보존 |
 | 중복 설정+모델 pagination | 1 | ID중복제거, config 관찰 병합, 정확한 조건 정체당 후보1, page2 반영 |
-| 정상/partial/failed 모델 목록 미노출 | 3 | 완전 목록만 notInCatalog, 삭제0 |
+| 두 설정 disjoint 목록 정상/partial/failed 미노출 | 3 | A=Sonnet/B=Haiku 합집합, B만 있는 기존 Haiku는 미노출0; 정상 전체에서만 진짜 미노출, B401/partial이면 판단 보류; 기존 행/설정/관찰 ID 보존 |
 | 일부 공급자 목록 실패 | 1 | sibling 성공·modelError/priceError 구분·키 비노출 |
 | 구조 변경 / 단위 누락 5사 | 10 | 명시적 확인 필요/부분 실패, 임의 적용가능 가격0 |
 | 공식 미래 시행 | 1 | 2099 하한, 이른 예약400, 즉시도 미래 저장·비소급 |
 | 입력/없는 preview | 1 | 빈/없는/비활성/26설정400, 없는preview404 |
 
-같은 모델에 서로 다른 요금 조건 후보가 존재해도 정상이다. 기대 가격/Standard 조건에 해당하는 후보를 선택하며 모델 하나당 후보 하나를 강제하지 않는다. Tripo는 P1 상세의 멀티뷰/표준 텍스처 50credit와 공개 $0.01/credit 근거를 확인하며 일반 H 표의 가격을 P1에 대입하면 통과하지 않는다. Meshy는 multi-image 2K/meshy-6 30credit를 보존하고 USD 환산을 적용하지 않는다.
+같은 모델에 서로 다른 요금 조건 후보가 존재해도 정상이다. 기대 가격/Standard 조건에 해당하는 후보를 선택하며 모델 하나당 후보 하나를 강제하지 않는다. Tripo는 P1 상세의 mesh/multiview-to-3d/texture_quality=standard 조건, 같은 후보의50credit/$0.01 per credit/USD0.5를 검증하고 적용/재조회한다. Meshy는 mesh/multi-image-to-3d/texture_image_resolution=2048/geometry_resolution=standard 조건과 같은 후보의30credit/null환산/계정별 보류/적용400을 함께 확인한다. Google image는 입력0.30/MTok+출력0.039/image+1024x1024 크기 근거와 blocked를 확인하며 output 정액을 전체 비용으로 적용하면 불합격이다. terms null도 허용해 표시용 환산값을 적용 가능 요금과 혼동하지 않는다.
 
 ## 고정 Fake UI 사례
 
@@ -47,3 +47,6 @@ outbound handler는 지정 공식 host/경로의 GET만 허용하며 미등록 U
 공통 검사는 전체 기능 검증을 대체하지 않는다. 참가자 자체 테스트/최종 독립 리뷰는 과거 호출의 미등록/legacy/alias 비용 계산, 계정 간 환산 차단, 상충 요금/다른 조건 저장키 충돌, 실패 중 rollback, 응답 유실 재전송, 취소/timeout/크기/page상한, capability/실행 설정 보존을 검증해야 한다. 전체 비유료 Backend 및 Frontend 회귀는 진행자가 최종 통합 시 별도로 실행한다. 이번 준비에서는 전체 회귀를 실행하지 않는다.
 
 fixture manifest의 `acceptance` 항목은 사례 수와 공통 테스트/host/brief의 SHA를 고정한다. 결과 로그는 저장소 밖에 보관하며 키·HTTP 인증 헤더·전체 원문 dump를 보고에 넣지 않는다.
+
+
+리뷰 수정 라운드1은 정상 가격5·두 설정 union3·integrity1·기존 CRUD/fixture boundary sanity1의 focused10건을 실행한다. 기대값/조건을 고친 뒤 전체29건을 다시 실행했다고 주장하지 않으며, 변경 없는 UI8건도 이 라운드에서 재실행하지 않는다. 고정 전체 case 수는 계속29/8이다. 신규 합성 목록4개가 추가되어 source fixture 총39개(공식12/합성27)다.

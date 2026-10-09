@@ -33,6 +33,14 @@ Tripo·Meshy는 모델 ID와 실제 멀티뷰/텍스처/geometry 옵션을 공�
 
 JSON은 System.Text.Json, HTML은 공통 고정 의존성 AngleSharp 1.8.4로 DOM을 해석한다. 외부 자원 로딩·script 실행을 하지 않으며 모델/표 제목/헤더/등급/단위를 함께 읽는다. 전체 페이지의 첫 가격을 정규식으로 가져오는 방식은 사용하지 않는다.
 
+### 공통 가격 조건 관찰 계약
+
+- Google `gemini-2.5-flash-image`의 유료 Standard는 입력 토큰 비용과 출력 이미지 비용을 함께 청구한다. `$0.039`는 1024×1024 이하 이미지의 출력만 환산한 값이며 전체 호출 정액이 아니다. `terms`는 null이어도 되고, 표시용 `perImage=0.039`를 보존해도 되지만 `blockedReason`은 반드시 값이 있어야 하고 적용은 400/저장0이다. 같은 이미지 후보의 `evidence.conditions`에 `input=0.30 USD/1M text/image tokens`, `output=0.039 USD/image`, `size<=1024x1024`를 보존한다. 원문 표/주석의 입력·출력·크기 차원을 이 공통 문자열로 정규화하며 1290 이미지 출력 토큰/$30 per 1M와 텍스트 출력의 별도 요금 맥락도 유지한다. 혼합 계산기를 확장하지 않는다.
+- Tripo `P1-20260311`의 `area=mesh`, `operation=multiview-to-3d`, `conditions`에 `texture_quality=standard`인 정확한 조합은 같은 후보에서 50credit/작업, 공개 USD0.01/credit, `terms.perImage=0.5`, `blockedReason=null`을 반환한다. P1 상세 표의 Multiview/Standard Texture와 공개 API 환산 근거를 연결하며 선택 적용 후 단가 조회도 USD0.5여야 한다. 다른 작업/텍스처 또는 지원하지 않는 옵션과 혼합하지 않는다.
+- Meshy `meshy-6`의 `area=mesh`, `operation=multi-image-to-3d`, `conditions`에 `texture_image_resolution=2048`와 `geometry_resolution=standard`를 보존한다. 원문 Multi-Image/Mesh with 2K textures의 기본 geometry 조합이다. 같은 후보의 30credit/작업과 `usdPerCredit=null`을 보존하며 `terms`가 있더라도 `perImage=null`, `blockedReason=계정별 환산 지원 필요`, 적용400/저장0이다. 4K/8K/Ultra/다른 작업 후보로 숫자를 대신 채우지 않는다.
+
+모든 설정 합집합 검사에는 서로 다른 합성 키를 사용한다. Anthropic 설정 A는 Sonnet만 완전 수집, B는 Haiku만 완전 수집하는 경우 B에만 있는 기존 Haiku는 미노출이 아니다. 양쪽 완전 목록 어디에도 없는 별도 기존 모델만 blocked `notInCatalog`다. B가401이거나 첫 페이지 뒤 실패로 partial이면 두 기존 모델 모두 잘못된 미노출로 표시하지 않는다. 설정별 결과 ID와 후보 관찰 config ID 집합을 유지하고 기존 단가/설정을 보존한다. 이 키와 목록은 실제 계정 응답이 아니다.
+
 ## HTTP 계약
 
 기존 단가 CRUD와 `{ "data": ..., "error": null }` / `{ "data": null, "error": { "code": ..., "message": ... } }` 봉투를 유지한다. 아래는 구현 간 공통 외부 계약이며 내부 타입/분해는 구현자가 선택한다. 공급자 wire 값은 `openai/anthropic/google/tripo/meshy`다.

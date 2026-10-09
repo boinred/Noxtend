@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.DependencyInjection;
 using Noxtend.Tests.Infrastructure;
 
 namespace Noxtend.Tests.Api;
@@ -38,6 +39,31 @@ public sealed class ModelPriceUpdateAcceptanceTests(SqlServerFixture sql)
         Assert.Equal("acceptance-crud", price["model"]!.GetValue<string>());
         Assert.Single(await Prices(client));
         Assert.Empty(host.OutboundPaths);
+        using var outbound = host.Services.GetRequiredService<IHttpClientFactory>().CreateClient();
+        host.Scenario = "union-normal";
+        var listA = await SyntheticModels(outbound, "acceptance-key-union-a", false, HttpStatusCode.OK);
+        var listB = await SyntheticModels(outbound, "acceptance-key-union-b", false, HttpStatusCode.OK);
+        Assert.Equal("claude-sonnet-4-6", listA["data"]![0]!["id"]!.GetValue<string>());
+        Assert.Equal("claude-haiku-4-5", listB["data"]![0]!["id"]!.GetValue<string>());
+        Assert.False(listA["has_more"]!.GetValue<bool>());
+        Assert.False(listB["has_more"]!.GetValue<bool>());
+        host.Scenario = "union-models-denied";
+        await SyntheticModels(outbound, "acceptance-key-union-a", false, HttpStatusCode.OK);
+        await SyntheticModels(outbound, "acceptance-key-union-b", false, HttpStatusCode.Unauthorized);
+        host.Scenario = "union-models-partial";
+        await SyntheticModels(outbound, "acceptance-key-union-a", false, HttpStatusCode.OK);
+        var partial = await SyntheticModels(outbound, "acceptance-key-union-b", false, HttpStatusCode.OK);
+        Assert.True(partial["has_more"]!.GetValue<bool>());
+        await SyntheticModels(outbound, "acceptance-key-union-b", true, HttpStatusCode.Unauthorized);
+    }
+
+    private static async Task<JsonNode> SyntheticModels(HttpClient outbound, string key, bool nextPage, HttpStatusCode status)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.anthropic.com/v1/models" + (nextPage ? "?after_id=claude-haiku-4-5" : ""));
+        request.Headers.Add("x-api-key", key);
+        using var response = await outbound.SendAsync(request);
+        Assert.Equal(status, response.StatusCode);
+        return JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
     }
 
     [Theory]
@@ -50,6 +76,7 @@ public sealed class ModelPriceUpdateAcceptanceTests(SqlServerFixture sql)
     {
         await using var host = Host();
         using var client = host.CreateClient();
+        await ClearPrices(client);
         var config = await Provider(client, provider);
         var before = (await Prices(client)).ToJsonString();
         var preview = await Preview(client, [config]);
@@ -77,19 +104,45 @@ public sealed class ModelPriceUpdateAcceptanceTests(SqlServerFixture sql)
         if (provider is "google" or "meshy") Assert.NotNull(candidate["blockedReason"]);
         if (provider == "meshy")
         {
-            Assert.Contains(candidate["evidence"]!.AsArray(), item => item!["creditsPerTask"]?.GetValue<decimal>() == 30m);
+            Assert.Equal("mesh", candidate["area"]!.GetValue<string>());
+            Assert.Equal("multi-image-to-3d", candidate["operation"]!.GetValue<string>());
+            Assert.Contains("texture_image_resolution=2048", candidate["conditions"]!.GetValue<string>());
+            Assert.Contains("geometry_resolution=standard", candidate["conditions"]!.GetValue<string>());
+            Assert.Contains(candidate["evidence"]!.AsArray(), item => item!["creditsPerTask"]?.GetValue<decimal>() == 30m && item["usdPerCredit"] is null);
             Assert.All(candidate["evidence"]!.AsArray(), item => Assert.Null(item!["usdPerCredit"]));
+            Assert.Contains("계정별 환산 지원 필요", candidate["blockedReason"]!.GetValue<string>());
+            Assert.Null(candidate["terms"]?["perImage"]);
+            await Apply(client, preview, candidate, HttpStatusCode.BadRequest, "PriceUpdateInvalid");
+            Assert.Empty(await Prices(client));
         }
         if (provider == "google")
         {
             var image = Candidate(preview, "google", "gemini-2.5-flash-image");
-            Assert.Equal(0.039m, image["terms"]!["perImage"]!.GetValue<decimal>());
+            Assert.Equal("image", image["area"]!.GetValue<string>());
+            Assert.NotNull(image["blockedReason"]);
+            if (image["terms"]?["perImage"] is { } outputPrice)
+                Assert.Equal(0.039m, outputPrice.GetValue<decimal>());
             Assert.Contains("standard", image["conditions"]!.GetValue<string>(), StringComparison.OrdinalIgnoreCase);
+            var evidenceText = string.Join("; ", image["evidence"]!.AsArray().Select(e => e!["conditions"]!.GetValue<string>()));
+            foreach (var token in new[] { "input=0.30 USD/1M text/image tokens", "output=0.039 USD/image", "size<=1024x1024" })
+                Assert.Contains(token, evidenceText);
+            await Apply(client, preview, image, HttpStatusCode.BadRequest, "PriceUpdateInvalid");
+            Assert.Empty(await Prices(client));
         }
         if (provider == "tripo")
         {
-            Assert.Contains(preview["candidates"]!.AsArray(), c => c!["model"]!.GetValue<string>() == model &&
-                c["evidence"]!.AsArray().Any(e => e!["creditsPerTask"]?.GetValue<decimal>() == 50m && e["usdPerCredit"]?.GetValue<decimal>() == 0.01m));
+            Assert.Equal("mesh", candidate["area"]!.GetValue<string>());
+            Assert.Equal("multiview-to-3d", candidate["operation"]!.GetValue<string>());
+            Assert.Contains("texture_quality=standard", candidate["conditions"]!.GetValue<string>());
+            Assert.Null(candidate["blockedReason"]);
+            Assert.Equal(0.5m, candidate["terms"]!["perImage"]!.GetValue<decimal>());
+            Assert.Contains(candidate["evidence"]!.AsArray(), e => e!["creditsPerTask"]?.GetValue<decimal>() == 50m && e["usdPerCredit"]?.GetValue<decimal>() == 0.01m);
+            await Apply(client, preview, candidate, HttpStatusCode.OK);
+            var saved = Assert.Single(await Prices(client))!;
+            Assert.Equal("P1-20260311", saved["model"]!.GetValue<string>());
+            Assert.Equal("tripo", saved["provider"]!.GetValue<string>());
+            Assert.Equal(0.5m, saved["perImage"]!.GetValue<decimal>());
+            Assert.False(saved["allowHistoricalFallback"]!.GetValue<bool>());
         }
         if (provider == "openai")
         {
@@ -221,11 +274,33 @@ public sealed class ModelPriceUpdateAcceptanceTests(SqlServerFixture sql)
     [InlineData("models-denied", false)]
     public async Task MissingCatalogDecisionRequiresCompleteUnion(string scenario, bool expectedMissing)
     {
-        await using var host = Host(scenario, "anthropic");
+        await using var host = Host("union-" + scenario, "anthropic");
         using var client = host.CreateClient();
         await ClearPrices(client);
+        await Seed(client, "claude-haiku-4-5", "anthropic");
         await Seed(client, "acceptance-not-in-catalog", "anthropic");
-        var preview = await Preview(client, [await Provider(client, "anthropic")]);
+        var a = await Provider(client, "anthropic", "acceptance-key-union-a");
+        var b = await Provider(client, "anthropic", "acceptance-key-union-b");
+        var existing = (await Prices(client)).ToJsonString();
+        var configs = await Send(client, HttpMethod.Get, "/api/providers", null, HttpStatusCode.OK);
+        var preview = await Preview(client, [a, b]);
+        Assert.Equal(existing, (await Prices(client)).ToJsonString());
+        Assert.Equal(configs.ToJsonString(), (await Send(client, HttpMethod.Get, "/api/providers", null, HttpStatusCode.OK)).ToJsonString());
+        Assert.Equal(new[] { a, b }.Order(), preview["providers"]!.AsArray().Select(c => c!["providerConfigId"]!.GetValue<string>()).Order());
+        var observedA = Assert.Single(preview["providers"]!.AsArray(), c => c!["providerConfigId"]!.GetValue<string>() == a)!;
+        var observedB = Assert.Single(preview["providers"]!.AsArray(), c => c!["providerConfigId"]!.GetValue<string>() == b)!;
+        Assert.Equal("complete", observedA["modelListStatus"]!.GetValue<string>());
+        Assert.Equal(scenario == "normal" ? "complete" : scenario == "models-partial" ? "partial" : "failed", observedB["modelListStatus"]!.GetValue<string>());
+        var sonnet = Candidate(preview, "anthropic", "claude-sonnet-4-6");
+        Assert.Equal(new[] { a }, sonnet["providerConfigIds"]!.AsArray().Select(id => id!.GetValue<string>()));
+        Assert.Contains(observedA["candidateIds"]!.AsArray(), id => id!.GetValue<string>() == sonnet["id"]!.GetValue<string>());
+        Assert.DoesNotContain(preview["candidates"]!.AsArray(), c => c!["model"]!.GetValue<string>() == "claude-haiku-4-5" && c["changeKind"]!.GetValue<string>() == "notInCatalog");
+        if (scenario == "normal")
+        {
+            var haiku = Candidate(preview, "anthropic", "claude-haiku-4-5");
+            Assert.Equal(new[] { b }, haiku["providerConfigIds"]!.AsArray().Select(id => id!.GetValue<string>()));
+            Assert.Contains(observedB["candidateIds"]!.AsArray(), id => id!.GetValue<string>() == haiku["id"]!.GetValue<string>());
+        }
         var missing = preview["candidates"]!.AsArray().Where(c => c!["model"]!.GetValue<string>() == "acceptance-not-in-catalog").ToArray();
         if (expectedMissing)
         {
@@ -234,7 +309,7 @@ public sealed class ModelPriceUpdateAcceptanceTests(SqlServerFixture sql)
             Assert.NotNull(candidate["blockedReason"]);
         }
         else Assert.DoesNotContain(missing, c => c!["changeKind"]!.GetValue<string>() == "notInCatalog");
-        Assert.Single(await Prices(client));
+        Assert.DoesNotContain("acceptance-key", preview.ToJsonString());
     }
 
     [Fact]
@@ -312,6 +387,13 @@ public sealed class ModelPriceUpdateAcceptanceTests(SqlServerFixture sql)
         Assert.NotEmpty(matches);
         var manifest = JsonNode.Parse(File.ReadAllText(Path.Combine(ModelPriceUpdateAcceptanceHost.FixtureRoot, "manifest.json")))!;
         var expected = manifest["expectedCandidates"]!.AsArray().FirstOrDefault(c => c!["provider"]!.GetValue<string>() == provider && c["model"]!.GetValue<string>() == model);
+        if (provider == "google" && model == "gemini-2.5-flash-image")
+            return Assert.Single(matches, c => c!["area"]!.GetValue<string>() == "image" &&
+                c["conditions"]!.GetValue<string>().Contains("standard", StringComparison.OrdinalIgnoreCase))!;
+        if (expected?["requiredConditionTokens"] is { } conditionTokens)
+            return Assert.Single(matches, c => c!["area"]!.GetValue<string>() == expected["area"]!.GetValue<string>() &&
+                c["operation"]!.GetValue<string>() == expected["operation"]!.GetValue<string>() &&
+                conditionTokens.AsArray().All(token => c["conditions"]!.GetValue<string>().Contains(token!.GetValue<string>())))!;
         if (expected?["inputPerMillion"] is { } input)
             return Assert.Single(matches, c => c!["terms"]?["inputPerMillion"]?.GetValue<decimal>() == input.GetValue<decimal>() &&
                 c["terms"]?["outputPerMillion"]?.GetValue<decimal>() == expected["outputPerMillion"]!.GetValue<decimal>() &&
@@ -326,8 +408,8 @@ public sealed class ModelPriceUpdateAcceptanceTests(SqlServerFixture sql)
         => Send(client, HttpMethod.Post, ApplyUrl(preview), new { requestId = Guid.NewGuid(), candidateIds = new[] { candidate["id"]!.GetValue<string>() }, effectiveFrom = (string?)null }, status, code);
     private static Task<JsonNode> Preview(HttpClient client, string[] ids)
         => Send(client, HttpMethod.Post, "/api/prices/update-previews", new { providerConfigIds = ids }, HttpStatusCode.OK);
-    private static async Task<string> Provider(HttpClient client, string kind)
-        => (await Send(client, HttpMethod.Post, "/api/providers", new { kind, displayName = "Acceptance " + kind, apiKey = "acceptance-key-not-real" }, HttpStatusCode.Created))["id"]!.GetValue<string>();
+    private static async Task<string> Provider(HttpClient client, string kind, string? testKey = null)
+        => (await Send(client, HttpMethod.Post, "/api/providers", new { kind, displayName = "Acceptance " + kind, apiKey = testKey ?? "acceptance-key-" + Guid.NewGuid().ToString("N") }, HttpStatusCode.Created))["id"]!.GetValue<string>();
     private static object PriceInput(string model, string provider, decimal input = 0.01m)
         => new { model, provider, inputPerMillion = input, outputPerMillion = 0.02m, longContextFrom = (int?)null, longInputPerMillion = (decimal?)null, longOutputPerMillion = (decimal?)null, perImage = (decimal?)null, effectiveFrom = "2020-01-01T00:00:00Z", note = "Acceptance manual baseline, not a source fixture" };
     private static Task<JsonNode> Seed(HttpClient client, string model, string provider)

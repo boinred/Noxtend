@@ -100,6 +100,26 @@ public sealed class ModelPriceUpdateAcceptanceHost(string connectionString) : We
                 if (!uri.AbsolutePath.EndsWith("/models"))
                     throw new InvalidOperationException("Acceptance only permits official list-model endpoints");
                 var secondPage = uri.Query.Contains("after_id=") || uri.Query.Contains("pageToken=");
+                var apiKey = request.Headers.TryGetValues("x-api-key", out var keys) ? keys.Single() : null;
+                if (provider == "anthropic" && host.Scenario.StartsWith("union-"))
+                {
+                    file = apiKey switch
+                    {
+                        "acceptance-key-union-a" => "anthropic-models-union-a.json",
+                        "acceptance-key-union-b" when host.Scenario == "union-models-denied" || host.Scenario == "union-models-partial" && secondPage
+                            => "anthropic-models-union-denied.json",
+                        "acceptance-key-union-b" when host.Scenario == "union-models-partial"
+                            => "anthropic-models-union-b-partial.json",
+                        "acceptance-key-union-b" => "anthropic-models-union-b-complete.json",
+                        _ => throw new InvalidOperationException("Synthetic model union needs a distinct registered test credential"),
+                    };
+                    var result = new HttpResponseMessage(file.EndsWith("-denied.json") ? HttpStatusCode.Unauthorized : HttpStatusCode.OK)
+                    {
+                        Content = new ByteArrayContent(File.ReadAllBytes(Path.Combine(FixtureRoot, file))),
+                    };
+                    result.Content.Headers.ContentType = new("application/json");
+                    return Task.FromResult(result);
+                }
                 if (provider == host.ScenarioProvider &&
                     (host.Scenario == "models-denied" || host.Scenario == "models-partial" && secondPage))
                     return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized)

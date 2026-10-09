@@ -417,6 +417,54 @@
       "mutation": "future",
       "sha256": "87da5ceee159561ed3d280f9259c46f048de7b41a2748a7f799c82ae1640754d",
       "bytes": 65271
+    },
+    {
+      "file": "anthropic-models-union-a.json",
+      "url": null,
+      "status": 200,
+      "contentType": "application/json",
+      "collectedAt": null,
+      "sha256": "f442b789500f32ca26ec0ba336ee377182ac4fd3476b4dc53c88d72012260aa3",
+      "bytes": 264,
+      "synthetic": true,
+      "derivedFrom": "anthropic-models-page-1.json",
+      "description": "Synthetic per-configuration model visibility, not an authenticated account response"
+    },
+    {
+      "file": "anthropic-models-union-b-complete.json",
+      "url": null,
+      "status": 200,
+      "contentType": "application/json",
+      "collectedAt": null,
+      "sha256": "284b31aa19d23149897af392d138d6173a9738667a5b9cceab55a0847c1dde53",
+      "bytes": 260,
+      "synthetic": true,
+      "derivedFrom": "anthropic-models-page-2.json",
+      "description": "Synthetic per-configuration model visibility, not an authenticated account response"
+    },
+    {
+      "file": "anthropic-models-union-b-partial.json",
+      "url": null,
+      "status": 200,
+      "contentType": "application/json",
+      "collectedAt": null,
+      "sha256": "335b399751b9792867f51035b5c0a148c94fe21e9b684dce67224a4fcb3c7b9c",
+      "bytes": 259,
+      "synthetic": true,
+      "derivedFrom": "anthropic-models-page-2.json",
+      "description": "Synthetic per-configuration model visibility, not an authenticated account response"
+    },
+    {
+      "file": "anthropic-models-union-denied.json",
+      "url": null,
+      "status": 401,
+      "contentType": "application/json",
+      "collectedAt": null,
+      "sha256": "227905c6f8c49c27bfd211206709e54e39b8a09f64d2af953ae3eca643d799c3",
+      "bytes": 133,
+      "synthetic": true,
+      "derivedFrom": null,
+      "description": "Synthetic per-configuration model visibility, not an authenticated account response"
     }
   ],
   "expectedCandidates": [
@@ -479,10 +527,17 @@
       "provider": "google",
       "model": "gemini-2.5-flash-image",
       "area": "image",
-      "perImage": 0.039,
       "source": "google-pricing.html",
-      "blockedReason": null,
-      "basis": "Paid Standard output $0.039 per image; Batch $0.0195 excluded. Deprecated/shutdown warning retained; pricing discovery does not enable execution"
+      "blockedReason": "Mixed input-token plus image-output pricing is not representable by the current calculator",
+      "basis": "Paid Standard Input $0.30/1M text/image tokens + Output $0.039/image for <=1024x1024 (1290 output image tokens at $30/1M); text output uses 2.5 Flash rate. Preserve each dimension and size; block apply. Batch $0.0195 excluded; shutdown warning retained.",
+      "outputPerImage": 0.039,
+      "inputPerMillion": 0.3,
+      "displayTermsPolicy": "terms may be null or preserve output perImage=0.039 for display only; never applicable",
+      "requiredEvidenceTokens": [
+        "input=0.30 USD/1M text/image tokens",
+        "output=0.039 USD/image",
+        "size<=1024x1024"
+      ]
     },
     {
       "provider": "tripo",
@@ -493,8 +548,11 @@
       "usdPerCredit": 0.01,
       "perImage": 0.5,
       "source": "tripo-p1.html",
-      "blockedReason": "Only exact compatible multiview standard texture options may use this amount; unsupported options remain blocked",
-      "basis": "P1 detailed table Multiview row: No Texture 40 / Standard 50 / Detailed 60; global API credits $0.01. General H Series table is not P1 price"
+      "blockedReason": null,
+      "basis": "P1 detailed table Multiview row: No Texture 40 / Standard 50 / Detailed 60; global API credits $0.01. General H Series table is not P1 price",
+      "requiredConditionTokens": [
+        "texture_quality=standard"
+      ]
     },
     {
       "provider": "meshy",
@@ -505,7 +563,11 @@
       "usdPerCredit": null,
       "blockedReason": "계정별 환산 지원 필요",
       "source": "meshy-pricing.html",
-      "basis": "Multi-Image / Mesh with 2K textures / meshy-6 = 30 credits per request; 8K =35, mesh only=20; no universal USD/credit"
+      "basis": "Multi-Image / Mesh with 2K textures / meshy-6 = 30 credits per request; 8K =35, mesh only=20; no universal USD/credit",
+      "requiredConditionTokens": [
+        "texture_image_resolution=2048",
+        "geometry_resolution=standard"
+      ]
     },
     {
       "provider": "meshy",
@@ -520,11 +582,11 @@
     "httpCases": 29,
     "fakeUiCases": 8,
     "sha256": {
-      "apps/backend/Noxtend.Tests/Api/ModelPriceUpdateAcceptanceTests.cs": "3eb51afc6bb60ca37eee30beaa078653278fee84972b2c49c09db3366ae2c14e",
-      "apps/backend/Noxtend.Tests/Api/ModelPriceUpdateAcceptanceHost.cs": "3c47833e57c483c04c833fc67d9cb6ad0d65b1de4032e6ac8d4ac93aa6cf9c91",
+      "apps/backend/Noxtend.Tests/Api/ModelPriceUpdateAcceptanceTests.cs": "b8302ad3373f99059daec6da63324c4c650d4a08e1e5321cebdc547bc52a1152",
+      "apps/backend/Noxtend.Tests/Api/ModelPriceUpdateAcceptanceHost.cs": "39f4864e78f786663cb6c1af6d7e88b161272f99c0cd22aa57144edbf0122e7c",
       "apps/frontend/tests/e2e/model-price-update-acceptance.spec.ts": "71104d963e347c3589caadd428f15f8d1afbb22ec21d936a712937d29ec716ce",
-      "docs/evals/model-price-update/brief.md": "a30a5715f682873e1acf873154a1911d80ce69810519b949f42e6e04ba7b2bf4",
-      "docs/evals/model-price-update/acceptance.md": "c8309f1c17edf7b399c8702d67e8b8322d1212c66e7d4f5de08aa7487f272acb",
+      "docs/evals/model-price-update/brief.md": "c49f32bb8514e88c4e8b5550729a898e89ecf8514f886d57509f6d12ce5d32ba",
+      "docs/evals/model-price-update/acceptance.md": "94e62ab525f6d71781ea702983c9d50eb2727f967ad6200960a92ab927902085",
       "docs/evals/model-price-update/fixtures/.gitattributes": "f8631f59b522cfdb33764f32a827f51886b43091ca08dbf063fef6cc8100f023"
     },
     "runtimes": {
@@ -539,7 +601,25 @@
   "expectationReview": {
     "preparedBy": "preparation agent",
     "humanPriceApproval": false,
-    "independentReview": "pending controller review",
-    "liveAccountBillingVerified": false
+    "independentReview": "round1 findings corrected; pending independent re-review",
+    "liveAccountBillingVerified": false,
+    "round1": "Google mixed image blocked; exact 3D operation/options/credit/USD; configuration-specific disjoint model union and partial/denied routing"
+  },
+  "modelUnionScenarios": {
+    "provider": "anthropic",
+    "credentials": {
+      "a": "acceptance-key-union-a",
+      "b": "acceptance-key-union-b"
+    },
+    "a": "anthropic-models-union-a.json",
+    "b": {
+      "normal": "anthropic-models-union-b-complete.json",
+      "models-denied": "anthropic-models-union-denied.json",
+      "models-partial": {
+        "first": "anthropic-models-union-b-partial.json",
+        "after_id=claude-haiku-4-5": "anthropic-models-union-denied.json"
+      }
+    },
+    "expected": "normal union preserves B-only haiku and marks truly absent baseline; one failed/partial config defers all missing decisions"
   }
 }
