@@ -24,6 +24,7 @@ import {
   updateModelPrice,
 } from '@/infra/api/tuningApi'
 import { queryKeys } from './keys'
+import { apiErrorMessage } from './errors'
 import type { AssetCategory } from '@/domain/job/types'
 import type { PromptKind } from '@/domain/tuning/types'
 import type { ModelPriceDraft, PromptDraft } from '@/domain/tuning/types'
@@ -182,7 +183,14 @@ export function useModelPrices() {
     retry: false,
   })
 
-  return { prices: query.data ?? [], isLoading: query.isLoading }
+  return {
+    prices: query.data ?? [],
+    isLoading: query.isLoading,
+    errorMessage: query.error
+      ? apiErrorMessage(query.error, '단가 목록을 가져올 수 없습니다')
+      : null,
+    refetch: query.refetch,
+  }
 }
 
 /**
