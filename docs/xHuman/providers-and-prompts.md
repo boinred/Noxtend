@@ -76,6 +76,16 @@
 - `ProviderHttp`의 OpenAI 응답 분류는 텍스트·이미지 양쪽에서 429의 insufficient_quota type/code와 문서화된 credit_balance_exhausted·organization_spend_limit_exceeded·project_spend_limit_exceeded·organization_usage_limit_exceeded code를 즉시 실패로 분류한다. 일반 rate limit·잘못된/없는 오류 본문은 기존 상태 코드 기준 재시도를 유지하고 원문 message는 예외에 넣지 않는다.
 - 취소 토큰, transient 오류 분류, 재시도 한도는 Provider 예외와 `RunTaskHandler`·`TaskExecution`에서 함께 확인한다. 인증 실패·크레딧 부족·잘못된 설정을 무조건 재시도하지 않는다.
 
+## 공식 모델·단가 수집·선택 적용
+
+- 진입점은 `apps/backend/Noxtend.Api/Controllers/PricesController.cs`의 `POST /api/prices/update-previews`와 `POST /api/prices/update-previews/{id:guid}/apply`다. wire DTO는 `Contracts/PriceUpdateContracts.cs`, 수집·적용 계약은 `Noxtend.Tuning.Application/Prices/PriceUpdateHandlers.cs`, 외부 port는 `Noxtend.Tuning.Domain/Ports/IOfficialModelPriceSource.cs`에 있다. 기존 단가 CRUD는 별도로 유지한다.
+- `Noxtend.Infrastructure/Prices/OfficialModelPriceSource.cs`는 선택한 활성 설정의 모델 목록과 공식 가격 원문을 수집한다. `OfficialPriceHttp.cs`가 공식 HTTPS host/path·redirect 차단·요청/본문 상한을 지키며 credential은 모델 목록 host에만 보낸다. `OfficialMeshPriceSource.cs`·`OfficialMeshPriceParser.cs`는 Tripo/Meshy의 작업·credit/USD 근거를 처리한다. 생성용 Factory나 실행 모델 allowlist를 확장하지 않는다.
+- `OfficialTextPriceParser.cs`는 OpenAI·Anthropic·Google의 exact model·유료 Standard·단위·열 구조를 검증한다. 같은 조건의 유효 일치를 모두 비교하여 값·공식일 상충을 보류하고 모든 가격/날짜 근거를 유지한다. 서로 다른 모달리티 조건은 별도 후보이며 혼합 요금·구간표를 단순 토큰 요금으로 확정하지 않는다.
+- `Noxtend.Tuning.Application/Prices/PriceCandidateComparison.cs`는 설정별 관측과 근거를 병합하고 현재 요금·변경 유형·실행 지원을 구분한다. 동일 저장 키의 공급자/조건 충돌과 `CanStore`의 SQL `decimal(18,6)` 정밀도·범위 위반은 선택 적용을 보류한다. 모델 미노출은 같은 공급자의 모든 선택 설정이 완전 수집된 경우에만 목록 합집합으로 판단하며 기존 단가를 삭제하지 않는다.
+- `Noxtend.Infrastructure/Persistence/Repositories/EfPriceUpdateStore.cs`는 서버 소유 30분 preview·baseline fingerprint·선택 묶음·표현 가능성을 재검증한다. serializable transaction과 application lock으로 새 시행 행·receipt를 원자 저장하고 자동 mutation retry는 하지 않는다. 같은 requestId/입력의 성공 receipt 재생은 preview 만료보다 우선하며 다른 입력은 충돌이다. 적용 시각/공식 시행일보다 이른 시행을 거부한다.
+- `Noxtend.Tuning.Domain/Call/ModelPrice.cs`의 `CreateCollected`는 Provider·SourceEvidenceJson·AllowHistoricalFallback=false를 보존한다. 근거 JSON에는 조건·공식 시행일·evidence를 함께 저장하고 comparer가 후속 currentTerms의 공식일을 복구한다. `ModelPriceBook.cs`는 수집 행 시행 전 과거 비용 fallback을 하지 않으며 기존 수동 행의 정책을 유지한다. `ModelPriceMetadata`·`PriceUpdateSnapshots` migration과 `PriceUpdateConfigurations.cs`가 metadata·preview·receipt를 저장한다.
+- 순수 회귀는 `Noxtend.Tests/Infrastructure/OfficialTextPriceSourceTests.cs`, `OfficialModelCollectionTests.cs`, `OfficialMeshPriceSourceTests.cs`, `Application/PriceCandidateComparisonTests.cs`, `PriceUpdateCollectionTests.cs`다. SQL 저장·rollback·동시 요청·표현 불가 묶음 거부·정확값 조회는 `Infrastructure/PriceUpdateStoreTests.cs`; HTTP 통합은 `Api/ModelPriceUpdateAcceptanceTests.cs`, 잘못된 JSON 입력은 `PriceUpdateMalformedRequestTests.cs`에서 확인한다.
+
 ## 호출 기록·비용·민감 정보
 
 - `EfLlmCallRepository`는 IDbContextFactory가 만든 별도 context를 scoped 수명 동안 소유하고 Dispose한다. AddAsync 후 SaveChangesAsync 계약을 유지하며 작업 리스 ReloadAsync의 추적 초기화와 호출 기록 저장을 분리한다.
@@ -98,5 +108,6 @@
 
 ## 확인 기준과 미확인
 
+- 모델·단가 수집 확인: 2026-10-09, revision `7862b8b`. 수집→parser→비교→SQL 적용→DTO·metadata migration 본문을 대조했고 parser/comparer 순수 회귀를 실행했다. 신설 SQL6건이 수집됐고 전체 비유료 Backend1780/1780(건너뜀0)에 포함되어 통과했다. 상세 근거는 [실행 결과](../evals/model-price-update/results.md#최종-통합-검증)에 있다. 공식 fixture 검증은 실 공급자 최신 가격/실 청구 정확성의 근거가 아니다.
 - 마지막 확인: 2026-10-08, revision `d2cad8d`. 코드 지도 도입 때 문서의 코드 경로와 상대 링크 존재를 자동 대조했다. 서술된 규칙 전체를 코드와 다시 대조하지는 않았다.
 - 미확인: 실 공급자의 출력 품질과 응답 형식 변화, 단가 미등록 모델의 실제 비용. 일반 회귀는 Fake·가짜 HTTP 응답만 사용한다.

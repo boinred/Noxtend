@@ -12,6 +12,10 @@ import { useState } from 'react'
 import { PageContainer } from '@/features/screens/PageContainer'
 import { Button } from '@/components/ui/button'
 import { AdminTabs } from './AdminTabs'
+import { PriceUpdatePanel } from './PriceUpdatePanel'
+import { PriceProviderFilter } from './PriceProviderFilter'
+import { matchesPriceProvider } from '@/domain/tuning/priceUpdate'
+import type { PriceProviderFilter as Filter } from '@/domain/tuning/priceUpdate'
 import { useModelPrices, usePriceMutations } from '@/app/queries/useTuning'
 import { groupPricesByModel, isScheduled } from '@/domain/tuning/types'
 import { adminStyles as styles } from './adminStyles'
@@ -21,12 +25,14 @@ import type { ModelPrice, ModelPriceDraft } from '@/domain/tuning/types'
 type Editing = ModelPrice | 'new' | null
 
 export function PricesScreen() {
-  const { prices, isLoading } = useModelPrices()
+  const { prices, isLoading, errorMessage, refetch } = useModelPrices()
   const { create, update, remove } = usePriceMutations()
   const [editing, setEditing] = useState<Editing>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const groups = groupPricesByModel(prices)
+  const [providerFilter, setProviderFilter] = useState<Filter>('all')
+  const displayed = prices.filter((price) => matchesPriceProvider(price.provider, providerFilter))
+  const groups = groupPricesByModel(displayed)
 
   const submit = async (draft: ModelPriceDraft) => {
     setError(null)
@@ -66,10 +72,19 @@ export function PricesScreen() {
       testId="prices-screen"
     >
       <AdminTabs />
+      <PriceUpdatePanel />
+      <div className="mb-4">
+        <PriceProviderFilter
+          id="price-provider-filter"
+          label="기존 단가 공급자"
+          value={providerFilter}
+          onChange={setProviderFilter}
+        />
+      </div>
 
       <div className={styles.toolbar}>
         <span className={styles.note} data-testid="price-count">
-          {groups.length}개 모델 · {prices.length}개 행
+          전체 {prices.length}개 행 · 표시 {displayed.length}개 행 · {groups.length}개 모델
         </span>
         <Button variant="default" onClick={() => setEditing('new')} data-testid="price-add">
           단가 추가
@@ -94,9 +109,17 @@ export function PricesScreen() {
         />
       ) : null}
 
-      {isLoading ? null : groups.length === 0 ? (
+      {errorMessage ? (
+        <div>
+          <p className={styles.error}>단가 조회 실패: {errorMessage}</p>
+          <Button onClick={() => void refetch()}>단가 다시 조회</Button>
+        </div>
+      ) : null}
+      {isLoading ? (
+        <p className={styles.note}>단가 조회 중…</p>
+      ) : errorMessage && prices.length === 0 ? null : groups.length === 0 ? (
         <p className={styles.empty} data-testid="price-empty">
-          등록된 단가가 없습니다. 단가를 모르는 모델의 호출은 비용 합계에서 빠집니다.
+          공급자 결과 없음. 단가를 모르는 모델의 호출은 비용 합계에서 빠집니다.
         </p>
       ) : (
         <div className={styles.panel}>
@@ -123,7 +146,7 @@ export function PricesScreen() {
                     </td>
                     <td>
                       {formatDate(price.effectiveFrom)}
-                      {price.id === group.current.id ? (
+                      {price.id === group.current?.id ? (
                         <span className={styles.activeBadge} data-testid="price-current">
                           적용 중
                         </span>
@@ -212,6 +235,7 @@ function PriceForm({ price, isSaving, onSubmit, onCancel }: PriceFormProps) {
       effectiveFrom: `${effectiveFrom}T00:00:00Z`,
       note: note.trim(),
       // 비우면 토큰 과금 모델이다 — 0 으로 두면 "장당 공짜" 로 읽힌다
+      provider: price?.provider ?? null,
       perImage: perImage.trim().length > 0 ? Number(perImage) : null,
     })
   }

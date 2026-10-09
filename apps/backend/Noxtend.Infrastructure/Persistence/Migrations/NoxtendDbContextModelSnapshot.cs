@@ -538,6 +538,10 @@ namespace Noxtend.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("AllowHistoricalFallback")
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
                     b.Property<DateTimeOffset>("EffectiveFrom")
                         .HasColumnType("datetimeoffset");
 
@@ -574,6 +578,13 @@ namespace Noxtend.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 6)
                         .HasColumnType("decimal(18,6)");
 
+                    b.Property<string>("Provider")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("SourceEvidenceJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Model", "EffectiveFrom")
@@ -581,6 +592,43 @@ namespace Noxtend.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("IX_ModelPrices_ModelEffectiveFrom");
 
                     b.ToTable("ModelPrices", (string)null);
+                });
+
+            modelBuilder.Entity("Noxtend.Tuning.Domain.Call.PriceUpdateRequestReceipt", b =>
+                {
+                    b.Property<Guid>("RequestId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ReceiptJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RequestJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("RequestId");
+
+                    b.ToTable("PriceUpdateRequestReceipts", (string)null);
+                });
+
+            modelBuilder.Entity("Noxtend.Tuning.Domain.Call.PriceUpdateSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Json")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PriceUpdateSnapshots", (string)null);
                 });
 
             modelBuilder.Entity("Noxtend.Tuning.Domain.Golden.GoldenSample", b =>

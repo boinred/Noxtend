@@ -26,7 +26,8 @@ public sealed record ModelPriceInput(
     DateTimeOffset EffectiveFrom,
     string? Note,
     /// <summary>이미지 1장당 USD. 토큰 과금 모델이면 null (사이클 #7 · Plan D-8).</summary>
-    decimal? PerImage = null);
+    decimal? PerImage = null,
+    string? Provider = null);
 
 /// <summary>
 /// 새 단가 행.
@@ -52,7 +53,7 @@ public sealed class CreateModelPriceHandler(IModelPriceRepository prices)
             var price = ModelPrice.Create(
                 model, input.InputPerMillion, input.OutputPerMillion,
                 input.LongContextFrom, input.LongInputPerMillion, input.LongOutputPerMillion,
-                input.EffectiveFrom, input.Note ?? string.Empty, input.PerImage);
+                input.EffectiveFrom, input.Note ?? string.Empty, input.PerImage, input.Provider);
 
             await prices.AddAsync(price, ct);
             await prices.SaveChangesAsync(ct);
@@ -94,7 +95,7 @@ public sealed class UpdateModelPriceHandler(IModelPriceRepository prices)
             price.Update(
                 input.InputPerMillion, input.OutputPerMillion,
                 input.LongContextFrom, input.LongInputPerMillion, input.LongOutputPerMillion,
-                input.EffectiveFrom, input.Note ?? string.Empty, input.PerImage);
+                input.EffectiveFrom, input.Note ?? string.Empty, input.PerImage, input.Provider);
 
             await prices.SaveChangesAsync(ct);
 

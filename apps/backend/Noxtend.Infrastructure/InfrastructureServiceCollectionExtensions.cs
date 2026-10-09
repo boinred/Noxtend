@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Noxtend.Application.Common;
 using Noxtend.Domain.Common;
@@ -24,6 +25,7 @@ using Noxtend.Infrastructure.Mesh;
 using Noxtend.Infrastructure.Persistence;
 using Noxtend.Infrastructure.Persistence.Repositories;
 using Noxtend.Infrastructure.Queue;
+using Noxtend.Infrastructure.Prices;
 using Noxtend.Infrastructure.RateLimit;
 using Noxtend.Infrastructure.Scheduling;
 using Noxtend.Infrastructure.Security;
@@ -118,6 +120,13 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddHttpClient(LlmProviderFactory.ImageHttpClientName)
             .ConfigureHttpClient(http => http.Timeout = TimeSpan.FromMinutes(20))
             .ConfigurePrimaryHttpMessageHandler(ProviderHandler);
+
+        services.AddHttpClient(OfficialPriceHttp.ClientName)
+            .ConfigureHttpClient(http => http.Timeout = Timeout.InfiniteTimeSpan)
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false })
+            .RedactLoggedHeaders(_ => true);
+        services.TryAddSingleton<TimeProvider>(TimeProvider.System);
+        services.AddScoped<IOfficialModelPriceSource, OfficialModelPriceSource>();
 
         var useFake = configuration.GetValue("Llm:UseFake", false);
 
@@ -372,6 +381,10 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<EstimateSimilarityCostHandler>();
 
         services.AddScoped<ListJobCallsHandler>();
+        services.AddSingleton<IPriceUpdateExecutionSupport, ExistingPriceUpdateExecutionSupport>();
+        services.AddScoped<IPriceUpdateStore, EfPriceUpdateStore>();
+        services.AddScoped<CollectPriceUpdateHandler>();
+        services.AddScoped<ApplyPriceUpdateHandler>();
         services.AddScoped<ListModelPricesHandler>();
         services.AddScoped<CreateModelPriceHandler>();
         services.AddScoped<UpdateModelPriceHandler>();

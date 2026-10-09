@@ -1,0 +1,2 @@
+# Immutable upstream whitespace
+*.html -whitespace

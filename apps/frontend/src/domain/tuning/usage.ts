@@ -172,15 +172,29 @@ export function estimateMeshBatchCost(
 
 /** 백엔드 ModelPriceBook과 같은 시행일 선택 규칙의 3D 정액 단가 조회. */
 function meshPriceAt(prices: ModelPrice[], model: string, at: string): ModelPrice | null {
-  const candidates = prices.filter((price) => price.model === model)
+  const eligible = prices
+    .filter(
+      (price) =>
+        Date.parse(price.effectiveFrom) <= Date.parse(at) ||
+        price.allowHistoricalFallback !== false,
+    )
+    .sort((a, b) => b.model.length - a.model.length)
+  const matchedModel = eligible.find((price) => {
+    if (!model.toLowerCase().startsWith(price.model.toLowerCase())) return false
+    const rest = model.slice(price.model.length)
+    return rest === '' || /^-[0-9]+$/.test(rest)
+  })?.model
+  const candidates = eligible.filter((price) => price.model === matchedModel)
   if (candidates.length === 0) return null
 
-  // 생성 시점 이전의 최신 행을 사용하고, 더 오래된 결과에는 가장 오래된 행을 소급한다.
+  // 수집 행의 시행 전 미등록과 레거시 소급 정책 보존
   return (
     candidates
-      .filter((price) => price.effectiveFrom <= at)
-      .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0] ??
-    candidates.sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom))[0] ??
+      .filter((price) => Date.parse(price.effectiveFrom) <= Date.parse(at))
+      .sort((a, b) => Date.parse(b.effectiveFrom) - Date.parse(a.effectiveFrom))[0] ??
+    candidates
+      .filter((price) => price.allowHistoricalFallback !== false)
+      .sort((a, b) => Date.parse(a.effectiveFrom) - Date.parse(b.effectiveFrom))[0] ??
     null
   )
 }
@@ -229,8 +243,8 @@ export function formatUsageTotal(
 /**
  * 모델 하나의 지금 단가를 고르는 자리에서 읽을 한 줄로 (사이클 #8).
  *
- * **`groupPricesByModel` 을 그대로 쓴다.** "지금 적용되는 행" 규칙 — 미래 시행 행만
- * 있으면 가장 이른 것, 아니면 오늘 이전 중 최신 — 을 여기서 다시 구현하면 관리자 표와
+ * **`groupPricesByModel` 을 그대로 쓴다.** "지금 적용되는 행" 규칙 — 미래 행만
+ * 있으면 미등록, 아니면 오늘 이전 중 최신 — 을 여기서 다시 구현하면 관리자 표와
  * 스튜디오가 서로 다른 단가를 말하게 된다.
  *
  * 이미지 모델은 장당이다. 토큰 단위로 환산하지 않는 이유는 `ModelPrice.perImage` 가
@@ -240,7 +254,7 @@ export function modelPriceHint(prices: ModelPrice[], modelId: string): string {
   const group = groupPricesByModel(prices).find((g) => g.model === modelId)
 
   // 단가 미등록은 `$0` 과 구분되는 낱말이다 (C-7 · FR-20)
-  if (!group) return '단가 미등록'
+  if (!group?.current) return '단가 미등록'
 
   const { current } = group
   if (current.perImage !== null) return `장당 ${formatUsd(current.perImage)}`

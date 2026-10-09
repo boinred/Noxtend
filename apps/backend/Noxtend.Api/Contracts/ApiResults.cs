@@ -14,6 +14,11 @@ public static class ApiResults
 {
     private static readonly Dictionary<string, int> StatusByCode = new()
     {
+        [ErrorCode.PriceUpdateInvalid] = StatusCodes.Status400BadRequest,
+        [ErrorCode.PriceUpdateNotFound] = StatusCodes.Status404NotFound,
+        [ErrorCode.PriceUpdateExpired] = StatusCodes.Status409Conflict,
+        [ErrorCode.PriceUpdateConflict] = StatusCodes.Status409Conflict,
+        [ErrorCode.PriceUpdateRequestConflict] = StatusCodes.Status409Conflict,
         [ErrorCode.SpriteWrongMode] = StatusCodes.Status409Conflict,
         [ErrorCode.SpriteRequestConflict] = StatusCodes.Status409Conflict,
         [ErrorCode.SpriteRevisionConflict] = StatusCodes.Status409Conflict,

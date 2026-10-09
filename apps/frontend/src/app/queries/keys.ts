@@ -8,6 +8,7 @@ import type { ProductionMode } from '@/domain/sprites/types'
 import type { AssetCategory } from '@/domain/job/types'
 
 export const queryKeys = {
+  jobDetails: () => ['job'] as const,
   job: (jobId: string) => ['job', jobId] as const,
   jobList: (filter: JobListFilter, limit = 10, productionMode?: ProductionMode) =>
     ['jobs', filter, limit, productionMode] as const,
@@ -41,6 +42,7 @@ export const queryKeys = {
   jobCalls: (jobId: string) => ['job', jobId, 'calls'] as const,
 
   // ─── 유사도 (background-similarity-tuning) ───
+  similarity: () => ['similarity'] as const,
   similarityStatus: (jobId: string) => ['similarity', jobId, 'status'] as const,
   similarityRun: (jobId: string, runId: string) => ['similarity', jobId, 'run', runId] as const,
   similarityEstimate: (jobId: string, model: string, maxIterations: number) =>

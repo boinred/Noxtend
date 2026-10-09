@@ -1,4 +1,6 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using Noxtend.Domain.Common;
 using Noxtend.Api.Contracts;
 using Noxtend.Tuning.Application.Prices;
 
@@ -19,7 +21,9 @@ public sealed class PricesController(
     ListModelPricesHandler list,
     CreateModelPriceHandler create,
     UpdateModelPriceHandler update,
-    DeleteModelPriceHandler delete) : ControllerBase
+    DeleteModelPriceHandler delete,
+    CollectPriceUpdateHandler collectUpdates,
+    ApplyPriceUpdateHandler applyUpdates) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> ListAsync(CancellationToken ct)
@@ -45,6 +49,48 @@ public sealed class PricesController(
         Guid id, [FromBody] ModelPriceRequest request, CancellationToken ct)
         => ApiResults.From(
             await update.HandleAsync(id, request.ToInput(), ct), ModelPriceResponse.From);
+
+    [HttpPost("update-previews")]
+    [PriceUpdateInput]
+    public async Task<IActionResult> CollectUpdateAsync([FromBody] JsonElement request, CancellationToken ct)
+    {
+        if (!TryIds(request, "providerConfigIds", out var ids)) return InvalidUpdate();
+        return ApiResults.From(await collectUpdates.HandleAsync(ids, ct), PriceUpdatePreviewResponse.From);
+    }
+
+    [HttpPost("update-previews/{id:guid}/apply")]
+    [PriceUpdateInput]
+    public async Task<IActionResult> ApplyUpdateAsync(Guid id, [FromBody] JsonElement request, CancellationToken ct)
+    {
+        if (request.ValueKind != JsonValueKind.Object || !request.TryGetProperty("requestId", out var requestId)
+            || requestId.ValueKind != JsonValueKind.String || !Guid.TryParse(requestId.GetString(), out var parsedRequestId)
+            || !TryIds(request, "candidateIds", out var ids)) return InvalidUpdate();
+        DateTimeOffset? effective = null;
+        if (request.TryGetProperty("effectiveFrom", out var date) && date.ValueKind != JsonValueKind.Null)
+        {
+            if (date.ValueKind != JsonValueKind.String || !date.TryGetDateTimeOffset(out var parsedDate)) return InvalidUpdate();
+            effective = parsedDate.ToUniversalTime();
+        }
+        return ApiResults.From(await applyUpdates.HandleAsync(id, new(parsedRequestId, ids, effective), ct), receipt => receipt);
+    }
+
+    private static bool TryIds(JsonElement request, string name, out IReadOnlyList<Guid>? ids)
+    {
+        ids = null;
+        if (request.ValueKind != JsonValueKind.Object || !request.TryGetProperty(name, out var array) || array.ValueKind != JsonValueKind.Array)
+            return false;
+        var parsed = new List<Guid>();
+        foreach (var value in array.EnumerateArray())
+        {
+            if (value.ValueKind != JsonValueKind.String || !Guid.TryParse(value.GetString(), out var id)) return false;
+            parsed.Add(id);
+        }
+        ids = parsed;
+        return true;
+    }
+
+    private static IActionResult InvalidUpdate()
+        => ApiResults.Failure<object>(ErrorCode.PriceUpdateInvalid, "단가 업데이트 입력이 유효하지 않습니다");
 
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> DeleteAsync(Guid id, CancellationToken ct)

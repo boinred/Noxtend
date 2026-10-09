@@ -25,6 +25,7 @@ API와 Worker는 같은 ASP.NET Core 호스트에서 실행된다. 프로젝트 
 | 유사도 평가 | `EvaluateSimilarityHandler` → `ILlmProvider` | `Noxtend.Tests/Application/SimilarityEvaluateHandlerTests.cs`, `SimilarityStartHandlerTests.cs` |
 | 공급자 관리 | `ProvidersController` → `ProviderHandlers` → Provider 도메인·Repository | `Noxtend.Tests/Application/ProviderHandlerTests.cs`, API 공급자 테스트 |
 | 프롬프트·호출 내역·단가 | Tuning Controller → Tuning Application → Tuning Domain·Infrastructure adapter | `PromptGridTests.cs`, `TuningTests.cs`, `RecordingLlmProviderTests.cs`, 가격 관련 테스트 |
+| 공식 모델·단가 수집·선택 적용 | `PricesController` → `CollectPriceUpdateHandler`·`ApplyPriceUpdateHandler` → `IOfficialModelPriceSource`·`EfPriceUpdateStore`; 상세는 [공급자와 프롬프트](providers-and-prompts.md#공식-모델단가-수집선택-적용) | `Application/PriceCandidateComparisonTests.cs`, `Infrastructure/OfficialTextPriceSourceTests.cs`, `Infrastructure/PriceUpdateStoreTests.cs`, `Api/ModelPriceUpdateAcceptanceTests.cs` |
 | 장면 배치·revision | `SceneLayoutController` → `GetSceneLayoutHandler`·`SceneRevisionHandlers.cs` → `ISceneLayoutRepository` | `Noxtend.Tests/Application/SceneLayoutHandlerTests.cs`, `Infrastructure/SceneLayoutPersistenceTests.cs` |
 | 작업 접수·큐·Worker·재시도·3D 메시 | [작업 실행·저장소 지도](job-execution.md) | 해당 지도의 관련 테스트 |
 
@@ -123,5 +124,6 @@ LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계�
 
 ## 확인 기준과 미확인
 
+- 모델·단가 수집 확인: 2026-10-09, revision `7862b8b`. `PricesController`의 `POST /api/prices/update-previews`, `POST /api/prices/update-previews/{id:guid}/apply` 및 `PriceUpdateContracts.cs`, handler·parser·store를 확인했다. preview·apply는 기존 `ApiResults` 봉투와 `PriceUpdateInvalid` 400, 만료·단가 변경·request 충돌 409, preview 없음 404를 사용한다. 신설 SQL6건을 포함한 Backend1780/1780(건너뜀0) 통과는 [실행 결과](../evals/model-price-update/results.md#최종-통합-검증)에 기록했다.
 - 마지막 확인: 2026-10-08, revision `d2cad8d`. 코드 지도 도입 때 문서의 코드 경로와 상대 링크 존재를 자동 대조했다. 서술된 규칙 전체를 코드와 다시 대조하지는 않았다.
 - 미확인: configured `Program.cs` 호스트를 관통하는 동작, 실제 SQL Server의 migration 적용, 유료 공급자 품질. Fake·격리 SQL 테스트 범위 밖이며 실환경 확인이 필요하다.

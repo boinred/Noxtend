@@ -69,14 +69,10 @@ describe('groupPricesByModel', () => {
       price('gpt-5', '2026-12-01T00:00:00Z', 2),
     ])
 
-    expect(groups[0]?.current.inputPerMillion).toBe(1)
+    expect(groups[0]?.current?.inputPerMillion).toBe(1)
   })
 
-  /**
-   * 인상을 미리 등록해 둔 상태. 백엔드가 "모든 행보다 오래된 호출은 가장 오래된
-   * 행으로 소급" 하는 것과 같은 규칙이라 화면과 계산이 어긋나지 않는다.
-   */
-  it('미래 시행 행만 있으면 가장 이른 행을 적용 중으로 본다', () => {
+  it('미래 시행 행만 있으면 적용 중인 행이 없다', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-01T00:00:00Z'))
 
@@ -85,7 +81,7 @@ describe('groupPricesByModel', () => {
       price('gpt-5', '2026-10-01T00:00:00Z', 3),
     ])
 
-    expect(groups[0]?.current.inputPerMillion).toBe(3)
+    expect(groups[0]?.current).toBeNull()
   })
 
   it('빈 목록은 빈 묶음이다', () => {
@@ -152,4 +148,10 @@ describe('modelPriceHint', () => {
     // 미래 행이 최신이라는 이유로 앞에 오면 사람이 그 값을 현재 단가로 읽는다
     expect(hint).toBe('100만 토큰당 입력 $3.000 · 출력 $15.000')
   })
+})
+
+it('비소급 미래 행만 있는 모델은 현재가가 없다', () => {
+  const future = { ...price('new-model', '2099-01-01T00:00:00Z'), allowHistoricalFallback: false }
+  expect(groupPricesByModel([future])[0]?.current).toBeNull()
+  expect(modelPriceHint([future], 'new-model')).toBe('단가 미등록')
 })

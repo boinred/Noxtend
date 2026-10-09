@@ -1,0 +1,13 @@
+{
+  "data": [
+    {
+      "id": "claude-sonnet-4-6",
+      "type": "model",
+      "display_name": "Claude Sonnet 4.6",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "has_more": true,
+  "first_id": "claude-sonnet-4-6",
+  "last_id": "claude-sonnet-4-6"
+}

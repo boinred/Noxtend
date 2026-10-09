@@ -137,6 +137,12 @@ public static class ErrorCode
     /// <summary>단가 값이 계산 가능한 형태가 아니다 (음수, 반쪽 장문 구간 등).</summary>
     public const string PriceInvalid = "PRICE_INVALID";
 
+    public const string PriceUpdateInvalid = "PriceUpdateInvalid";
+    public const string PriceUpdateNotFound = "PriceUpdateNotFound";
+    public const string PriceUpdateExpired = "PriceUpdateExpired";
+    public const string PriceUpdateConflict = "PriceUpdateConflict";
+    public const string PriceUpdateRequestConflict = "PriceUpdateRequestConflict";
+
     // ─── 사이클 #7 — 파츠 이미지 생성 (Design §6) ───
 
     /// <summary>이미지 공급자 설정을 찾을 수 없다.</summary>
