@@ -1,6 +1,12 @@
 # 모델·단가 업데이트 구현 및 xHuman 비교 결과
 
-**상태: 구현·A/B 측정·독립 비교·선택 구현 보완·최종 전체 회귀 완료. 로컬 `codex/model-price-update` branch에 보존.**
+**현재 상태: 구현·검증 완료 후 2026-10-09 [PR #9](https://github.com/boinred/Noxtend/pull/9)로 main 병합 완료 (`0e46277`). 2026-10-12 종료 상태 갱신.**
+
+- 작업 브랜치와 A/B 비교 브랜치를 삭제하고 worktree 3개를 복구 가능한 형태로 보관했다. 본 문서는 저장소의 `docs/evals/model-price-update/results.md`에 유지한다.
+- 원시 로그·비교 코드·Git bundle·기존 미커밋 문서 백업은 `/Users/boinred/.codex/artifacts/model-price-update/2026-10-09/`에 보존했다. 병합·정리 근거는 그 아래 `merge-delivery/delivery.json`에 있다.
+- 병합 결과는 검증 완료본 `802a091`과 파일 내용이 동일함을 확인했다. 실제 공급자·유료 API·실청구·배포 검증은 수행하지 않았다.
+
+아래 측정·검증 결과는 병합 전 실행 기록이다. 당시 실패·한계·수치는 그대로 보존한다.
 
 ## 비교 대상과 해석 범위
 
