@@ -10,6 +10,29 @@ namespace Noxtend.Tests.Infrastructure;
 public sealed class OfficialModelCollectionTests
 {
     [Theory]
+    [InlineData("missing-next")]
+    [InlineData("mismatched-limit")]
+    [InlineData("invalid-unit")]
+    public async Task Unreadable_supported_context_rows_report_partial_collection(string mutation)
+    {
+        var html = OfficialTextPriceSourceTests.AnthropicTierTable;
+        html = mutation switch
+        {
+            "missing-next" => html[..html.IndexOf("<tr><td><div>$0.50")] + "</tbody></table>",
+            "mismatched-limit" => html.Replace("over 100,000", "over 200,000"),
+            _ => html.Replace("$2.50 / MTok", "$2.50 / tokens"),
+        };
+        using var http = new HttpClient(new Handler((request, _) => Task.FromResult(Response(Encoding.UTF8.GetBytes(
+            request.RequestUri!.AbsolutePath.EndsWith("/models")
+                ? """{"data":[{"id":"claude-haiku-5-5"}],"has_more":false}""" : html)))));
+        var result = await Collect(http);
+        Assert.Equal("complete", result.ModelListStatus);
+        Assert.Equal("partial", result.Status);
+        Assert.NotNull(result.PriceError);
+        Assert.Null(Assert.Single(result.Candidates).Terms);
+    }
+
+    [Theory]
     [InlineData("openai", 1, 3)]
     [InlineData("anthropic", 2, 2)]
     [InlineData("google", 2, 2)]

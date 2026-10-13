@@ -140,6 +140,20 @@ public sealed class OfficialTextPriceSourceTests
     }
 
     [Theory]
+    [InlineData("unit-missing")]
+    [InlineData("missing-cell")]
+    public void Anthropic_unreadable_rows_keep_evidence_and_collection_error_reason(string mutation)
+    {
+        var html = StandardTable("anthropic", "1.75");
+        html = mutation == "unit-missing" ? html.Replace(" / MTok", "") : html.Replace("<td>$4</td>", "");
+        var candidate = Assert.Single(OfficialTextPriceParser.Parse("anthropic", System.Text.Encoding.UTF8.GetBytes(html),
+            "https://official.example/pricing", DateTimeOffset.UtcNow, ["claude-synthetic"]));
+        Assert.Null(candidate.Terms);
+        Assert.Equal("정확한 모델·Standard 요금·단위 확인 필요", candidate.BlockedReason);
+        Assert.Contains("$1.75", Assert.Single(candidate.Evidence).Conditions);
+    }
+
+    [Theory]
     [InlineData("openai", "gpt-5.3-codex")]
     [InlineData("anthropic", "claude-sonnet-4-6")]
     [InlineData("google", "gemini-2.5-flash")]
@@ -294,6 +308,8 @@ public sealed class OfficialTextPriceSourceTests
             "other-model" => AnthropicTierTable.Replace("<tr><td><div>$0.50", "<tr><td><a href=\"/docs/en/models/other/overview\">Other</a></td><td><div>$0.50"),
             _ => AnthropicTierTable.Replace("for prompts over", "Batch for prompts over"),
         };
+        Assert.Equal(mutation == "span" ? "컨텍스트 구간별 요금 확인 필요" : "정확한 모델·Standard 요금·단위 확인 필요",
+            ParseAnthropicTier(html).BlockedReason);
         foreach (var source in new[] { html, AnthropicTierTable + html, html + AnthropicTierTable })
         {
             var candidate = ParseAnthropicTier(source);

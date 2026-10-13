@@ -120,7 +120,7 @@ internal static class OfficialTextPriceParser
                 if (exactId != model) continue;
                 if (cells.Length != 6)
                 {
-                    yield return new Parsed("text", Standard, null, Text(row), "공식 모델 요금 행 구조 확인 필요");
+                    yield return new Parsed("text", Standard, null, Text(row), "정확한 모델·Standard 요금·단위 확인 필요");
                     continue;
                 }
                 var evidence = "Model pricing; Base tokens; " + Text(row);
@@ -143,12 +143,12 @@ internal static class OfficialTextPriceParser
                         terms = new(input, output, upper + 1, longInput, longOutput);
                     }
                     yield return new Parsed("text", Standard, terms, evidence,
-                        terms is null ? "컨텍스트 구간별 요금 확인 필요" : null);
+                        terms is null ? span == "2" ? "정확한 모델·Standard 요금·단위 확인 필요" : "컨텍스트 구간별 요금 확인 필요" : null);
                     continue;
                 }
                 if (!TokenMoney(Text(cells[1]), out var singleInput) || !TokenMoney(Text(cells[2]), out var singleOutput))
                 {
-                    yield return new Parsed("text", Standard, null, evidence, "공식 모델 요금·단위 확인 필요");
+                    yield return new Parsed("text", Standard, null, evidence, "정확한 모델·Standard 요금·단위 확인 필요");
                     continue;
                 }
                 yield return new Parsed("text", Standard, new(singleInput, singleOutput), evidence, null);
