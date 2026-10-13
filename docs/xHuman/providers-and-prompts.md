@@ -22,7 +22,7 @@
 
 `AnalyzeSprites`는 TaskKind=7, LlmOperationKind=5의 독립 분석 operation이며 Background 전용 프롬프트다. `RunSpriteAnalysisTaskHandler`는 settings·sourceCanvas를 camelCase JSON 데이터로 렌더하고 접수 시 실제 codec 형식과 일치 확인된 업로드 또는 기존 결과의 독립 복사 이미지를 첨부한다. 업로드 MIME 불일치는 접수 단계에서 거부하며 분석 공급자에 잘못된 MIME을 보내지 않는다. `PromptTemplate.Render`는 원래 템플릿만 한 번 치환하여 삽입한 notes의 `{{...}}`를 재확장하거나 미치환 변수로 거부하지 않는다. 원래 템플릿의 누락 변수는 계속 실패한다.
 
-`SeedPrompts.AnalyzeSprites()`와 `SeedSpriteAnalyzePrompt` migration은 정확한 시점·유형과 대상 schema를 등록한다. 기존 AnalyzeSprites/Background 슬롯이 있으면 운영자 내용을 보존하며 기존 3D·평가 프롬프트는 변경하지 않는다. `FakeLlmProvider`도 같은 schema를 반환하고 관리자 격자·편집·Frontend operation 라벨은 새 분석을 포함한다. 단가가 없는 모델 비용은 기존 ModelPriceBook의 null 규칙을 따른다.
+`SeedPrompts.AnalyzeSprites()`와 `SeedSpriteAnalyzePrompt` migration은 정확한 시점·유형과 대상 schema를 등록한다. `SeedPrompts.AnalyzeSpritesV2()`와 `ReviseSpriteAnalyzePrompt` migration은 `sourceBounds` x·y·w·h를 원본 너비·높이 대비 0~1 비율(픽셀 아님)로 안내하는 개정이며 schema 구조는 V1과 같고 좌표 필드에 `description`만 더한다. Background 슬롯을 비활성화하고 `MAX(Version)+1`로 새 행을 추가하며 Down은 새 행 삭제 후 이전 최신 버전을 재활성화한다. 운영자가 만든 버전은 덮어쓰지 않지만 새 버전이 활성 행이 된다. 확인: `SpriteAnalyzePromptMigrationTests`, `SeedPromptVariableTests`. 기존 AnalyzeSprites/Background 슬롯이 있으면 운영자 내용을 보존하며 기존 3D·평가 프롬프트는 변경하지 않는다. `FakeLlmProvider`도 같은 schema를 반환하고 관리자 격자·편집·Frontend operation 라벨은 새 분석을 포함한다. 단가가 없는 모델 비용은 기존 ModelPriceBook의 null 규칙을 따른다.
 
 ### 2D 배경 이미지 생성
 

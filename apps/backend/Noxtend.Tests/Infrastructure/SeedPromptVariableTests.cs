@@ -20,6 +20,37 @@ public sealed class SeedPromptVariableTests
     private static readonly Regex Placeholder = new(@"\{\{(\w+)\}\}", RegexOptions.Compiled);
 
     [Fact]
+    public void SpriteAnalyzeV2UsesTheSameVariablesAsV1AndTeachesNormalizedBounds()
+    {
+        var v1 = SeedPrompts.AnalyzeSprites();
+        var v2 = SeedPrompts.AnalyzeSpritesV2();
+        var used = Placeholder.Matches(v2.System + v2.User).Select(m => m.Groups[1].Value).ToHashSet();
+
+        Assert.Equal(PromptTemplate.AllowedVariables(LlmOperationKind.AnalyzeSprites).OrderBy(v => v), used.OrderBy(v => v));
+        Assert.Equal(v1.User, v2.User);
+        Assert.Contains("0~1", v2.System);
+        Assert.Contains("{x:0.5,y:0.5,w:0.5,h:0.5}", v2.System);
+
+        Assert.True(v2.Note.Length <= 500);
+
+        using var document = JsonDocument.Parse(v2.Schema);
+        foreach (var (_, node) in ObjectsIn(document.RootElement, "$"))
+        {
+            Assert.Equal(
+                node.GetProperty("properties").EnumerateObject().Select(p => p.Name).OrderBy(n => n),
+                node.GetProperty("required").EnumerateArray().Select(v => v.GetString()!).OrderBy(n => n));
+        }
+
+        var bounds = document.RootElement.GetProperty("properties").GetProperty("assets")
+            .GetProperty("items").GetProperty("properties").GetProperty("sourceBounds");
+        Assert.Contains("0~1", bounds.GetProperty("description").GetString());
+        foreach (var axis in new[] { "x", "y", "w", "h" })
+        {
+            Assert.Contains("0~1", bounds.GetProperty("properties").GetProperty(axis).GetProperty("description").GetString());
+        }
+    }
+
+    [Fact]
     public void SpriteSourceSeedUsesOnlyPromptVariable()
     {
         var (system, user, _, _) = SeedPrompts.GenerateSpriteSource();
