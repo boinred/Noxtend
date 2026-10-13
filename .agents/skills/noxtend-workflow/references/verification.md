@@ -69,7 +69,7 @@ pnpm hooks:test
 - 훅은 검사만 수행하며 자동 포맷·stage·stash를 하지 않는다. 실행 대상은 staged 경로로 결정하지만 lint는 현재 작업 트리 전체 Frontend를 읽는다. 부분 stage의 커밋 내용만 격리해 검증하는 것은 아니다.
 - `hooks:install`은 이 checkout의 Git 설정에 `.githooks` 경로를 등록한다. 새 clone에는 한 번 등록해야 한다. Git의 `--no-verify`로 우회할 수 있으므로 훅 통과가 CI·전체 회귀·수동 검증을 대신하지 않는다.
 - `hooks:test`는 임시 Git 저장소와 가짜 pnpm으로 실행·건너뜀·실패 전파 및 실제 커밋 차단을 확인한다. 실제 Frontend 검사 명령은 위의 `pnpm lint`를 사용한다.
-- `.githooks/guard-git-stage.mjs`는 Claude Code·Codex의 `PreToolUse` Bash 훅(`.claude/settings.json`, `.codex/hooks.json`)으로 에이전트의 일괄 stage를 차단한다. `git add`·`git stage`의 `.`·`:/`·`-A`·`--all`·`-u`와 `git commit`의 `-a`·`--all`(`-am` 포함)을 `&&`·`;`·`|`·줄바꿈으로 나눈 각 명령에서 검사하고, 경로를 지정한 stage와 따옴표 안 문자열은 허용한다. 서브셸·`eval` 등 우회는 막지 못하며, 필요하면 사용자가 터미널에서 직접 실행한다. Codex는 `/hooks`에서 프로젝트 훅을 신뢰해야 동작한다.
+- `.githooks/guard-git-stage.mjs`는 Claude Code·Codex의 `PreToolUse` Bash 훅(`.claude/settings.json`, `.codex/hooks.json`)으로 에이전트의 일괄 stage를 차단한다. `git add`·`git stage`의 `.`·`:/`·`-A`·`--all`·`-u`와 `git commit`의 `-a`·`--all`(`-am` 포함)을 `&&`·`;`·`|`·줄바꿈으로 나눈 각 명령에서 검사하고, 경로를 지정한 stage와 따옴표 안 문자열은 허용한다. heredoc 본문 줄이나 `#` 뒤 문자열의 `git add -A`·`git add .`는 오탐으로 차단될 수 있으며, 그때는 경로를 지정하거나 본문을 파일로 넘긴다. 서브셸·`eval` 등 우회는 막지 못하며, 필요하면 사용자가 터미널에서 직접 실행한다. Codex는 `/hooks`에서 프로젝트 훅을 신뢰해야 동작한다.
 
 ## 설계·계획 문서 훅
 

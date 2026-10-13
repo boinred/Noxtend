@@ -33,7 +33,7 @@ Write the simplest code that provably works. Every rule below exists to keep cha
 - Keep diffs small and independently verifiable. One behavior per change; unrelated cleanup goes in its own change.
 - Match the surrounding code: naming, idioms, comment density, and the repository's Korean/English comment rules.
 - Comments explain **why** — a decision, a trade-off, a trap — never restate what the code does.
-- Use `//` for ordinary C#/JavaScript/TypeScript comments and finish with a short noun phrase. Use syntax-required JSX/CSS/YAML/shell comments, XML documentation, and tool directives as specified by the root `AGENTS.md`; do not rewrite existing comments in bulk.
+- Use `//` for ordinary C#/JavaScript/TypeScript comments and finish with a short noun phrase. Use syntax-required JSX/CSS/YAML/shell comments, XML documentation, and tool directives as specified in `## Comments`; do not rewrite existing comments in bulk.
 - When touching existing code, leave it slightly simpler than found, but never bundle a rewrite into a feature change.
 
 ## Reviewing

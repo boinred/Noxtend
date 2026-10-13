@@ -15,7 +15,7 @@
 
 ## Review Focus
 
-1. 훅의 오탐·누락: 경로 지정 stage(`git add .agents/x`, `git add ./src/a.ts`), 따옴표 안 문자열, `git commit -m`의 메시지 값은 허용하고 `-A`·`--all`·`-u`·`--update`·`.`·`:/`·`*`·`commit -a`·`-am`·`git -C <dir> add -A`·복합 명령 안의 일괄 stage는 차단하는가 → Task 1 테스트.
+1. 훅의 오탐·누락: 경로 지정 stage(`git add .agents/x`, `git add ./src/a.ts`), 따옴표 안 문자열, `git commit -m`의 메시지 값은 허용하고 `-A`·`--all`·`-u`·`--update`·`.`·`:/`·`commit -a`·`-am`·`git -C <dir> add -A`·복합 명령 안의 일괄 stage는 차단하는가 → Task 1 테스트.
 2. 옮긴 지침의 누락: 기존 102줄의 각 규칙이 새 `AGENTS.md`, `execution.md`, `karpathy-guidelines`, 기존 정본 중 한 곳에 남는가 → Task 2 대조표.
 
 ## 실행 방식
@@ -58,7 +58,9 @@
 
 - 실행 방식: Subagent-driven, 브랜치 `claude/agents-md-slim`, 시작 `d52ceb3`(같은 브랜치의 선행 커밋은 이전 작업의 미커밋 문서를 사용자 요청으로 먼저 커밋한 것).
 - Task 1: `59d7f19`. RED(스크립트 없음, 2건 실패) → GREEN. `pnpm hooks:test` 4/4 통과, `git add -A` 수동 입력에 deny JSON 출력, 커밋 훅의 Frontend lint 통과. 독립 리뷰 Approved; 리뷰어가 브리프 사례와 추가 탐침(`-Av`, `-c … add .`, `GIT_DIR=x`, `-m x -a`, `--amend -a`, `-p`, `-C HEAD` 등)을 직접 실행해 확인.
-- Task 1 남은 제약: `sudo`·`env`·절대 경로 `git`·`xargs`·서브셸·`eval`로 감싼 명령, `git add ./`·`..`, 주석(`#`) 뒤 문자열은 판별하지 않는다. `git add -- -A`는 오탐이다. 훅은 보조 장치이며 지침의 경로 지정 stage 원칙이 정본이다.
+- Task 1 남은 제약: `sudo`·`env`·절대 경로 `git`·`xargs`·서브셸·`eval`로 감싼 명령, `./`·`..`·`*`는 일괄 stage로 보지 않는다. 따옴표 없는 heredoc 본문 줄의 `git add -A`·`git add .`와 `#` 뒤 문자열은 오탐으로 deny될 수 있다(`git add AGENTS.md # not -A`). `git add -- -A`도 오탐이다. 훅은 보조 장치이며 지침의 경로 지정 stage 원칙이 정본이다.
 - Task 2: `7496ac9`, 수정 `1eebf23`. 루트 `AGENTS.md` 102줄(12,103B) → 59줄. 독립 리뷰에서 저장소 아닌 사본의 `git init` 금지·완료 주장 금지 규칙 누락(Important)을 찾아 `verification.md` 완료 근거 항목에 복원했고, "전체 `SKILL.md`" 표현도 되살렸다. `pnpm docs:check`, `git diff --check`, 상대 링크·anchor 검사 통과.
 - 옮긴 위치: 계획 작성·구현 실행 방식 → `.agents/skills/noxtend-workflow/references/execution.md`, 주석 규칙 → `karpathy-guidelines`의 `## Comments`, 지도 갱신 세부 → 기존 `docs/xHuman/README.md`, 실패 판단·`.git` 없는 사본 → 기존 `verification.md`, 루트 CI 참조 스크립트 확인 → 기존 `deployment.md`.
 - 미반영 Minor: "공통 지침을 복제하지 않는다", 지도에서 못 찾으면 검색 범위를 넓힌다는 문장, `noxtend-workflow` description의 실행 자료 언급은 넣지 않았다.
+- 의도된 의미 변경: 기존 "명시적 요청이 있을 때만 전체 일괄 stage" → "에이전트 훅이 막고 필요하면 사용자가 직접 실행"(사용자 승인 훅 목표).
+- 최종 리뷰 수정: `docs: address final review of agents md slimming`(실행 명령 문장 원문 복원, 주석 규칙 참조·훅 오탐 설명·훅 deny 사유 보완).

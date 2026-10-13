@@ -51,7 +51,7 @@ pnpm hooks:install
 
 ## 실행·외부 행동·Git
 
-- 런타임·명령은 `package.json`, `pnpm-lock.yaml`, `.csproj`, 실제 스크립트가 정본이다. 현재 요구는 Node.js `>=24`, pnpm `11.9.0`, Backend `.NET 10`이며 루트 `pnpm` 스크립트는 Frontend 대상이다.
+- 런타임·명령은 `package.json`, `pnpm-lock.yaml`, `.csproj`, 실제 스크립트가 정본이다. 현재 요구는 Node.js `>=24`, pnpm `11.9.0`, Backend `.NET 10`이다. 루트의 앱 실행·검증 `pnpm` 스크립트는 Frontend 대상이며 Backend 검증을 대신하지 않는다.
 - 기능 코드 변경은 해당 스택 전체 회귀, API 계약 변경은 양쪽 스택을 검증한다. HTTP·영속성 경계 변경은 [연결·경계 검증](.agents/skills/noxtend-workflow/references/verification.md#연결경계-검증)도 한다. 일반 검증은 Fake로 하고 유료 smoke를 제외하며, 미수집·건너뜀·환경 미설정을 통과로 계산하지 않는다.
 - 현재 인증이 없다. 네트워크 노출·비밀값·저장 데이터·Data Protection 키 보존은 배포 지침을 따른다. 실제 AI·유료 smoke·Slack 전송·배포는 사용자 요청의 승인 범위에서만 수행하며 설정·환경 변수 존재를 승인으로 간주하지 않는다.
 - `azure-pipelines.yml`은 Slack 커밋 알림 정의다. 빌드·테스트·배포 파이프라인으로 설명하지 않는다.

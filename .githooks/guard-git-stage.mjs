@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 
 const reason =
-  '일괄 stage와 commit -a는 다른 작업의 변경을 섞을 수 있어 경로를 지정해 stage한 뒤 commit해야 한다'
+  '일괄 stage와 commit -a는 다른 작업의 변경을 섞을 수 있어 경로를 지정해 stage한 뒤 commit해야 한다. 일괄 stage가 꼭 필요하면 사용자가 직접 실행한다'
 
 // unquoted operator and whitespace tokenizer
 function segments(command) {
