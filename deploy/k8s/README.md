@@ -23,7 +23,7 @@ deploy/local-up.sh
 `--forward`는 포트 포워딩(`localhost:18080`)을 터미널에서 `Ctrl+C`까지 유지한다.
 API 파드가 재시작되면 두 방식 모두 포워딩이 끊긴다. 재배포 없이 다시 연결하려면
 `kubectl -n noxtend port-forward svc/api 18080:8080`을 사용한다.
-이미 포트 18080을 쓰는 포워딩이 있으면 해당 프로세스를 종료한 뒤 실행한다.
+실행 전 18080 listener를 검사하고, 현재 사용자·kubectl 실행파일·`noxtend` namespace·`svc/api 18080:8080`이 확인된 기존 포워딩만 TERM으로 종료한다. 명시 context는 현재 context와 일치해야 하며, context 생략은 기존 스크립트 명령 형태에 한해 허용한다. 포트 해제를 최대 5초 기다리며, 다른 context·프로그램 또는 식별 불확실한 listener가 하나라도 있거나 해제가 실패하면 빌드·배포 전에 중단한다. 미확인 프로세스는 직접 확인한 뒤 종료해야 한다.
 Frontend는 별도로 `pnpm dev`로 실행하고
 `http://localhost:5173`에 접속한다. `18080`은 API 주소이며 `/`는 화면을 제공하지 않는다.
 

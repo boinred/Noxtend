@@ -37,8 +37,52 @@ die() { printf '\033[31m✗ %s\033[0m\n' "$1" >&2; exit 1; }
 
 # --- preflight -----------------------------------------------------------------
 
-command -v kubectl >/dev/null || die "kubectl not found"
-command -v docker  >/dev/null || die "docker not found"
+for tool in kubectl docker curl lsof ps id sleep seq mktemp cat nohup; do
+  command -v "$tool" >/dev/null || die "$tool not found"
+done
+
+listeners() {
+  local result status=0
+  result=$(lsof -nP -iTCP:18080 -sTCP:LISTEN -t 2>&1) || status=$?
+  if [ "$status" -ne 0 ] && { [ "$status" -ne 1 ] || [ -n "$result" ]; }; then
+    die "cannot inspect port 18080: $result"
+  fi
+  printf '%s' "$result"
+}
+
+LISTENERS=$(listeners)
+if [ -n "$LISTENERS" ]; then
+  CONTEXT=$(kubectl config current-context) || die "cannot determine Kubernetes context"
+  [ -n "$CONTEXT" ] || die "cannot determine Kubernetes context"
+  OWNER=$(id -u)
+  KUBECTL=$(command -v kubectl)
+  # All-listener validation before TERM
+  for pid in $LISTENERS; do
+    [[ "$pid" =~ ^[0-9]+$ ]] || die "cannot identify listener on port 18080"
+    PROCESS=$(ps -ww -p "$pid" -o uid= -o command=) || die "cannot identify listener PID $pid on port 18080"
+    read -r uid executable arguments <<< "$PROCESS"
+    [ "$uid" = "$OWNER" ] && { [ "$executable" = "$KUBECTL" ] || [ "$executable" = kubectl ]; } || \
+      die "port 18080 is occupied by an unverified process (PID $pid); stop it manually"
+    case "$arguments" in
+      "-n $NAMESPACE port-forward svc/api 18080:8080"|\
+      "-n $NAMESPACE port-forward svc/api 18080:8080 --address 127.0.0.1"|\
+      "--context $CONTEXT -n $NAMESPACE port-forward svc/api 18080:8080"|\
+      "--context $CONTEXT -n $NAMESPACE port-forward svc/api 18080:8080 --address 127.0.0.1") ;;
+      *) die "port 18080 is occupied by an unverified process (PID $pid); stop it manually" ;;
+    esac
+  done
+  log "Stopping existing Noxtend port-forward on port 18080"
+  for pid in $LISTENERS; do
+    kill -TERM "$pid" || die "cannot stop port-forward PID $pid"
+  done
+  for ((attempt=0; attempt<25; attempt++)); do
+    REMAINING=$(listeners) || die "cannot verify port 18080 release"
+    [ -n "$REMAINING" ] || break
+    sleep 0.2
+  done
+  REMAINING=$(listeners) || die "cannot verify port 18080 release"
+  [ -z "$REMAINING" ] || die "port 18080 was not released after TERM; stop it manually"
+fi
 
 [ -f "$K8S_DIR/secrets.yaml" ] || die \
   "deploy/k8s/secrets.yaml is missing. Copy secrets.example.yaml and set the passwords (see deploy/k8s/README.md)."
