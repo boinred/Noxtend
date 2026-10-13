@@ -20,7 +20,7 @@ API와 Worker는 같은 ASP.NET Core 호스트에서 실행된다. 프로젝트 
 | 변경 대상 | 코드 흐름 | 관련 테스트 시작점 |
 | --- | --- | --- |
 | 텍스트 공정 | `TaskWorker` → `RunTaskHandler` → `StageRegistry`·`IStage`의 변수·스키마·응답 처리 → `ILlmProvider` | `Noxtend.Tests/Application/RunTaskHandlerTests.cs`, 단계별 테스트 |
-| 2D 기준 이미지 생성 | `UploadsController.GenerateAsync` → `GenerateSpriteSourceHandler` → `IImageProvider` → `CreateUploadHandler` | `Noxtend.Tests/Application/SpriteSourceGenerationTests.cs`, `Api/SpriteApiTests.cs` |
+| 2D 원본 준비 | `SpriteJobsController` 원본 명령 → `SpriteSourceCommandsHandler` → 보완·생성 공정 또는 선택 시 `SpriteSourceInspector` → `AnalyzeSprites` | `Noxtend.Tests/Application/SpriteSourceCommandTests.cs`, `SpriteSourceTaskTests.cs`, `Api/SpriteApiTests.cs`, `Infrastructure/SpriteRequestConcurrencyTests.cs` |
 | 파츠 이미지 생성 | Worker → `RunGenerationTaskHandler` → `GenerationStage` → `IImageProvider` | `Noxtend.Tests/Application/RunGenerationTaskHandlerTests.cs`, `ImageProviderUsageTests.cs` |
 | 유사도 평가 | `EvaluateSimilarityHandler` → `ILlmProvider` | `Noxtend.Tests/Application/SimilarityEvaluateHandlerTests.cs`, `SimilarityStartHandlerTests.cs` |
 | 공급자 관리 | `ProvidersController` → `ProviderHandlers` → Provider 도메인·Repository | `Noxtend.Tests/Application/ProviderHandlerTests.cs`, API 공급자 테스트 |
@@ -44,6 +44,8 @@ LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계�
 `PipelineJob.Sprites.cs`의 `ReplaceSpritePlan`, `ApproveSpritePlan`, `ApproveSpriteBases`, `RegenerateSpriteFrame`, `ApproveSpriteAsset`, `CaptureSpriteExport`가 검수와 고정 입력을 관리한다. 생성 입력 변경은 해당 대상의 `PlanRevision`과 슬롯을 갱신하고, FPS·이름·순서 변경은 이미지·공정을 유지하며 해당 승인만 무효화한다. `ReviewRevision`은 요청의 낡은 검수를 거부하고 no-op에서는 증가하지 않는다. 기준 교체는 후속 프레임과 승인을 무효화하며 삭제된 대상의 이미지·패키지 이력은 `SpritePipelineState`에 보존한다.
 
 `SpriteCommandsHandler`는 `SpriteCommandContext(JobId, RequestId, ExpectedRevision)`로 계획 편집·계획 승인·기준 승인·프레임 재생성·대상 승인·내보내기를 접수한다. operation·job/asset/index·expectedRevision과 고정 property 순서의 JSON, 정렬한 대상 ID로 SHA-256 fingerprint를 만들고 전역 요청 조회를 revision 검사보다 먼저 수행한다. 최초 조회와 작업 조회 사이에 동일 요청이 확정되는 경쟁은 작업 조회 후 mutation 검사 전 receipt 재조회로 판정하므로 이후 취소된 작업에서도 기존 접수 응답을 반환한다. 같은 요청은 기존 receipt·TaskIds를 반환하고 다른 본문·경로·operation은 `SPRITE_REQUEST_CONFLICT`, 새 요청의 낡은 검수는 `SPRITE_REVISION_CONFLICT`로 거부한다. 상태·팬아웃·receipt를 같은 SaveChanges로 저장한 다음 기존 오케스트레이터에 디스패치하며 SQL unique/rowversion 경쟁은 ReloadAsync 후 승자 receipt 또는 충돌로 반환한다. 생성 승인 때 이미지 모델의 투명 지원과 고정 생성 캔버스 capability를 확인한다.
+
+`SpriteSourceCommandsHandler`는 원본 준비 명령 다섯 개를 같은 순서(fingerprint → receipt → 작업 → mode·revision·취소 → mutation → receipt → SaveChanges → 충돌 시 `ReloadAsync` → 디스패치)로 접수한다. 초안 생성은 텍스트·이미지 공급자 활성, 텍스트 모델 목록, 이미지 모델의 투명 지원·생성 크기, `EnhanceSpriteSource`·`GenerateSpriteSource`·`AnalyzeSprites` Background 활성 프롬프트를 확인하고 `SpriteSourceSizes.Pick`으로 잠정 원본 캔버스를, 그 출력 캔버스로 생성 캔버스를 정한 뒤 작업·보완 공정·receipt를 한 SaveChanges로 저장한다. 다시 보완과 선택은 초안의 텍스트 공급자 활성을 재검증한다. 생성은 본문 프롬프트를 저장하고 그 snapshot으로 공정을 계획하며, 같은 프롬프트 저장은 revision을 올리지 않아도 receipt를 남긴다. 선택은 초안의 후보만 받고(없으면 `JOB_UPLOAD_NOT_FOUND`) `SpriteSourceInspector`로 12 MiB·16,777,216픽셀·EXIF 방향·MIME을 검사한 실제 크기로 캔버스를 다시 계산한 뒤 독립 Blob과 `StoredImage`를 만들어 `SelectSource`에 넘긴다. 검사 실패는 복사 없이 400, 복사 후 도메인 거부·충돌·미확정 저장 실패는 복사본을 지운다. 계획·저장 명령은 `Touch`로 Jobs 행을 바꾸므로 동시 generate는 rowversion으로 하나만 접수된다. `StartSpriteJobHandler`도 같은 `SpriteSourceInspector`를 쓴다.
 
 분석 대기·실행 중 `ReplaceSpritePlan`을 거부해 늦은 분석이 편집을 덮어쓰지 않게 한다. `RetryTaskHandler`·`RetryOutputTask`는 현재 AnalyzeSprites·GenerateSprite·PackSprites·EnhanceSpriteSource·GenerateSpriteSource 실패를 같은 공정과 고정 입력으로 다시 실행한다. 원본 준비 공정은 `SourceDraft`를 유지하고 다른 미종료 원본 준비 공정이 있으면 거부한다. 분석은 새 계획이 없는 현재 분석, 생성은 현재 빈 슬롯, pack은 현재 승인 snapshot의 최신 내보내기만 재시도한다. 명시적 프레임 재생성은 새 공정이며 무관한 승인은 유지한다. 종료된 2D 작업의 재생성·retry·export 접수는 Pending과 CompletedAt=null로 재개방하고 Worker Claim에서 Running으로 전환한다. 취소된 작업은 재개방하지 않으며 계획 편집만 하는 작업은 PendingReview다. `PackSprites=9`는 LLM operation·프롬프트를 갖지 않고 단일 일반 공정 Worker·ReclaimPlan에 등록한다.
 
@@ -77,16 +79,19 @@ LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계�
 
 ## 2D 배경 HTTP 계약
 
-`UploadsController.GenerateAsync`의 `POST /api/uploads/generate`는 `GenerateSpriteSourceRequest { requestId, prompt, imageProviderConfigId, imageModel }`을 받아 동기 생성 후 201 `ApiResponse<UploadResponse>`를 반환한다. `GenerateSpriteSourceHandler`는 설명을 trim 후 1~1000자로 제한하고 활성 Background 기준 프롬프트·투명 지원·양의 생성 크기가 확인된 모델을 요구한다. 너비 ≥ 높이인 크기 중 최대 면적을 선택하고 해당 크기가 없으면 전체 최대 면적을 사용한다. 참조 없이 opaque 한 장을 생성하고 `CreateUploadHandler`의 기존 PNG·JPEG·WebP, 12 MiB 업로드 규칙과 Blob 우선 저장을 재사용하며 이름은 `sprite-prompt`다. 생성 요청은 2D 작업을 만들지 않으며 `requestId`는 호출 기록의 `SourceGenerationId`로만 사용한다.
+원본 준비 명령은 2D 작업 접수와 같은 receipt·revision 규칙을 따른다. 설명·프롬프트 길이 위반은 `SPRITE_SETTINGS_INVALID`(400), 원본 준비 공정 실행·대기 중은 `SPRITE_BUSY`, `SourceDraft`가 아니면 `SPRITE_NOT_READY`, 후보 8장에서 generate는 `SPRITE_SOURCE_LIMIT`(모두 409), 선택 검증 실패는 기존 업로드 코드(400)다. 이전의 동기 `POST /api/uploads/generate`는 제거했다.
 
-설정 오류는 `SpriteSettingsInvalid`(400), 공급자 없음·중지는 `JobImageProviderNotFound`·`JobImageProviderDisabled`(400), 미확인 모델은 `JobImageModelUnavailable`(400), 활성 프롬프트 누락은 `PromptNotActive`(409)다. 공급자 호출·응답 실패와 한 장이 아닌 응답·업로드 규칙 위반은 `ProviderCallFailed`·`ProviderBadResponse`(502)로 반환한다. handler 진입부터 표준 `TimeProvider`의 180초 linked 취소 토큰을 조회·대기·생성·저장에 전달하며 서버 제한만 502로 변환하고 요청 취소는 전파한다. 반환 직후 취소 확인으로 토큰을 무시한 의존 호출도 다음 단계로 넘어가지 않는다. 공급자 응답 뒤 실패는 기존 recorder의 성공·실제 사용량을 보존하며 응답 전 취소는 사용량을 추정하지 않는다. 기록의 `CancellationToken.None`과 Blob 우선 저장을 유지하므로 협력적 제한이며 저장 도중 취소의 원자적 롤백·미사용 Blob 정리를 제공하지 않는다.
-
-`Noxtend.Api/Controllers/SpriteJobsController.cs`는 기존 `StartSpriteJobHandler`·`SpriteCommandsHandler`를 호출한다. `Contracts/SpriteContracts.cs`는 요청과 안전한 응답 DTO이며 엔티티·Blob 키·공급자 주소·fingerprint를 공개하지 않는다. 접수와 모든 검수 mutation은 기존 `{ data, error }` 봉투의 202와 `{ id, status, revision, taskIds }`를 반환한다.
+`Noxtend.Api/Controllers/SpriteJobsController.cs`는 `StartSpriteJobHandler`·`SpriteCommandsHandler`·`SpriteSourceCommandsHandler`를 호출한다. `Contracts/SpriteContracts.cs`는 요청과 안전한 응답 DTO이며 엔티티·Blob 키·공급자 주소·fingerprint를 공개하지 않는다. 접수와 모든 검수 mutation은 기존 `{ data, error }` 봉투의 202와 `{ id, status, revision, taskIds }`를 반환한다.
 
 | 경로 | 본문·결과 |
 | --- | --- |
-| `POST /api/uploads/generate` | `requestId`, `prompt`, `imageProviderConfigId`, `imageModel` → 201 `UploadResponse` |
 | `POST /api/jobs/sprites` | `requestId`, `uploadId` 또는 `sourceJobId`·`sourceGeneratedImageId`, 분석·이미지 공급자/모델, `settings` |
+| `POST /api/jobs/sprites/drafts` | `requestId`, `description`, 텍스트·이미지 공급자/모델, `settings` → 원본 준비 작업 + 보완 공정 |
+| `POST /api/jobs/{id}/sprites/source/enhance` | `requestId`, `expectedRevision`, `description` |
+| `PUT /api/jobs/{id}/sprites/source/prompt` | `requestId`, `expectedRevision`, `prompt` |
+| `POST /api/jobs/{id}/sprites/source/generate` | `requestId`, `expectedRevision`, `prompt` → 저장 + 후보 생성 공정 |
+| `POST /api/jobs/{id}/sprites/source/select` | `requestId`, `expectedRevision`, `candidateId` → 원본 확정 + 분석 공정 |
+| `GET /api/jobs/{id}/sprites/source/candidates/{candidateId}` | 후보 이미지, 저장 MIME, 파일명 없음 |
 | `PUT /api/jobs/{id}/sprites/plan` | `requestId`, `expectedRevision`, `assets` 계획 배열 |
 | `POST /api/jobs/{id}/sprites/plan/approve` | `requestId`, `expectedRevision` |
 | `POST /api/jobs/{id}/sprites/base/approve` | `requestId`, `expectedRevision`, `assetIds` |
@@ -98,11 +103,11 @@ LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계�
 
 `settings`는 `view: sideView|topDown|isometric`, `outputKind: layers|tiles`, 선택 `tileWidth=128`, 선택 `repeat=both`다. 이름 입력의 숫자·조합 문자열을 거부한다. 계획은 대상 ID·이름·순서·`sourceBounds { x,y,w,h }`·투명·루프·프레임 수·FPS·동작 설명을 받는다. sprite 요청의 미등록 필드는 JSON formatter가 거부하므로 Blob 키·URL을 원본 참조로 받지 않는다. DTO 매핑은 명시적 null 목록·항목·중첩 영역과 유한하지 않은 ROI를 fingerprint 직렬화 전에 거부하고 나머지 규칙은 기존 Domain 검증에 맡긴다. JSON 숫자 `1e400`의 무한대 변환도 400이다.
 
-`JobsController`의 기존 상세는 `productionMode: threeD|twoD`와 nullable `sprite`를 추가한다. 기존 3D는 `sprite=null`이다. sprite는 설정·원본/생성/출력 캔버스·변환·phase·reviewRevision·대상 계획/슬롯/승인 snapshot·이미지/패키지 이력을 담는다. `completedExportId`는 실제 저장된 export가 있을 때만 공개하며 내부의 실패 소비 ID는 null로 변환한다. `exports`에는 저장 성공한 ID·공정 ID·검수 revision·current·생성 시각·포함/제외 대상 ID만 담는다.
+`JobsController`의 기존 상세는 `productionMode: threeD|twoD`와 nullable `sprite`를 추가한다. 기존 3D는 `sprite=null`이다. sprite는 설정·원본/생성/출력 캔버스·변환·phase·reviewRevision·대상 계획/슬롯/승인 snapshot·이미지/패키지 이력을 담는다. `completedExportId`는 실제 저장된 export가 있을 때만 공개하며 내부의 실패 소비 ID는 null로 변환한다. `exports`에는 저장 성공한 ID·공정 ID·검수 revision·current·생성 시각·포함/제외 대상 ID만 담는다. `source`는 원본 준비 출신 작업만 `{ description, prompt, candidates[{ id, prompt, width, height, createdAt }] }`이고 원본 확정 후에도 유지하며 Blob 키는 없다. 원본 준비 중 `sourceImageId`는 상세·요약 모두 null이다.
 
 기존 목록은 선택 `productionMode=threeD|twoD`를 받고 잘못된 값은 400이며 items와 total에 같은 필터를 적용한다. 각 요약은 mode와 nullable `sprite { phase, assetCount, approvedAssetCount, imageCount, exportCount }`를 추가한다. category·status·limit와 기존 필드 의미는 유지한다.
 
-`ApiResults`는 요청/revision/busy/wrong-mode/not-ready 충돌을 409, 작업 소유 대상 누락을 404, 설정·계획·프레임 오류를 400으로 매핑한다. 이미지·ZIP의 다른 작업 ID는 기존 job-not-found 봉투 404이며 실제 Blob 파일 누락은 기존 바이너리 관례의 빈 404다. 접수된 export snapshot은 저장 ZIP이 없으면 409다. 저장 성공한 과거 PNG·ZIP은 current 여부와 무관하게 작업 소유 이력으로 다운로드할 수 있다.
+`ApiResults`는 요청/revision/busy/wrong-mode/not-ready/source-limit 충돌을 409, 작업 소유 대상 누락을 404, 설정·계획·프레임 오류를 400으로 매핑한다. 이미지·ZIP·원본 후보의 다른 작업 ID는 기존 job-not-found 봉투 404이며 실제 Blob 파일 누락은 기존 바이너리 관례의 빈 404다. 접수된 export snapshot은 저장 ZIP이 없으면 409다. 저장 성공한 과거 PNG·ZIP은 current 여부와 무관하게 작업 소유 이력으로 다운로드할 수 있다.
 
 `JobsController`는 mesh·검수 조회/겹침/추가/삭제/이동/승인/서술/팔레트·방향 생성·서술 복귀·mesh 재계획을 2D에서 409로 거부한다. 공통 cancel/retry/delete는 유지한다. `GetSceneLayoutHandler`, `RestoreSceneRevisionHandler`, `StartSimilarityRunHandler`도 공통 Application 입구에서 2D를 차단해 빈 3D layout 저장·복원과 Blob/평가 dispatch를 막는다. 읽기 전용 similarity 상태·이력 경로는 유지한다.
 

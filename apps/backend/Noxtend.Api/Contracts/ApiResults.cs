@@ -24,6 +24,7 @@ public static class ApiResults
         [ErrorCode.SpriteRevisionConflict] = StatusCodes.Status409Conflict,
         [ErrorCode.SpriteBusy] = StatusCodes.Status409Conflict,
         [ErrorCode.SpriteNotReady] = StatusCodes.Status409Conflict,
+        [ErrorCode.SpriteSourceLimit] = StatusCodes.Status409Conflict,
         [ErrorCode.SpriteAssetNotFound] = StatusCodes.Status404NotFound,
         [ErrorCode.SpriteSettingsInvalid] = StatusCodes.Status400BadRequest,
         [ErrorCode.SpritePlanInvalid] = StatusCodes.Status400BadRequest,

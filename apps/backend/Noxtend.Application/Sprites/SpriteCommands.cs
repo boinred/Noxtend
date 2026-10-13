@@ -7,3 +7,6 @@ public sealed record StartSpriteJobCommand(Guid RequestId, Guid? UploadId, Guid?
     Guid ImageProviderConfigId, string ImageModel, SpriteSettings Settings);
 
 public sealed record SpriteCommandContext(Guid JobId, Guid RequestId, int ExpectedRevision);
+
+public sealed record CreateSpriteDraftCommand(Guid RequestId, string Description, Guid ProviderConfigId, string Model,
+    Guid ImageProviderConfigId, string ImageModel, SpriteSettings Settings);

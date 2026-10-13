@@ -56,8 +56,6 @@ public sealed class PipelineFixture
             Jobs, Orchestrator, Clock, Scheduler, NullLogger<TaskExecution>.Instance);
 
         RateLimitGate = new RateLimitGate(RateLimiter, Clock);
-        GenerateSpriteSource = new GenerateSpriteSourceHandler(Providers, Catalog, Prompts,
-            new StubImageProviderFactory(Images_), RateLimitGate, Upload);
         Run = new RunTaskHandler(
             Images, Blobs, new StubProviderFactory(Llm), Prompts,
             new StageRegistry(
@@ -75,6 +73,8 @@ public sealed class PipelineFixture
             Execution, Clock, Options, NullLogger<RunSpritePackTaskHandler>.Instance);
         StartSprites = new StartSpriteJobHandler(Jobs, Images, Blobs, Providers, Catalog, Prompts,
             new SkiaImageTranscoder(), Orchestrator, Clock, NullLogger<StartSpriteJobHandler>.Instance);
+        SpriteSource = new SpriteSourceCommandsHandler(Jobs, Images, Blobs, Providers, Catalog, Prompts,
+            new SkiaImageTranscoder(), Orchestrator, Clock, NullLogger<SpriteSourceCommandsHandler>.Instance);
         RunSpriteAnalysis = new RunSpriteAnalysisTaskHandler(Images, Blobs, new StubProviderFactory(Llm),
             Prompts, Execution, Options, RateLimitGate);
         RunSpriteGeneration = new RunSpriteGenerationTaskHandler(Jobs, Images, Blobs,
@@ -148,11 +148,11 @@ public sealed class PipelineFixture
 
     public JobOrchestrator Orchestrator { get; }
     public CreateUploadHandler Upload { get; }
-    public GenerateSpriteSourceHandler GenerateSpriteSource { get; }
     public StartJobHandler Start { get; }
     public SpriteCommandsHandler SpriteCommands { get; }
     public RunSpritePackTaskHandler RunSpritePack { get; }
     public StartSpriteJobHandler StartSprites { get; }
+    public SpriteSourceCommandsHandler SpriteSource { get; }
     public RunSpriteAnalysisTaskHandler RunSpriteAnalysis { get; }
     public RunSpriteGenerationTaskHandler RunSpriteGeneration { get; }
     public RunSpriteSourceEnhanceTaskHandler RunSpriteSourceEnhance { get; }

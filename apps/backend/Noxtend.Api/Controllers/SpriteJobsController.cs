@@ -11,7 +11,7 @@ namespace Noxtend.Api.Controllers;
 [ApiController]
 [Route("api/jobs")]
 public sealed class SpriteJobsController(StartSpriteJobHandler start, SpriteCommandsHandler commands,
-    IJobRepository jobs, IBlobStorage blobs) : ControllerBase
+    SpriteSourceCommandsHandler source, IJobRepository jobs, IBlobStorage blobs) : ControllerBase
 {
     [HttpPost("sprites")]
     public async Task<IActionResult> StartAsync([FromBody] StartSpriteJobRequest request, CancellationToken ct)
@@ -21,6 +21,40 @@ public sealed class SpriteJobsController(StartSpriteJobHandler start, SpriteComm
         return Accepted(await start.HandleAsync(new(request.RequestId, request.UploadId, request.SourceJobId,
             request.SourceGeneratedImageId, request.ProviderConfigId, request.Model,
             request.ImageProviderConfigId, request.ImageModel, settings), ct));
+    }
+
+    [HttpPost("sprites/drafts")]
+    public async Task<IActionResult> CreateDraftAsync([FromBody] CreateSpriteDraftRequest request, CancellationToken ct)
+    {
+        var settings = request.Settings?.ToDomain();
+        if (settings is null) return Invalid(ErrorCode.SpriteSettingsInvalid);
+        return Accepted(await source.CreateDraftAsync(new(request.RequestId, request.Description, request.ProviderConfigId,
+            request.Model, request.ImageProviderConfigId, request.ImageModel, settings), ct));
+    }
+
+    [HttpPost("{id:guid}/sprites/source/enhance")]
+    public async Task<IActionResult> EnhanceSourceAsync(Guid id, [FromBody] SpriteSourceEnhanceRequest request, CancellationToken ct)
+        => Accepted(await source.EnhanceAsync(new(id, request.RequestId, request.ExpectedRevision), request.Description, ct));
+
+    [HttpPut("{id:guid}/sprites/source/prompt")]
+    public async Task<IActionResult> SaveSourcePromptAsync(Guid id, [FromBody] SpriteSourcePromptRequest request, CancellationToken ct)
+        => Accepted(await source.SavePromptAsync(new(id, request.RequestId, request.ExpectedRevision), request.Prompt, ct));
+
+    [HttpPost("{id:guid}/sprites/source/generate")]
+    public async Task<IActionResult> GenerateSourceAsync(Guid id, [FromBody] SpriteSourcePromptRequest request, CancellationToken ct)
+        => Accepted(await source.GenerateAsync(new(id, request.RequestId, request.ExpectedRevision), request.Prompt, ct));
+
+    [HttpPost("{id:guid}/sprites/source/select")]
+    public async Task<IActionResult> SelectSourceAsync(Guid id, [FromBody] SpriteSourceSelectRequest request, CancellationToken ct)
+        => Accepted(await source.SelectAsync(new(id, request.RequestId, request.ExpectedRevision), request.CandidateId, ct));
+
+    [HttpGet("{id:guid}/sprites/source/candidates/{candidateId:guid}")]
+    public async Task<IActionResult> GetSourceCandidateAsync(Guid id, Guid candidateId, CancellationToken ct)
+    {
+        var job = await jobs.GetAsync(id, ct);
+        var candidate = job?.Sprites?.SourceDraft?.Candidates.FirstOrDefault(candidate => candidate.Id == candidateId);
+        if (candidate is null) return Missing();
+        return await DownloadAsync(candidate.BlobKey, candidate.ContentType, null, ct);
     }
 
     [HttpPut("{id:guid}/sprites/plan")]
@@ -82,13 +116,13 @@ public sealed class SpriteJobsController(StartSpriteJobHandler start, SpriteComm
             : Missing();
     }
 
-    private async Task<IActionResult> DownloadAsync(string key, string contentType, string filename, CancellationToken ct)
+    private async Task<IActionResult> DownloadAsync(string key, string contentType, string? filename, CancellationToken ct)
     {
         try
         {
             var stream = await blobs.OpenReadAsync(key, ct);
             Response.Headers.CacheControl = "private, max-age=31536000, immutable";
-            return File(stream, contentType, filename);
+            return filename is null ? File(stream, contentType) : File(stream, contentType, filename);
         }
         catch (FileNotFoundException) { return NotFound(); }
     }

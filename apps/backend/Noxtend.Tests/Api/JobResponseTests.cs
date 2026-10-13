@@ -2,6 +2,7 @@ using Noxtend.Api.Contracts;
 using Noxtend.Application.Job;
 using Noxtend.Application.Pipeline;
 using Noxtend.Domain.Job;
+using Noxtend.Domain.Sprites;
 using Noxtend.Tests.Domain;
 
 namespace Noxtend.Tests.Api;
@@ -20,6 +21,31 @@ public sealed class JobResponseTests
         Assert.Null(detail.Sprite);
         Assert.Equal("threeD", summary.ProductionMode);
         Assert.Null(summary.Sprite);
+    }
+
+    [Fact]
+    public void SourceDraftJob_ExposesNullSourceImageAndSourceWithoutBlobKeys()
+    {
+        var provider = Guid.NewGuid();
+        var job = PipelineJob.CreateSpriteDraft(provider, "image", new(SpriteView.SideView, SpriteOutputKind.Layers),
+            new(64, 48), new(64, 48), new("80년대 서울", "골목 프롬프트", provider, "text", []), Now).Value!;
+        var task = job.PlanSourceGeneration("골목 프롬프트", Guid.NewGuid()).Value!;
+        task.Claim(Now, TimeSpan.FromMinutes(1));
+        var candidate = new SpriteSourceCandidate(Guid.NewGuid(), "images/secret", "image/png", 64, 48, "골목 프롬프트", Now);
+        Assert.True(job.TryAddSourceCandidate(task.Id, candidate));
+
+        var detail = JobResponse.From(new JobDetails(job, []));
+
+        Assert.Null(detail.SourceImageId);
+        Assert.Null(JobSummaryResponse.From(job).SourceImageId);
+        Assert.Equal("sourceDraft", detail.Sprite!.Phase);
+        var source = detail.Sprite.Source!;
+        Assert.Equal(("80년대 서울", "골목 프롬프트"), (source.Description, source.Prompt));
+        Assert.Equal(new SpriteSourceCandidateResponse(candidate.Id, "골목 프롬프트", 64, 48, Now), source.Candidates.Single());
+
+        var uploaded = PipelineJob.CreateSprites(Guid.NewGuid(), provider, "image", new(SpriteView.SideView, SpriteOutputKind.Layers),
+            new(64, 48), new(64, 48), Now).Value!;
+        Assert.Null(JobResponse.From(new JobDetails(uploaded, [])).Sprite!.Source);
     }
 
     /// <summary>
