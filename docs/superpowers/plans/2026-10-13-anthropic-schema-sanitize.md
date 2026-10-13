@@ -45,6 +45,7 @@
 - 실행 방식: Subagent-driven, worktree `Noxtend-worktrees/anthropic-schema`, 브랜치 `claude/anthropic-schema-sanitize`, 시작 `2db8d35`.
 - 원인 확인: 로컬 Kubernetes `noxtend/api` 로그에서 `AnalyzeSprites` 공정이 `claude-haiku-5-5`로 2회 시도해 모두 Anthropic 400(`maxItems` 미지원)으로 실패. 이미지 생성 단계는 정상.
 - Task 1: `0e4c32d`. 새 테스트 4건 RED(빌드 실패 CS0103) → GREEN. Backend 전체 회귀(유료 smoke 제외) 1,801 통과·0 실패·0 건너뜀(8분 53초). 문서 검사·`git diff --check` 통과. 독립 리뷰 Approved.
-- 검증 대조: 2D 분석(`SpritePlanParser`·`SpriteRules`), 팔레트·scaleReference, placements 1~20, Similarity 6축·점수·길이는 서버가 같은 제약을 검사한다. Similarity 보정 값 범위는 파싱이 아니라 후보 생성(`SceneAdjuster`) 시점에 검사된다.
+- 검증 대조: 2D 분석(`SpritePlanParser`·`SpriteRules`), 팔레트·scaleReference, placements 1~20(`Stages.ReadPlacements`가 프레임 밖 배치를 개수 검사 전에 버리므로 일부가 프레임 밖인 초과 응답은 개수 검사를 통과할 수 있다. 기존 동작), Similarity 6축·점수·길이는 서버가 같은 제약을 검사한다. Similarity 보정 값 범위는 파싱이 아니라 후보 생성(`SceneAdjuster`) 시점에 검사된다.
 - `pattern`: 시드의 단순 정규식(`^#[0-9A-Fa-f]{6}$`, `^P[0-9]{2}$`)은 Anthropic 문서상 지원 범위라 유지했다.
 - 미확인: 실제 Anthropic 호출로 수정 후 요청이 받아들여지는지는 확인하지 않았다. 로컬 API 파드는 아직 수정 전 이미지다.
+- 최종 수정 wave: 커밋 `test(llm): cover anthropic schema wiring`. 최종 리뷰 "Ready to merge: Yes", Minor 1(어댑터 `BuildRequest` 배선 테스트)·4(기록 정밀도) 반영. 후속으로 남김: Similarity 보정 값 범위 파싱 시점 검사, Similarity V1 `additionalProperties`, 어댑터 수준 `additionalProperties` 자동 부여.

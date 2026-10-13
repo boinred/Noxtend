@@ -103,6 +103,20 @@ public sealed class AnthropicJsonSchemaTests
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(schema), Convert(schema)));
     }
 
+    [Fact]
+    public void DataValuesWithKeywordNamedKeys_AreLeftUnchanged()
+    {
+        const string schema = """
+            {"type":"object","properties":{
+              "a":{"type":"object","default":{"minimum":1,"maxItems":2}},
+              "b":{"type":"object","enum":[{"maximum":3}]},
+              "c":{"type":"object","const":{"minLength":4}}
+            }}
+            """;
+
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(schema), Convert(schema)));
+    }
+
     private static JsonNode Convert(string schema)
         => JsonSerializer.SerializeToNode(AnthropicJsonSchema.ForStructuredOutput(schema))!;
 }

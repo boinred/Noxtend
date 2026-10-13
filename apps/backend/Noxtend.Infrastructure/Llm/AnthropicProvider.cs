@@ -78,7 +78,7 @@ public sealed class AnthropicProvider : ILlmProvider
             message.Usage?.OutputTokens is { } output ? (int)output : null);
     }
 
-    private MessageCreateParams BuildRequest(LlmRequest request) => new()
+    internal MessageCreateParams BuildRequest(LlmRequest request) => new()
     {
         Model = _model,
         MaxTokens = MaxTokens,
