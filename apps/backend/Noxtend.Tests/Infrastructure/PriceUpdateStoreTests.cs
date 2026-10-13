@@ -71,6 +71,34 @@ public sealed class PriceUpdateStoreTests(SqlServerFixture sql)
     }
 
     [Fact]
+    public async Task ParsedAnthropicTiers_RoundTripAndEstimateBothSidesOfBoundary()
+    {
+        var candidate = Assert.Single(Noxtend.Infrastructure.Prices.OfficialTextPriceParser.Parse("anthropic",
+            System.Text.Encoding.UTF8.GetBytes(OfficialTextPriceSourceTests.AnthropicTierTable),
+            "https://official.example/pricing", clock.GetUtcNow(), ["claude-haiku-5-5"]));
+        Assert.Null(candidate.BlockedReason);
+        var preview = Preview(candidate.Model);
+        preview = preview with { Candidates = [preview.Candidates[0] with { Provider = "anthropic", Terms = candidate.Terms, Evidence = candidate.Evidence,
+            BaselineFingerprint = PriceCandidateComparison.Fingerprint("anthropic", candidate.Model, []) }] };
+        await Initialize(preview);
+        await using (var db = Context())
+        {
+            var result = await new EfPriceUpdateStore(db, clock).ApplyAsync(preview.Id,
+                new(Guid.NewGuid(), [preview.Candidates[0].Id], null), default);
+            Assert.True(result.IsSuccess, result.ErrorMessage);
+        }
+        await using var check = Context();
+        var saved = Assert.Single(await check.ModelPrices.ToListAsync());
+        Assert.Equal(100001, saved.LongContextFrom);
+        Assert.Equal(candidate.Terms!.LongInputPerMillion, saved.LongInputPerMillion);
+        Assert.Equal(candidate.Terms.LongOutputPerMillion, saved.LongOutputPerMillion);
+        var book = new ModelPriceBook([saved]);
+        Assert.Equal(0.0104999m, book.Estimate(candidate.Model, clock.GetUtcNow(), 99999, 1000));
+        Assert.Equal(0.0105m, book.Estimate(candidate.Model, clock.GetUtcNow(), 100000, 1000));
+        Assert.Equal(0.0525005m, book.Estimate(candidate.Model, clock.GetUtcNow(), 100001, 1000));
+    }
+
+    [Fact]
     public async Task ConcurrentSameRequest_ReplaysOneReceiptAndSurvivesFreshContext()
     {
         var preview = Preview("same-request");

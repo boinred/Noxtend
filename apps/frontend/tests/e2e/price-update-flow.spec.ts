@@ -34,9 +34,9 @@ const preview = {
       terms: {
         inputPerMillion: 1,
         outputPerMillion: 2,
-        longContextFrom: null,
-        longInputPerMillion: null,
-        longOutputPerMillion: null,
+        longContextFrom: 100001,
+        longInputPerMillion: 0.5,
+        longOutputPerMillion: 2.5,
         perImage: null,
         officialEffectiveFrom: '2099-01-01T00:00:00Z',
       },
@@ -106,6 +106,9 @@ for (const width of [390, 1440]) {
     await page.getByTestId('price-update-config').check()
     await page.getByTestId('price-update-collect').click()
     await page.getByTestId('price-update-select-visible').click()
+    await expect(page.getByTestId('price-update-panel')).toContainText(
+      '100,001 tokens 이상 입력 $0.5 / 출력 $2.5 per 1M',
+    )
     const schedule = page.locator('#price-update-effective')
     await schedule.fill('2098-12-31T00:00')
     await expect(page.getByTestId('price-update-apply')).toBeDisabled()
@@ -133,4 +136,104 @@ for (const width of [390, 1440]) {
       await page.evaluate(() => new Date('2099-01-02T12:00').toISOString()),
     )
   })
+}
+
+for (const theme of ['light', 'dark']) {
+  for (const width of [390, 1440]) {
+    test(`공급자 실패·경고 색상 · ${theme} · ${width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 })
+      await page.addInitScript((value) => localStorage.setItem('nextend.theme', value), theme)
+      await installFakeApi(page, {
+        providers: [
+          {
+            id: configId,
+            displayName: 'Claude-Free-Plan',
+            kind: 'anthropic',
+            isEnabled: true,
+            apiKeyMasked: '••••',
+          },
+        ],
+      })
+      const states = [
+        {
+          status: 'failed',
+          modelListStatus: 'partial',
+          modelError: 'HTTP 401',
+          label: '수집 실패',
+          token: '--destructive',
+        },
+        {
+          status: 'partial',
+          modelListStatus: 'failed',
+          modelError: 'HTTP 401',
+          label: '목록 실패',
+          token: '--destructive',
+        },
+        {
+          status: 'partial',
+          modelListStatus: 'partial',
+          modelError: null,
+          label: '부분 실패',
+          token: '--accent-amber',
+        },
+        {
+          status: 'success',
+          modelListStatus: 'partial',
+          modelError: null,
+          label: '목록 부분 실패',
+          token: '--accent-amber',
+        },
+        {
+          status: 'success',
+          modelListStatus: 'complete',
+          modelError: null,
+          label: '성공',
+          token: '--foreground',
+        },
+      ]
+      await page.route('**/api/prices/update-previews', (route) =>
+        route.fulfill({
+          json: {
+            data: {
+              ...preview,
+              providers: states.map((state, index) => ({
+                ...preview.providers[0],
+                ...state,
+                provider: 'anthropic',
+                providerConfigId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+              })),
+              candidates: [{ ...preview.candidates[0], blockedReason: '계정별 환산 지원 필요' }],
+            },
+            error: null,
+          },
+        }),
+      )
+      await page.goto('/admin/prices')
+      await page.getByTestId('price-update-config').check()
+      await page.getByTestId('price-update-collect').click()
+      const rows = page.getByTestId('price-update-provider-summary').locator('p')
+      await expect(rows).toHaveCount(states.length)
+      for (const [index, state] of states.entries()) {
+        await expect(rows.nth(index)).toContainText(state.label)
+        if (state.modelError) await expect(rows.nth(index)).toContainText('모델 실패: HTTP 401')
+        const colors = await rows.nth(index).evaluate((row, token) => {
+          const probe = document.createElement('span')
+          probe.style.color = `var(${token})`
+          document.body.append(probe)
+          const expected = getComputedStyle(probe).color
+          probe.remove()
+          return { actual: getComputedStyle(row).color, expected }
+        }, state.token)
+        expect(colors.actual).toBe(colors.expected)
+      }
+      await expect(page.getByText('적용 보류: 계정별 환산 지원 필요')).toBeVisible()
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      )
+      await page.screenshot({
+        path: testInfo.outputPath(`status-${theme}-${width}.png`),
+        fullPage: true,
+      })
+    })
+  }
 }

@@ -67,7 +67,7 @@ test.describe('단가 관리', () => {
     await expect(first).toContainText('2026-01-01')
     await expect(first.getByTestId('price-current')).toBeVisible()
 
-    // 모델명은 묶음의 첫 행에만 붙는다 — 그 행이 곧 적용 중인 행이다
+    // 묶음 첫 행의 현재 단가와 모델명
     await expect(first).toContainText('gpt-5.6-luna')
   })
 
@@ -76,7 +76,7 @@ test.describe('단가 관리', () => {
     await page.goto('/admin/prices')
 
     // 구간이 안 보이면 왜 같은 모델의 비용이 튀는지 설명되지 않는다
-    await expect(page.getByTestId('price-table')).toContainText('272,000 초과')
+    await expect(page.getByTestId('price-table')).toContainText('272,000 이상')
   })
 
   test('#P4 새 행을 추가한다 — 공급자가 단가를 바꿨을 때의 길', async ({ page }) => {
@@ -152,5 +152,138 @@ test.describe('단가 관리', () => {
     await page.getByTestId('price-delete').first().click()
 
     await expect(page.getByTestId('price-row')).toHaveCount(3)
+  })
+})
+
+const noteModel = 'gemini-3.1-pro-preview-with-extended-context'
+const currentNote = '공식 단가 안내: ' + '긴 메모의 출처와 변경 이유를 확인합니다. '.repeat(12)
+
+async function installNotePrices(page: import('@playwright/test').Page) {
+  await installFakeApi(page)
+  await page.route('**/api/prices', (route) =>
+    route.fulfill({
+      json: {
+        data: [
+          {
+            id: 'note-current',
+            model: noteModel,
+            effectiveFrom: '2026-01-01T00:00:00Z',
+            note: currentNote,
+          },
+          {
+            id: 'note-scheduled',
+            model: noteModel,
+            effectiveFrom: '2099-01-01T00:00:00Z',
+            note: '새 시행일의 별도 메모',
+          },
+          {
+            id: 'note-empty',
+            model: 'model-without-note',
+            effectiveFrom: '2026-01-01T00:00:00Z',
+            note: '   ',
+          },
+        ].map((price) => ({
+          inputPerMillion: 1,
+          outputPerMillion: 5,
+          longContextFrom: null,
+          longInputPerMillion: null,
+          longOutputPerMillion: null,
+          provider: null,
+          perImage: null,
+          ...price,
+        })),
+      },
+    }),
+  )
+}
+
+for (const scenario of [
+  { width: 1440, theme: 'dark' },
+  { width: 390, theme: 'light' },
+] as const) {
+  test(`#P9 ${scenario.width}px ${scenario.theme} 모델 한 줄과 행별 메모 툴팁`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: scenario.width, height: 900 })
+    await page.addInitScript(
+      (theme) => localStorage.setItem('nextend.theme', theme),
+      scenario.theme,
+    )
+    await installNotePrices(page)
+    await page.goto('/admin/prices')
+
+    const table = page.getByTestId('price-table')
+    const models = table.getByRole('button', { name: `${noteModel} 메모`, exact: true })
+    await expect(models).toHaveCount(2)
+    await expect(table.getByRole('columnheader', { name: '메모', exact: true })).toHaveCount(0)
+    const model = models.first()
+    await model.evaluate((element) => element.scrollIntoView({ block: 'center', inline: 'start' }))
+    const modelBox = await model.boundingBox()
+    const metrics = await model.evaluate((element) => ({
+      height: element.clientHeight,
+      lineHeight: Number.parseFloat(getComputedStyle(element).lineHeight),
+      clipped: element.scrollWidth > element.clientWidth,
+    }))
+    expect(metrics.height).toBeLessThanOrEqual(metrics.lineHeight * 1.1)
+    expect(metrics.clipped).toBe(false)
+    const date = table.getByTestId('price-row').first().locator('td').nth(1)
+    await expect(date).toHaveCSS('white-space', 'nowrap')
+    await expect(
+      table
+        .getByTestId('price-row')
+        .filter({ hasText: 'model-without-note' })
+        .getByRole('button', { name: /메모/ }),
+    ).toHaveCount(0)
+
+    await model.hover()
+    const tooltip = page.getByTestId('price-note-tooltip')
+    await expect(tooltip).toHaveText(currentNote)
+    const tooltipBox = await tooltip.boundingBox()
+    expect(tooltipBox!.y + tooltipBox!.height).toBeLessThanOrEqual(modelBox!.y)
+    expect(tooltipBox!.x).toBeGreaterThanOrEqual(0)
+    expect(tooltipBox!.x + tooltipBox!.width).toBeLessThanOrEqual(scenario.width)
+    expect(tooltipBox!.height).toBeGreaterThan(40)
+    await tooltip.hover()
+    await expect(tooltip).toBeVisible()
+    await page.screenshot({
+      path: testInfo.outputPath(`price-note-tooltip-${scenario.width}-${scenario.theme}.png`),
+      fullPage: true,
+    })
+    await page.keyboard.press('Escape')
+    await expect(tooltip).toHaveCount(0)
+    await page.mouse.move(0, 0)
+    await model.blur()
+    await model.focus()
+    await expect(tooltip).toHaveText(currentNote)
+    await expect(model).toHaveAttribute('aria-describedby', /.+/)
+    await page.keyboard.press('Escape')
+    await expect(tooltip).toHaveCount(0)
+    await models.nth(1).focus()
+    await expect(tooltip).toHaveText('새 시행일의 별도 메모')
+    await page.keyboard.press('Escape')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    const panel = table.locator('..')
+    if (scenario.width === 390) {
+      expect(await panel.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(
+        true,
+      )
+      await panel.evaluate((element) => {
+        element.scrollLeft = element.scrollWidth
+      })
+      expect(await panel.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0)
+    }
+  })
+}
+
+test.describe('터치 메모', () => {
+  test.use({ hasTouch: true, viewport: { width: 390, height: 900 } })
+  test('#P10 모델 터치로 메모를 열고 바깥 터치로 닫는다', async ({ page }) => {
+    await installNotePrices(page)
+    await page.goto('/admin/prices')
+    const model = page.getByRole('button', { name: `${noteModel} 메모`, exact: true }).first()
+    await model.tap()
+    await expect(page.getByTestId('price-note-tooltip')).toHaveText(currentNote)
+    await page.getByTestId('price-count').tap()
+    await expect(page.getByTestId('price-note-tooltip')).toHaveCount(0)
   })
 })
