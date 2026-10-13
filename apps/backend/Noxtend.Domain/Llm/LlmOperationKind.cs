@@ -24,6 +24,7 @@ public enum LlmOperationKind
     AnalyzeSprites = 5,
     GenerateSprite = 6,
     GenerateSpriteSource = 7,
+    EnhanceSpriteSource = 8,
     SimilarityEvaluate = 100,
 }
 
@@ -42,6 +43,8 @@ public static class LlmOperation
         TaskKind.GenerateSprite => LlmOperationKind.GenerateSprite,
         TaskKind.AnalyzeSprites => LlmOperationKind.AnalyzeSprites,
         TaskKind.Generate => LlmOperationKind.Generate,
+        TaskKind.EnhanceSpriteSource => LlmOperationKind.EnhanceSpriteSource,
+        TaskKind.GenerateSpriteSource => LlmOperationKind.GenerateSpriteSource,
         _ => throw new ArgumentOutOfRangeException(
             nameof(kind), kind, "LLM 을 호출하지 않는 공정입니다"),
     };

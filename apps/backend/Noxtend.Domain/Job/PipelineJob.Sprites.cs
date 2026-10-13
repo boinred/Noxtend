@@ -29,9 +29,121 @@ public sealed partial class PipelineJob
         job.Sprites = new SpritePipelineState(settings, sourceCanvas, generationCanvas);
         return Result<PipelineJob>.Ok(job);
     }
+
+    public static Result<PipelineJob> CreateSpriteDraft(
+        Guid imageProviderConfigId, string imageModel, SpriteSettings settings,
+        SpriteCanvas provisionalSource, SpriteCanvas generationCanvas, SpriteSourceDraft draft, DateTimeOffset now)
+    {
+        var validation = SpriteRules.ValidateSettings(settings, provisionalSource);
+        if (!validation.IsSuccess)
+            return Result<PipelineJob>.Fail(validation.ErrorCode!, validation.ErrorMessage!);
+        if (generationCanvas is null || generationCanvas.Width <= 0 || generationCanvas.Height <= 0)
+            return Result<PipelineJob>.Fail(ErrorCode.SpriteSettingsInvalid, "생성 캔버스는 양수 크기여야 합니다");
+        if (draft is null || !SpriteSourceDraft.ValidDescription(draft.Description)
+            || (draft.Prompt is not null && !SpriteSourceDraft.ValidPrompt(draft.Prompt))
+            || draft.TextProviderConfigId == Guid.Empty || string.IsNullOrWhiteSpace(draft.TextModel)
+            || draft.Candidates is not { Count: 0 })
+            return Result<PipelineJob>.Fail(ErrorCode.SpriteSettingsInvalid, "설명은 1~1000자, 텍스트 모델이 필요합니다");
+
+        var job = new PipelineJob(Guid.NewGuid(), AssetCategory.Background, null, now,
+            imageProviderConfigId, imageModel, null, null, null, null, requiresReview: true)
+        {
+            ProductionMode = ProductionMode.TwoD,
+        };
+        job.Sprites = new SpritePipelineState(settings, provisionalSource, generationCanvas, draft with
+        {
+            Description = draft.Description.Trim(), Prompt = draft.Prompt?.Trim(), TextModel = draft.TextModel.Trim(),
+        });
+        return Result<PipelineJob>.Ok(job);
+    }
+
+    public Result<PipelineTask> PlanSourceEnhance(string description, Guid requestId)
+    {
+        var guard = CheckSourceCommand();
+        if (!guard.IsSuccess) return SpriteFailure<PipelineTask>(guard);
+        if (!SpriteSourceDraft.ValidDescription(description))
+            return Result<PipelineTask>.Fail(ErrorCode.SpriteSettingsInvalid, "설명은 1~1000자여야 합니다");
+        var draft = Sprites!.SourceDraft!;
+        Sprites.ReplaceSourceDraft(draft with { Description = description.Trim() });
+        return Result<PipelineTask>.Ok(PlanSourceTask(TaskKind.EnhanceSpriteSource,
+            draft.TextProviderConfigId, draft.TextModel, new(description.Trim(), null), requestId));
+    }
+
+    public Result<bool> SaveSourcePrompt(string prompt)
+    {
+        var guard = CheckSourceCommand();
+        if (!guard.IsSuccess) return guard;
+        if (!SpriteSourceDraft.ValidPrompt(prompt))
+            return Result<bool>.Fail(ErrorCode.SpriteSettingsInvalid, "프롬프트는 1~4000자여야 합니다");
+        var draft = Sprites!.SourceDraft!;
+        if (draft.Prompt == prompt.Trim()) return Result<bool>.Ok(false);
+        Sprites.ReplaceSourceDraft(draft with { Prompt = prompt.Trim() });
+        Sprites.Touch();
+        return Result<bool>.Ok(true);
+    }
+
+    public Result<PipelineTask> PlanSourceGeneration(string prompt, Guid requestId)
+    {
+        var guard = CheckSourceCommand();
+        if (!guard.IsSuccess) return SpriteFailure<PipelineTask>(guard);
+        if (!SpriteSourceDraft.ValidPrompt(prompt))
+            return Result<PipelineTask>.Fail(ErrorCode.SpriteSettingsInvalid, "프롬프트는 1~4000자여야 합니다");
+        var draft = Sprites!.SourceDraft!;
+        if (draft.Candidates.Count >= SpriteSourceDraft.MaxCandidates)
+            return Result<PipelineTask>.Fail(ErrorCode.SpriteSourceLimit, "원본 후보는 작업당 8장까지입니다");
+        // 화면의 미저장 편집을 저장과 생성 입력에 함께 고정
+        Sprites.ReplaceSourceDraft(draft with { Prompt = prompt.Trim() });
+        return Result<PipelineTask>.Ok(PlanSourceTask(TaskKind.GenerateSpriteSource,
+            ImageProviderConfigId!.Value, ImageModel!, new(null, prompt.Trim()), requestId));
+    }
+
+    public bool TryApplySourcePrompt(Guid taskId, string prompt)
+    {
+        var task = _tasks.FirstOrDefault(t => t.Id == taskId);
+        if (task is not { Kind: TaskKind.EnhanceSpriteSource, Status: TaskStatus.Running or TaskStatus.Succeeded }
+            || !IsCurrentTask(task) || !SpriteSourceDraft.ValidPrompt(prompt)) return false;
+        Sprites!.ReplaceSourceDraft(Sprites.SourceDraft! with { Prompt = prompt.Trim() });
+        Sprites.Touch();
+        return true;
+    }
+
+    public bool TryAddSourceCandidate(Guid taskId, SpriteSourceCandidate candidate)
+    {
+        var task = _tasks.FirstOrDefault(t => t.Id == taskId);
+        if (task is not { Kind: TaskKind.GenerateSpriteSource } || candidate is null
+            || !CanAttachSpriteResult(task, candidate.CreatedAt) || !IsCurrentTask(task)
+            || candidate.Id == Guid.Empty || string.IsNullOrWhiteSpace(candidate.BlobKey)
+            || string.IsNullOrWhiteSpace(candidate.ContentType) || candidate.Width <= 0 || candidate.Height <= 0
+            || candidate.Prompt != task.SourceInput?.Prompt) return false;
+        var draft = Sprites!.SourceDraft!;
+        if (draft.Candidates.Count >= SpriteSourceDraft.MaxCandidates
+            || draft.Candidates.Any(c => c.Id == candidate.Id)) return false;
+        Sprites.ReplaceSourceDraft(draft with { Candidates = [.. draft.Candidates, candidate] });
+        Sprites.Touch();
+        return true;
+    }
+
+    public Result<PipelineTask> SelectSource(Guid storedImageId, SpriteCanvas actualSource,
+        SpriteCanvas generationCanvas, Guid requestId)
+    {
+        var guard = CheckSourceCommand();
+        if (!guard.IsSuccess) return SpriteFailure<PipelineTask>(guard);
+        if (storedImageId == Guid.Empty)
+            return Result<PipelineTask>.Fail(ErrorCode.JobUploadNotFound, "확정할 원본 이미지가 필요합니다");
+        var validation = SpriteRules.ValidateSettings(Sprites!.Settings, actualSource);
+        if (!validation.IsSuccess) return SpriteFailure<PipelineTask>(validation);
+        if (generationCanvas is null || generationCanvas.Width <= 0 || generationCanvas.Height <= 0)
+            return Result<PipelineTask>.Fail(ErrorCode.SpriteSettingsInvalid, "생성 캔버스는 양수 크기여야 합니다");
+        SourceImageId = storedImageId;
+        Sprites.ReplaceCanvases(actualSource, generationCanvas);
+        Sprites.SetPhase(SpritePhase.Analyzing);
+        var draft = Sprites.SourceDraft!;
+        return Result<PipelineTask>.Ok(PlanSourceTask(TaskKind.AnalyzeSprites,
+            draft.TextProviderConfigId, draft.TextModel, null, requestId));
+    }
     public Result<bool> ReplaceSpritePlan(IReadOnlyList<SpriteAssetPlan> plans, int expectedRevision)
     {
-        var guard = CheckSpriteMutation(expectedRevision);
+        var guard = CheckSpriteCommand(expectedRevision);
         if (!guard.IsSuccess) return guard;
         var state = Sprites!;
         if (_tasks.Any(t => t.Kind == TaskKind.AnalyzeSprites && !t.IsTerminal && IsCurrentTask(t)))
@@ -68,7 +180,7 @@ public sealed partial class PipelineJob
 
     public Result<IReadOnlyList<SpriteFrameInput>> ApproveSpritePlan(int expectedRevision)
     {
-        var guard = CheckSpriteMutation(expectedRevision);
+        var guard = CheckSpriteCommand(expectedRevision);
         if (!guard.IsSuccess) return SpriteFailure<IReadOnlyList<SpriteFrameInput>>(guard);
         if (Sprites!.Phase != SpritePhase.PlanReview || Sprites.Assets.Count == 0)
             return Result<IReadOnlyList<SpriteFrameInput>>.Fail(ErrorCode.SpriteNotReady, "계획 검수가 필요합니다");
@@ -85,7 +197,7 @@ public sealed partial class PipelineJob
 
     public Result<IReadOnlyList<SpriteFrameInput>> ApproveSpriteBases(IReadOnlyList<Guid> assetIds, int expectedRevision)
     {
-        var guard = CheckSpriteMutation(expectedRevision);
+        var guard = CheckSpriteCommand(expectedRevision);
         if (!guard.IsSuccess) return SpriteFailure<IReadOnlyList<SpriteFrameInput>>(guard);
         var selected = SelectSpriteAssets(assetIds);
         if (!selected.IsSuccess)
@@ -114,7 +226,7 @@ public sealed partial class PipelineJob
 
     public Result<bool> ApproveSpriteAsset(Guid assetId, int expectedRevision)
     {
-        var guard = CheckSpriteMutation(expectedRevision);
+        var guard = CheckSpriteCommand(expectedRevision);
         if (!guard.IsSuccess) return guard;
         var asset = Sprites!.Assets.FirstOrDefault(a => a.Plan.Id == assetId);
         if (asset is null) return Result<bool>.Fail(ErrorCode.SpriteAssetNotFound, "대상이 없습니다");
@@ -131,7 +243,7 @@ public sealed partial class PipelineJob
 
     public Result<SpriteFrameInput> RegenerateSpriteFrame(Guid assetId, int index, int expectedRevision)
     {
-        var guard = CheckSpriteMutation(expectedRevision);
+        var guard = CheckSpriteCommand(expectedRevision);
         if (!guard.IsSuccess) return SpriteFailure<SpriteFrameInput>(guard);
         var asset = Sprites!.Assets.FirstOrDefault(a => a.Plan.Id == assetId);
         if (asset is null) return Result<SpriteFrameInput>.Fail(ErrorCode.SpriteAssetNotFound, "대상이 없습니다");
@@ -195,6 +307,9 @@ public sealed partial class PipelineJob
         if (task.JobId != Id || !_tasks.Any(t => t.Id == task.Id)) return false;
         if (ProductionMode != ProductionMode.TwoD) return task.SpriteInput is null && task.SpriteExportInput is null;
         if (Sprites is null || Status == JobStatus.Canceled) return false;
+        if (IsSourceTask(task))
+            return Sprites.Phase == SpritePhase.SourceDraft
+                && task.Id == _tasks.Where(IsSourceTask).MaxBy(t => t.Ordinal)?.Id;
         if (task.SpriteInput is { } input)
         {
             var asset = Sprites.Assets.FirstOrDefault(a => a.Plan.Id == input.AssetId);
@@ -232,7 +347,7 @@ public sealed partial class PipelineJob
 
     public Result<SpriteExportInput> CaptureSpriteExport(IReadOnlyList<Guid> assetIds, int expectedRevision)
     {
-        var guard = CheckSpriteMutation(expectedRevision);
+        var guard = CheckSpriteCommand(expectedRevision);
         if (!guard.IsSuccess) return SpriteFailure<SpriteExportInput>(guard);
         var selected = SelectSpriteAssets(assetIds);
         if (!selected.IsSuccess) return Result<SpriteExportInput>.Fail(selected.ErrorCode!, selected.ErrorMessage!);
@@ -281,6 +396,36 @@ public sealed partial class PipelineJob
         return expectedRevision == Sprites.ReviewRevision ? Result<bool>.Ok(true)
             : Result<bool>.Fail(ErrorCode.SpriteRevisionConflict, "검수 revision이 변경되었습니다");
     }
+    private Result<bool> CheckSpriteCommand(int expectedRevision)
+    {
+        var guard = CheckSpriteMutation(expectedRevision);
+        return guard.IsSuccess && Sprites!.Phase == SpritePhase.SourceDraft
+            ? Result<bool>.Fail(ErrorCode.SpriteNotReady, "원본 확정 후 진행할 수 있습니다") : guard;
+    }
+    // 요청 revision 비교는 접수 handler 책임
+    private Result<bool> CheckSourceCommand()
+    {
+        var guard = CheckSpriteMutation(Sprites?.ReviewRevision ?? 0);
+        if (!guard.IsSuccess) return guard;
+        if (Sprites!.Phase != SpritePhase.SourceDraft || Sprites.SourceDraft is null)
+            return Result<bool>.Fail(ErrorCode.SpriteNotReady, "원본 준비 단계가 아닙니다");
+        return _tasks.Any(t => IsSourceTask(t) && !t.IsTerminal)
+            ? Result<bool>.Fail(ErrorCode.SpriteBusy, "원본 준비 공정이 진행 중입니다") : guard;
+    }
+    private PipelineTask PlanSourceTask(TaskKind kind, Guid providerConfigId, string model,
+        SpriteSourceInput? input, Guid requestId)
+    {
+        if (requestId == Guid.Empty) throw new InvalidOperationException("요청 ID가 필요합니다");
+        var task = PlanTask(kind, _tasks.Count, providerConfigId: providerConfigId, model: model);
+        if (input is not null) task.BindSourceInput(input);
+        task.BindRequest(requestId);
+        Sprites!.Touch();
+        OpenSpriteReview();
+        Status = JobStatus.Running;
+        return task;
+    }
+    private static bool IsSourceTask(PipelineTask task)
+        => task.Kind is TaskKind.EnhanceSpriteSource or TaskKind.GenerateSpriteSource;
     private static Result<T> SpriteFailure<T>(Result<bool> result)
         => Result<T>.Fail(result.ErrorCode!, result.ErrorMessage!);
     private static bool GenerationChanged(SpriteAssetPlan before, SpriteAssetPlan after)
@@ -345,7 +490,8 @@ public sealed partial class PipelineJob
         var state = Sprites!;
         var active = _tasks.Where(t => !t.IsTerminal && IsCurrentTask(t)).ToArray();
         if (active.Length > 0 || hasNewFrames) Status = JobStatus.Running;
-        if (state.Phase == SpritePhase.PlanReview) return;
+        // 원본 준비·분석 재시도 대기 중 단계 보존
+        if (state.Phase is SpritePhase.PlanReview or SpritePhase.SourceDraft or SpritePhase.Analyzing) return;
         state.SetPhase(active.Any(t => t.SpriteExportInput is not null) ? SpritePhase.Packaging
             : active.Any(t => t.SpriteInput?.FrameIndex == 0) ? SpritePhase.BaseGeneration
             : hasNewFrames || active.Any(t => t.SpriteInput is not null) ? SpritePhase.FrameGeneration
@@ -355,6 +501,12 @@ public sealed partial class PipelineJob
     private void ReconcileSpriteTasks(DateTimeOffset now)
     {
         if (Status == JobStatus.Canceled || IsTerminal) return;
+        // 원본 준비 공정 실패는 작업 실패가 아닌 재시도 대기
+        if (Sprites!.Phase == SpritePhase.SourceDraft)
+        {
+            UpdateSpriteState();
+            return;
+        }
         var tasks = _tasks.Where(IsCurrentTask).ToArray();
         if (tasks.Any(t => !t.IsTerminal))
         {

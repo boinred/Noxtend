@@ -150,6 +150,50 @@ public sealed class JobDeletionPersistenceTests(SqlServerFixture sql)
         Assert.Equal(sourceGenerationId, call.SourceGenerationId);
     }
 
+    [Fact]
+    public async Task Delete_SourceDraftJob_ReturnsCandidateKeysWithoutSource()
+    {
+        await Migrate();
+        var job = SpritePersistenceTests.SourceDraft(out var candidate);
+        job.Cancel(Now);
+        await using (var seed = Context())
+        {
+            seed.Jobs.Add(job);
+            await seed.SaveChangesAsync();
+        }
+
+        await using var db = Context();
+        var blobs = await new EfJobRepository(db).DeleteIfTerminalAsync(job.Id, CancellationToken.None);
+
+        Assert.Equal([candidate.BlobKey], blobs!.Images);
+        await using var read = Context();
+        Assert.Empty(read.Jobs);
+    }
+
+    [Fact]
+    public async Task Delete_SelectedSourceJob_RemovesSourceImageAndCandidates()
+    {
+        await Migrate();
+        var source = StoredImage.Create("uploads/selected.png", "selected.png", "image/png", 1024, Now);
+        var job = SpritePersistenceTests.SourceDraft(out var candidate);
+        Assert.True(job.SelectSource(source.Id, new(1024, 1024), new(1024, 1024), Guid.NewGuid()).IsSuccess);
+        job.Cancel(Now);
+        await using (var seed = Context())
+        {
+            seed.StoredImages.Add(source);
+            seed.Jobs.Add(job);
+            await seed.SaveChangesAsync();
+        }
+
+        await using var db = Context();
+        var blobs = await new EfJobRepository(db).DeleteIfTerminalAsync(job.Id, CancellationToken.None);
+
+        Assert.Contains(candidate.BlobKey, blobs!.Images);
+        Assert.Contains("uploads/selected.png", blobs.Images);
+        await using var read = Context();
+        Assert.Empty(read.StoredImages.Where(image => image.Id == source.Id));
+    }
+
     // ─── 설정 ───
 
     /// <summary>작업 하나 + 원본 + 생성 이미지 + 3D 실행 + 비용 원장.</summary>

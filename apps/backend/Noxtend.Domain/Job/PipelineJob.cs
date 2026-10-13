@@ -30,7 +30,7 @@ public sealed partial class PipelineJob
     private PipelineJob(
         Guid id,
         AssetCategory category,
-        Guid sourceImageId,
+        Guid? sourceImageId,
         DateTimeOffset now,
         Guid? imageProviderConfigId,
         string? imageModel,
@@ -64,7 +64,8 @@ public sealed partial class PipelineJob
     /// </summary>
     public AssetCategory Category { get; private set; }
 
-    public Guid SourceImageId { get; private set; }
+    // 2D 원본 준비 단계에서만 null
+    public Guid? SourceImageId { get; private set; }
     public JobStatus Status { get; private set; }
 
     /// <summary>
@@ -734,8 +735,10 @@ public sealed partial class PipelineJob
         if (ProductionMode == ProductionMode.TwoD)
         {
             if (Status == JobStatus.Canceled || task is not { Status: TaskStatus.Failed }
-                || task.Kind is not (TaskKind.AnalyzeSprites or TaskKind.GenerateSprite or TaskKind.PackSprites)
+                || task.Kind is not (TaskKind.AnalyzeSprites or TaskKind.GenerateSprite or TaskKind.PackSprites
+                    or TaskKind.EnhanceSpriteSource or TaskKind.GenerateSpriteSource)
                 || !IsCurrentTask(task)
+                || (IsSourceTask(task) && _tasks.Any(t => t.Id != task.Id && IsSourceTask(t) && !t.IsTerminal))
                 || (task.SpriteInput is { } input && Sprites!.Assets.Single(a => a.Plan.Id == input.AssetId)
                     .Frames[input.FrameIndex].CurrentImageId is not null)
                 || (task.Kind == TaskKind.PackSprites && task.Id != _tasks
@@ -746,7 +749,9 @@ public sealed partial class PipelineJob
             Status = reopening ? JobStatus.Pending : JobStatus.Running;
             CompletedAt = null;
             FailureReason = null;
-            Sprites!.SetPhase(task.Kind == TaskKind.AnalyzeSprites ? SpritePhase.Analyzing
+            // 원본 준비 공정은 단계 유지, 동시 명령과 Jobs 행 충돌
+            if (IsSourceTask(task)) Sprites!.Touch();
+            else Sprites!.SetPhase(task.Kind == TaskKind.AnalyzeSprites ? SpritePhase.Analyzing
                 : task.Kind == TaskKind.PackSprites ? SpritePhase.Packaging
                 : task.SpriteInput!.FrameIndex == 0 ? SpritePhase.BaseGeneration : SpritePhase.FrameGeneration);
             return true;

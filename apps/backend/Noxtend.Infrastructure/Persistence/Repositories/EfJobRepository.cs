@@ -193,6 +193,12 @@ public sealed class EfJobRepository(NoxtendDbContext db) : IJobRepository
             .ToListAsync(ct);
         imageKeys.AddRange(spriteImageKeys);
         imageKeys.AddRange(spriteExportKeys);
+        // 후보는 작업 소유 Blob이라 공유 판정 없음
+        var sourceDraft = await db.Jobs
+            .Where(job => job.Id == jobId && job.Sprites != null)
+            .Select(job => job.Sprites!.SourceDraft)
+            .FirstOrDefaultAsync(ct);
+        if (sourceDraft is not null) imageKeys.AddRange(sourceDraft.Candidates.Select(c => c.BlobKey));
 
         var meshKeys = await db.Jobs
             .Where(job => job.Id == jobId)
@@ -249,16 +255,16 @@ public sealed class EfJobRepository(NoxtendDbContext db) : IJobRepository
 
         // ④ **원본은 공유될 수 있다.** 같은 업로드로 두 번 접수한 작업이 실제로 있다 —
         // 확인 없이 지우면 남은 작업의 원본이 사라진다
-        if (!await db.Jobs.AnyAsync(job => job.SourceImageId == sourceImageId, ct))
+        if (sourceImageId is { } id && !await db.Jobs.AnyAsync(job => job.SourceImageId == id, ct))
         {
             var sourceKey = await db.StoredImages
-                .Where(image => image.Id == sourceImageId)
+                .Where(image => image.Id == id)
                 .Select(image => image.BlobKey)
                 .FirstOrDefaultAsync(ct);
 
             if (sourceKey is not null)
             {
-                await db.StoredImages.Where(i => i.Id == sourceImageId).ExecuteDeleteAsync(ct);
+                await db.StoredImages.Where(i => i.Id == id).ExecuteDeleteAsync(ct);
                 imageKeys.Add(sourceKey);
             }
         }

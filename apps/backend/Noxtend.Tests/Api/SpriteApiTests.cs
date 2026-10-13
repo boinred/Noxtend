@@ -376,7 +376,7 @@ public sealed class SpriteApiTests
     }
     private static async Task FinishFrames(PipelineFixture f, PipelineJob job, IReadOnlyList<Guid> ids)
     {
-        var source = (await f.Images.GetAsync(job.SourceImageId, default))!;
+        var source = (await f.Images.GetAsync(job.SourceImageId!.Value, default))!;
         foreach (var id in ids)
         {
             var task = job.Tasks.Single(task => task.Id == id);

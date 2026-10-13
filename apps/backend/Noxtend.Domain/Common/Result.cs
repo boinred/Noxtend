@@ -63,6 +63,7 @@ public static class ErrorCode
     public const string SpriteAssetNotFound = "SPRITE_ASSET_NOT_FOUND";
     public const string SpriteFrameInvalid = "SPRITE_FRAME_INVALID";
     public const string SpritePlanInvalid = "SPRITE_PLAN_INVALID";
+    public const string SpriteSourceLimit = "SPRITE_SOURCE_LIMIT";
 
     // character-studio §5.2 — 캐릭터 고유 입력 검증
     public const string JobGenderRequired = "JOB_GENDER_REQUIRED";

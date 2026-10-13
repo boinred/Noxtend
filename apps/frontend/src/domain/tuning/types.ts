@@ -28,6 +28,7 @@ const PROMPT_KIND_LABELS: Record<PromptKind, string> = {
   analyzeSprites: '2D 배경 분석',
   generateSprite: '2D 배경 생성',
   generateSpriteSource: '2D 배경 기준 생성',
+  enhanceSpriteSource: '2D 배경 원본 보완',
 }
 
 export function promptKindLabel(kind: PromptKind): string {
@@ -43,7 +44,8 @@ export function promptKindCategories(kind: PromptKind): (AssetCategory | null)[]
   return kind === 'similarityEvaluate' ||
     kind === 'analyzeSprites' ||
     kind === 'generateSprite' ||
-    kind === 'generateSpriteSource'
+    kind === 'generateSpriteSource' ||
+    kind === 'enhanceSpriteSource'
     ? ['background']
     : [null, 'character', 'object', 'background']
 }

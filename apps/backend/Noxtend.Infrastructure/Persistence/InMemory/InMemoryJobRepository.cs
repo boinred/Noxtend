@@ -135,6 +135,7 @@ public sealed class InMemoryJobRepository(
         {
             imageKeys.AddRange(sprites.Images.Select(image => image.BlobKey));
             imageKeys.AddRange(sprites.Exports.Select(export => export.BlobKey));
+            if (sprites.SourceDraft is { } draft) imageKeys.AddRange(draft.Candidates.Select(c => c.BlobKey));
         }
         var meshKeys = job.GeneratedMeshes
             .SelectMany(mesh => mesh.Artifacts)
@@ -150,8 +151,9 @@ public sealed class InMemoryJobRepository(
         sceneLayouts?.RemoveByJob(jobId);
 
         // **원본은 공유될 수 있다** — 같은 업로드로 두 번 접수한 작업이 있으면 남긴다
-        if (!_jobs.Values.Any(other => other.SourceImageId == job.SourceImageId)
-            && images?.Remove(job.SourceImageId) is { } sourceKey)
+        if (job.SourceImageId is { } sourceImageId
+            && !_jobs.Values.Any(other => other.SourceImageId == sourceImageId)
+            && images?.Remove(sourceImageId) is { } sourceKey)
         {
             imageKeys.Add(sourceKey);
         }

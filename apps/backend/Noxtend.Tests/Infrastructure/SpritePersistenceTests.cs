@@ -397,6 +397,72 @@ public sealed class SpritePersistenceTests(SqlServerFixture sql)
     }
 
     [Fact]
+    public async Task SourceDraftJob_RoundTripsDraftCandidatesAndNullSource()
+    {
+        await using var db = Context();
+        await db.Database.MigrateAsync();
+        var job = SourceDraft(out var candidate);
+        db.Jobs.Add(job);
+        await db.SaveChangesAsync();
+        await using var read = Context();
+        var loaded = (await new EfJobRepository(read).GetAsync(job.Id, default))!;
+        Assert.Null(loaded.SourceImageId);
+        Assert.Equal(SpritePhase.SourceDraft, loaded.Sprites!.Phase);
+        var draft = loaded.Sprites.SourceDraft!;
+        Assert.Equal("80년대 서울", draft.Description);
+        Assert.Equal("상세 프롬프트", draft.Prompt);
+        Assert.Equal("text-model", draft.TextModel);
+        Assert.Equal(candidate, Assert.Single(draft.Candidates));
+        Assert.Equal(new SpriteSourceInput("80년대 서울", null),
+            loaded.Tasks.Single(t => t.Kind == TaskKind.EnhanceSpriteSource).SourceInput);
+        Assert.Equal(new SpriteSourceInput(null, "상세 프롬프트"),
+            loaded.Tasks.Single(t => t.Kind == TaskKind.GenerateSpriteSource).SourceInput);
+        Assert.Equal(job.Sprites!.ReviewRevision, loaded.Sprites.ReviewRevision);
+    }
+
+    [Fact]
+    public async Task ExistingSpriteJob_KeepsNewSourceColumnsNull()
+    {
+        await using var db = Context();
+        await db.Database.MigrateAsync();
+        var job = Planned();
+        db.Jobs.Add(job);
+        await db.SaveChangesAsync();
+        Assert.Equal(1, await db.Database.SqlQuery<int>($"""
+            SELECT COUNT(*) AS Value FROM Jobs
+            WHERE Id = {job.Id} AND SpriteSourceDraftJson IS NULL AND SourceImageId IS NOT NULL
+            """).SingleAsync());
+        Assert.Equal(0, await db.Database.SqlQuery<int>($"SELECT COUNT(*) AS Value FROM Tasks WHERE SourceInputJson IS NOT NULL").SingleAsync());
+        await using var read = Context();
+        var loaded = (await new EfJobRepository(read).GetAsync(job.Id, default))!;
+        Assert.Null(loaded.Sprites!.SourceDraft);
+        Assert.Equal(job.SourceImageId, loaded.SourceImageId);
+    }
+
+    [Fact]
+    public async Task SourceDraftMigrationDown_RefusesNullSourceRows()
+    {
+        await using var db = Context();
+        await db.Database.MigrateAsync();
+        db.Jobs.Add(SourceDraft(out _));
+        await db.SaveChangesAsync();
+        var previous = db.Database.GetMigrations().TakeWhile(m => !m.EndsWith("_AddSpriteSourceDraft")).Last();
+        await Assert.ThrowsAsync<SqlException>(() => db.GetService<IMigrator>().MigrateAsync(previous));
+        Assert.Contains(await db.Database.GetAppliedMigrationsAsync(), m => m.EndsWith("_AddSpriteSourceDraft"));
+    }
+
+    [Fact]
+    public async Task InMemoryDeletion_IncludesSourceCandidatesWithoutSource()
+    {
+        var job = SourceDraft(out var candidate);
+        job.Cancel(Now);
+        var repo = new InMemoryJobRepository(new InMemoryStoredImageRepository());
+        await repo.AddAsync(job, default);
+        var removed = (await repo.DeleteIfTerminalAsync(job.Id, default))!;
+        Assert.Equal([candidate.BlobKey], removed.Images);
+    }
+
+    [Fact]
     public async Task LegacyJobWithoutMesh_MigratesToThreeD()
     {
         await using var db = Context();
@@ -706,6 +772,24 @@ public sealed class SpritePersistenceTests(SqlServerFixture sql)
         var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "fake",
             new(SpriteView.SideView, SpriteOutputKind.Layers), new(800, 600), new(1024, 1024), Now).Value!;
         Assert.True(job.ReplaceSpritePlan([new(Guid.NewGuid(), "배경", 0, new(0, 0, 1, 1), false)], 0).IsSuccess);
+        return job;
+    }
+
+    internal static PipelineJob SourceDraft(out SpriteSourceCandidate candidate)
+    {
+        var job = PipelineJob.CreateSpriteDraft(Guid.NewGuid(), "fake", new(SpriteView.SideView, SpriteOutputKind.Layers),
+            new(1024, 1024), new(1024, 1024), new("80년대 서울", null, Guid.NewGuid(), "text-model", []), Now).Value!;
+        var enhance = job.PlanSourceEnhance("80년대 서울", Guid.NewGuid()).Value!;
+        enhance.Claim(Now, TimeSpan.FromMinutes(2));
+        Assert.True(job.TryApplySourcePrompt(enhance.Id, "상세 프롬프트"));
+        enhance.Succeed(Now);
+        job.ReconcileFromTasks(Now);
+        var generate = job.PlanSourceGeneration("상세 프롬프트", Guid.NewGuid()).Value!;
+        generate.Claim(Now, TimeSpan.FromMinutes(2));
+        candidate = new(Guid.NewGuid(), $"sprites/sources/{Guid.NewGuid():N}.png", "image/png", 1024, 1024, "상세 프롬프트", Now);
+        Assert.True(job.TryAddSourceCandidate(generate.Id, candidate));
+        generate.Succeed(Now);
+        job.ReconcileFromTasks(Now);
         return job;
     }
 

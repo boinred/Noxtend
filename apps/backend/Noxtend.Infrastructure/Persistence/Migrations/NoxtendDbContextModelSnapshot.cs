@@ -90,7 +90,7 @@ namespace Noxtend.Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("SceneJson");
 
-                    b.Property<Guid>("SourceImageId")
+                    b.Property<Guid?>("SourceImageId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Status")
@@ -1033,6 +1033,10 @@ namespace Noxtend.Infrastructure.Persistence.Migrations
                                 .ValueGeneratedOnAddOrUpdate()
                                 .HasColumnType("rowversion");
 
+                            b1.Property<string>("SourceInput")
+                                .HasColumnType("nvarchar(max)")
+                                .HasColumnName("SourceInputJson");
+
                             b1.Property<string>("SpriteExportInput")
                                 .HasColumnType("nvarchar(max)")
                                 .HasColumnName("SpriteExportInputJson");
@@ -1117,6 +1121,10 @@ namespace Noxtend.Infrastructure.Persistence.Migrations
                                 .IsRequired()
                                 .HasColumnType("nvarchar(max)")
                                 .HasColumnName("SpriteSourceCanvasJson");
+
+                            b1.Property<string>("SourceDraft")
+                                .HasColumnType("nvarchar(max)")
+                                .HasColumnName("SpriteSourceDraftJson");
 
                             b1.Property<string>("Transform")
                                 .IsRequired()

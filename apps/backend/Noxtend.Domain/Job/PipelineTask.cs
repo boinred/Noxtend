@@ -99,9 +99,11 @@ public sealed class PipelineTask
 
     public SpriteFrameInput? SpriteInput { get; private set; }
     public SpriteExportInput? SpriteExportInput { get; private set; }
+    public SpriteSourceInput? SourceInput { get; private set; }
     public Guid? RequestId { get; private set; }
 
     internal void BindSpriteInput(SpriteFrameInput input) => SpriteInput = input;
+    internal void BindSourceInput(SpriteSourceInput input) => SourceInput = input;
     public void BindSpriteExport(SpriteExportInput input)
     {
         if (Status != TaskStatus.Pending || SpriteInput is not null || SpriteExportInput is not null)

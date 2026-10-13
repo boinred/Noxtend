@@ -383,7 +383,7 @@ public sealed class SpriteCommandTests
     {
         var f = new PipelineFixture();
         var job = await Ready(f);
-        var shared = PipelineJob.CreateSprites(job.SourceImageId, job.ImageProviderConfigId!.Value, job.ImageModel!,
+        var shared = PipelineJob.CreateSprites(job.SourceImageId!.Value, job.ImageProviderConfigId!.Value, job.ImageModel!,
             job.Sprites!.Settings, job.Sprites.SourceCanvas, job.Sprites.GenerationCanvas, f.Clock.Now).Value!;
         await f.Jobs.AddAsync(shared, default);
         var result = await f.SpriteCommands.ExportAsync(Context(job), [job.Sprites.Assets[0].Id], default);
@@ -391,7 +391,7 @@ public sealed class SpriteCommandTests
         Assert.Equal(3, f.Blobs.Count);
         Assert.True((await f.Delete.HandleAsync(job.Id, default)).IsSuccess);
         Assert.Equal(1, f.Blobs.Count);
-        var upload = (await f.Images.GetAsync(shared.SourceImageId, default))!;
+        var upload = (await f.Images.GetAsync(shared.SourceImageId!.Value, default))!;
         await using var readable = await f.Blobs.OpenReadAsync(upload.BlobKey, default);
         Assert.True(readable.Length > 0);
         shared.Cancel(f.Clock.Now);
@@ -422,7 +422,7 @@ public sealed class SpriteCommandTests
     }
     private static async Task FinishFrames(PipelineFixture f, PipelineJob job, IReadOnlyList<Guid> taskIds)
     {
-        var source = (await f.Images.GetAsync(job.SourceImageId, default))!;
+        var source = (await f.Images.GetAsync(job.SourceImageId!.Value, default))!;
         foreach (var id in taskIds)
         {
             var task = job.Tasks.Single(t => t.Id == id);

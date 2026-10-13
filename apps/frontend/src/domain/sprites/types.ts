@@ -6,6 +6,7 @@ export type SpriteOutputKind = 'layers' | 'tiles'
 export type SpriteRepeat = 'x' | 'y' | 'both'
 export type SpriteTileLayout = 'square' | 'diamond'
 export type SpritePhase =
+  | 'sourceDraft'
   | 'analyzing'
   | 'planReview'
   | 'baseGeneration'
@@ -154,6 +155,7 @@ export type StartSpriteJobInput = SpriteStartCommon &
   )
 
 const PHASES: readonly SpritePhase[] = [
+  'sourceDraft',
   'analyzing',
   'planReview',
   'baseGeneration',

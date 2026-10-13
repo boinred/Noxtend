@@ -164,7 +164,7 @@ public sealed class SpriteRequestConcurrencyTests(SqlServerFixture sql)
         var receipt = await f.SpriteCommands.ExportAsync(SpriteCommandTests.Context(job), [job.Sprites!.Assets[0].Id], default);
         await Seed(f, job);
         await using var db = Context();
-        var shared = PipelineJob.CreateSprites(job.SourceImageId, job.ImageProviderConfigId!.Value, job.ImageModel!,
+        var shared = PipelineJob.CreateSprites(job.SourceImageId!.Value, job.ImageProviderConfigId!.Value, job.ImageModel!,
             job.Sprites.Settings, job.Sprites.SourceCanvas, job.Sprites.GenerationCanvas, f.Clock.Now).Value!;
         db.Jobs.Add(shared);
         await db.SaveChangesAsync();
@@ -257,7 +257,7 @@ public sealed class SpriteRequestConcurrencyTests(SqlServerFixture sql)
     {
         await using var db = Context();
         await db.Database.MigrateAsync();
-        db.StoredImages.Add((await f.Images.GetAsync(job.SourceImageId, default))!);
+        db.StoredImages.Add((await f.Images.GetAsync(job.SourceImageId!.Value, default))!);
         db.Jobs.Add(job);
         await db.SaveChangesAsync();
     }

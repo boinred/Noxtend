@@ -149,9 +149,9 @@ public sealed class RunTaskHandler(
         return result.RawJson;
     }
 
-    private async Task<ImageContent> LoadImageAsync(Guid sourceImageId, CancellationToken ct)
+    private async Task<ImageContent> LoadImageAsync(Guid? sourceImageId, CancellationToken ct)
     {
-        var image = await images.GetAsync(sourceImageId, ct)
+        var image = (sourceImageId is { } id ? await images.GetAsync(id, ct) : null)
                     ?? throw new ProviderCallFailedException("소스 이미지를 찾을 수 없습니다");
 
         await using var stream = await blobs.OpenReadAsync(image.BlobKey, ct);

@@ -67,7 +67,7 @@ public sealed class RunSpriteGenerationTaskHandler(
         var phase = (double)input.FrameIndex / (plan.Loop ? plan.FrameCount : 1);
         var prompt = await prompts.GetActiveAsync(LlmOperationKind.GenerateSprite, job.Category, ct)
             ?? throw new ProviderCallFailedException("2D 생성 활성 프롬프트가 없습니다");
-        var source = await images.GetAsync(job.SourceImageId, ct)
+        var source = (job.SourceImageId is { } sourceId ? await images.GetAsync(sourceId, ct) : null)
             ?? throw new ProviderCallFailedException("원본 이미지가 없습니다");
         var references = new List<ReferenceImage>
         {

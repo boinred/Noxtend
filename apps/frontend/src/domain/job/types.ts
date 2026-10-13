@@ -53,6 +53,8 @@ export type TaskKind =
   | 'analyzeSprites'
   | 'generateSprite'
   | 'packSprites'
+  | 'enhanceSpriteSource'
+  | 'generateSpriteSource'
 
 /** 제작 대상 카테고리 — 서버 wire 값과 동일. */
 export type AssetCategory = 'character' | 'object' | 'background'
@@ -108,6 +110,8 @@ const TASK_KIND_LABELS: Record<TaskKind, string> = {
   analyzeSprites: '2D 배경 분석',
   generateSprite: '2D 배경 생성',
   packSprites: '2D 배경 내보내기',
+  enhanceSpriteSource: '원본 프롬프트 보완',
+  generateSpriteSource: '원본 후보 생성',
 }
 
 /** 작업 상태의 화면 표기. 부분 성공은 성공과 다른 낱말이어야 한다 (C-3). */

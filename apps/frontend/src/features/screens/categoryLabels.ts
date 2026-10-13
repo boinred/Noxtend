@@ -82,6 +82,7 @@ export function jobSummaryCount(job: JobSummary): string {
 
 export function spritePhaseLabel(phase: SpritePhase): string {
   return {
+    sourceDraft: '원본 준비',
     analyzing: '제작 대상 분석',
     planReview: '제작 계획 검수',
     baseGeneration: '기준 이미지 생성',
