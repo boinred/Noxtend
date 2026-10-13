@@ -19,7 +19,7 @@
 
 ## 작업별 지침과 스킬
 
-프로젝트 스킬의 정본은 `.agents/skills/`이고 `.claude/skills/`는 그 링크다. 선택한 스킬의 `SKILL.md`와 작업에 필요한 참조만 읽는다.
+프로젝트 스킬의 정본은 `.agents/skills/`이고 `.claude/skills/`는 그 링크다. 선택한 스킬의 전체 `SKILL.md`와 작업에 필요한 참조만 읽는다.
 
 - 코드 작성·수정·리뷰는 [karpathy-guidelines](.agents/skills/karpathy-guidelines/SKILL.md)(주석 규칙 포함), 기능·버그 수정·리팩터링·테스트 구현은 [tdd-cycle](.agents/skills/tdd-cycle/SKILL.md)을 따른다. 문서·지침만 바꾸는 작업에는 새 TDD 테스트가 필요 없다.
 - 공백·줄 끝은 루트 `.editorconfig`를 따르고, Frontend 포맷·lint·계층 검사는 커밋 훅이 실행한다. C#은 포매터 없이 현재 스타일을 유지하며 일괄 재포맷하지 않는다.
