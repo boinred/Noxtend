@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { useJob, useRetryTask, useCancelJob } from '@/app/queries/useJob'
 import { apiErrorMessage } from '@/app/queries/errors'
 import { useProviders } from '@/app/queries/useProviders'
-import { jobStatusLabel, taskKindLabel, isTerminal } from '@/domain/job/types'
+import { jobStatusLabel, taskKindLabel, isTerminal, isSourceTask } from '@/domain/job/types'
 import { ROUTES } from '@/routes/paths'
 import { PageContainer } from '../PageContainer'
 import { ModelSummary } from '../ModelSummary'
@@ -14,6 +14,7 @@ import { SpriteFrameReview } from './SpriteFrameReview'
 import { SpritePreview } from './SpritePreview'
 import { SpriteExport } from './SpriteExport'
 import { SpriteProgress } from './SpriteProgress'
+import { SpriteSourceDraftPanel } from './SpriteSourceDraftPanel'
 import { spriteStyles as styles } from './spriteStyles'
 
 export function SpriteStudioScreen() {
@@ -28,6 +29,15 @@ export function SpriteStudioScreen() {
     sprite?.assets.flatMap((a) => a.frames.map((f) => f.currentTaskId)),
   )
   const canceled = job?.status === 'canceled'
+  const drafting = sprite?.phase === 'sourceDraft'
+  const analyzed = sprite?.phase !== 'analyzing' && !drafting
+  // 원본 준비 공정은 최신 Ordinal 하나만 current
+  const currentSourceTask = drafting
+    ? job?.tasks
+        .filter(isSourceTask)
+        .sort((a, b) => a.ordinal - b.ordinal)
+        .at(-1)
+    : undefined
   const packTask = job?.tasks.filter((task) => task.kind === 'packSprites').at(-1)
   const packing =
     sprite?.phase === 'packaging' &&
@@ -72,7 +82,9 @@ export function SpriteStudioScreen() {
                   ? () => {
                       if (
                         window.confirm(
-                          '작업을 취소할까요?\n\n이미 저장된 PNG와 ZIP은 계속 내려받을 수 있습니다.\n취소한 작업의 추가 생성과 검수는 진행할 수 없습니다.',
+                          drafting
+                            ? '원본 준비를 취소하면 이 작업에서 더 생성할 수 없습니다. 만든 후보는 볼 수 있습니다.'
+                            : '작업을 취소할까요?\n\n이미 저장된 PNG와 ZIP은 계속 내려받을 수 있습니다.\n취소한 작업의 추가 생성과 검수는 진행할 수 없습니다.',
                         )
                       ) {
                         cancel.mutate(job.id)
@@ -84,7 +96,9 @@ export function SpriteStudioScreen() {
             />
             {canceled ? (
               <p className={styles.hint}>
-                취소된 작업입니다. 이미 저장된 PNG와 ZIP은 내려받을 수 있습니다.
+                {drafting
+                  ? '취소된 작업입니다. 만든 후보는 볼 수 있습니다.'
+                  : '취소된 작업입니다. 이미 저장된 PNG와 ZIP은 내려받을 수 있습니다.'}
               </p>
             ) : null}
             {query.isError ? (
@@ -109,7 +123,8 @@ export function SpriteStudioScreen() {
               .filter(
                 (task) =>
                   task.status !== 'succeeded' &&
-                  (task.kind !== 'generateSprite' || currentFrameTasks.has(task.id)),
+                  (task.kind !== 'generateSprite' || currentFrameTasks.has(task.id)) &&
+                  (!isSourceTask(task) || task.id === currentSourceTask?.id),
               )
               .map((task) => (
                 <div key={task.id} className={styles.row}>
@@ -145,8 +160,19 @@ export function SpriteStudioScreen() {
           </section>
           {/* 모델은 접수 시점 고정 — 분석 중에도 표시 */}
           <ModelSummary models={job.models} providers={providers} className="mb-0" />
-          {sprite.phase !== 'analyzing' ? <SpriteAnalysisPanel sprite={sprite} /> : null}
-          {sprite.phase !== 'analyzing' && !canceled ? (
+          {drafting && sprite.source ? (
+            <SpriteSourceDraftPanel
+              key={job.id}
+              jobId={job.id}
+              sprite={sprite}
+              source={sprite.source}
+              tasks={job.tasks}
+              canceled={canceled}
+              disabled={query.isError}
+            />
+          ) : null}
+          {analyzed ? <SpriteAnalysisPanel sprite={sprite} /> : null}
+          {analyzed && !canceled && job.sourceImageId !== null ? (
             <SpritePlanReview
               key={job.id}
               jobId={job.id}
@@ -157,8 +183,7 @@ export function SpriteStudioScreen() {
               disabled={packing || query.isError}
             />
           ) : null}
-          {sprite.phase !== 'analyzing' &&
-          (sprite.phase !== 'planReview' || sprite.images.length > 0) ? (
+          {analyzed && (sprite.phase !== 'planReview' || sprite.images.length > 0) ? (
             <>
               <SpritePreview sprite={sprite} timeMs={0} playing={false} />
               <SpriteFrameReview

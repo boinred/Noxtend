@@ -33,7 +33,8 @@ public sealed class PipelineJobConfiguration : IEntityTypeConfiguration<Pipeline
         builder.Property(j => j.Category).HasConversion<string>().HasMaxLength(32).IsRequired();
         builder.Property(j => j.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
 
-        builder.Property(j => j.SourceImageId).IsRequired();
+        // 2D 원본 준비 단계만 null
+        builder.Property(j => j.SourceImageId);
         // 장면 명세는 JSON 열이다 (§2.3-1). 필드가 R-1 실측 후 바뀔 가능성이 높은데
         // 열로 쪼개면 그때마다 마이그레이션이 필요하고, 장면으로 검색할 일은 없다
         builder.Property(j => j.Scene)
@@ -105,6 +106,9 @@ public sealed class PipelineJobConfiguration : IEntityTypeConfiguration<Pipeline
             task.Property(t => t.SpriteExportInput).HasColumnName("SpriteExportInputJson")
                 .HasConversion(value => value == null ? null : SpriteJsonSerializer.Serialize(value),
                     json => json == null ? null : SpriteJsonSerializer.Deserialize<SpriteExportInput>(json));
+            task.Property(t => t.SourceInput).HasColumnName("SourceInputJson")
+                .HasConversion(value => value == null ? null : SpriteJsonSerializer.Serialize(value),
+                    json => json == null ? null : SpriteJsonSerializer.Deserialize<SpriteSourceInput>(json));
             task.Property(t => t.RequestId);
             task.ToTable("Tasks");
             task.WithOwner().HasForeignKey(t => t.JobId);

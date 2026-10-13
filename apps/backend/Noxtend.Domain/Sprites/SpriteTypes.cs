@@ -6,8 +6,9 @@ public enum SpriteView { SideView, TopDown, Isometric }
 public enum SpriteOutputKind { Layers, Tiles }
 public enum SpriteRepeat { X, Y, Both }
 public enum SpriteTileLayout { Square, Diamond }
-public enum SpriteRequestKind { Create, UpdatePlan, ApprovePlan, ApproveBases, RegenerateFrame, ApproveAsset, Export }
-public enum SpritePhase { Analyzing, PlanReview, BaseGeneration, BaseReview, FrameGeneration, FrameReview, ExportReady, Packaging, Completed }
+public enum SpriteRequestKind { Create, UpdatePlan, ApprovePlan, ApproveBases, RegenerateFrame, ApproveAsset, Export,
+    CreateDraft, EnhanceSource, SaveSourcePrompt, GenerateSource, SelectSource }
+public enum SpritePhase { SourceDraft, Analyzing, PlanReview, BaseGeneration, BaseReview, FrameGeneration, FrameReview, ExportReady, Packaging, Completed }
 
 public sealed record SpriteImageInfo(int Width, int Height, bool HasTransparentPixels, bool HasVisiblePixels, string ContentType);
 public sealed record SpriteCanvas(int Width, int Height);

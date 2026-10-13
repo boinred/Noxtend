@@ -37,7 +37,7 @@ public sealed class GetPromptGridHandler(IPromptCatalog catalog, IPromptVersionR
         [LlmOperationKind.Analyze, LlmOperationKind.Extract, LlmOperationKind.Decompose,
          LlmOperationKind.RewriteDescriptions, LlmOperationKind.Generate,
          LlmOperationKind.AnalyzeSprites, LlmOperationKind.GenerateSprite, LlmOperationKind.GenerateSpriteSource,
-         LlmOperationKind.SimilarityEvaluate];
+         LlmOperationKind.EnhanceSpriteSource, LlmOperationKind.SimilarityEvaluate];
 
     // 열 순서: 기본(null) → 캐릭터 → 소품 → 배경. 기본 열은 폴백 대상이 없다
     private static readonly AssetCategory?[] Columns =
@@ -141,7 +141,7 @@ public sealed class CreatePromptVersionHandler(IPromptVersionRepository prompts,
         CancellationToken ct)
     {
         // 유사도 평가는 Background 전용 슬롯이다 (background-similarity-tuning §7.1)
-        if ((kind is LlmOperationKind.SimilarityEvaluate or LlmOperationKind.AnalyzeSprites or LlmOperationKind.GenerateSprite or LlmOperationKind.GenerateSpriteSource) && category != AssetCategory.Background)
+        if ((kind is LlmOperationKind.SimilarityEvaluate or LlmOperationKind.AnalyzeSprites or LlmOperationKind.GenerateSprite or LlmOperationKind.GenerateSpriteSource or LlmOperationKind.EnhanceSpriteSource) && category != AssetCategory.Background)
         {
             return Result<PromptVersion>.Fail(
                 ErrorCode.PromptSchemaInvalid, "이 프롬프트는 Background 전용입니다");

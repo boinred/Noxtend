@@ -87,6 +87,8 @@ public enum TaskKind
     AnalyzeSprites = 7,
     GenerateSprite = 8,
     PackSprites = 9,
+    EnhanceSpriteSource = 10,
+    GenerateSpriteSource = 11,
 }
 
 /// <summary>공정의 상태.</summary>

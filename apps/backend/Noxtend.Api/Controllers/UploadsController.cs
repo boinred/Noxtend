@@ -3,7 +3,6 @@ using Noxtend.Api.Contracts;
 using Noxtend.Application.Common;
 using Noxtend.Domain.Common;
 using Noxtend.Application.Uploads;
-using Noxtend.Application.Sprites;
 using Noxtend.Domain.Ports;
 using Noxtend.Domain.Validation;
 
@@ -19,8 +18,7 @@ namespace Noxtend.Api.Controllers;
 public sealed class UploadsController(
     CreateUploadHandler createUpload,
     IStoredImageRepository images,
-    IBlobStorage blobs,
-    GenerateSpriteSourceHandler generateSpriteSource) : ControllerBase
+    IBlobStorage blobs) : ControllerBase
 {
     /// <summary>Design Ref: §4.2 #2 — multipart/form-data, 필드 `file`.</summary>
     [HttpPost]
@@ -39,14 +37,6 @@ public sealed class UploadsController(
         var result = await createUpload.HandleAsync(
             content, file.FileName, file.ContentType, file.Length, ct);
 
-        return ApiResults.From(result, UploadResponse.From, StatusCodes.Status201Created);
-    }
-
-    [HttpPost("generate")]
-    public async Task<IActionResult> GenerateAsync(GenerateSpriteSourceRequest request, CancellationToken ct)
-    {
-        var result = await generateSpriteSource.HandleAsync(
-            new(request.RequestId, request.Prompt, request.ImageProviderConfigId, request.ImageModel), ct);
         return ApiResults.From(result, UploadResponse.From, StatusCodes.Status201Created);
     }
 

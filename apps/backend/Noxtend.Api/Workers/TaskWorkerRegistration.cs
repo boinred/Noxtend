@@ -33,6 +33,8 @@ public static class TaskWorkerRegistration
         [TaskKind.PackSprites] = sp => sp.GetRequiredService<Noxtend.Application.Sprites.RunSpritePackTaskHandler>(),
         [TaskKind.GenerateSprite] = sp => sp.GetRequiredService<Noxtend.Application.Sprites.RunSpriteGenerationTaskHandler>(),
         [TaskKind.AnalyzeSprites] = sp => sp.GetRequiredService<Noxtend.Application.Sprites.RunSpriteAnalysisTaskHandler>(),
+        [TaskKind.EnhanceSpriteSource] = sp => sp.GetRequiredService<Noxtend.Application.Sprites.RunSpriteSourceEnhanceTaskHandler>(),
+        [TaskKind.GenerateSpriteSource] = sp => sp.GetRequiredService<Noxtend.Application.Sprites.RunSpriteSourceGenerationTaskHandler>(),
         [TaskKind.Analyze] = sp => sp.GetRequiredService<RunTaskHandler>(),
         [TaskKind.Extract] = sp => sp.GetRequiredService<RunTaskHandler>(),
         [TaskKind.Decompose] = sp => sp.GetRequiredService<RunTaskHandler>(),
@@ -71,7 +73,7 @@ public static class TaskWorkerRegistration
         {
             var count = kind switch
             {
-                TaskKind.Generate or TaskKind.GenerateSprite => generationWorkers,
+                TaskKind.Generate or TaskKind.GenerateSprite or TaskKind.GenerateSpriteSource => generationWorkers,
                 TaskKind.Reconstruct => meshWorkers,
                 _ => 1,
             };

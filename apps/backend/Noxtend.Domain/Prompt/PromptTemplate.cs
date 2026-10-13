@@ -29,7 +29,8 @@ public static partial class PromptTemplate
     /// </summary>
     public static IReadOnlySet<string> AllowedVariables(LlmOperationKind kind) => kind switch
     {
-        LlmOperationKind.GenerateSpriteSource => new HashSet<string> { "prompt" },
+        LlmOperationKind.GenerateSpriteSource => new HashSet<string> { "prompt", "settings" },
+        LlmOperationKind.EnhanceSpriteSource => new HashSet<string> { "description", "settings" },
         LlmOperationKind.GenerateSprite => new HashSet<string> { "settings", "asset", "frame", "sourceCanvas", "outputCanvas" },
         LlmOperationKind.AnalyzeSprites => new HashSet<string> { "settings", "sourceCanvas" },
         LlmOperationKind.Analyze => new HashSet<string>(),

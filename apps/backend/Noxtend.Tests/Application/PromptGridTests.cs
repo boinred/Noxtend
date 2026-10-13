@@ -126,6 +126,24 @@ public sealed class PromptGridTests
         Assert.Equal("fallback", characterCell.Status); // 기본이 있어 카테고리는 폴백
     }
 
+    // 원본 보완 슬롯: Background 전용, description·settings 변수
+    [Fact]
+    public async Task EnhanceSpriteSource_IsBackgroundOnlyWithDescriptionAndSettings()
+    {
+        var handler = new CreatePromptVersionHandler(new InMemoryPromptVersionRepository(), FixedClock.Default);
+
+        var other = await handler.HandleAsync(LlmOperationKind.EnhanceSpriteSource, AssetCategory.Object,
+            "{{description}}", "{{settings}}", "{}", null, CancellationToken.None);
+        var unknown = await handler.HandleAsync(LlmOperationKind.EnhanceSpriteSource, AssetCategory.Background,
+            "{{prompt}}", "{{settings}}", "{}", null, CancellationToken.None);
+        var saved = await handler.HandleAsync(LlmOperationKind.EnhanceSpriteSource, AssetCategory.Background,
+            "{{description}}", "{{settings}}", "{}", null, CancellationToken.None);
+
+        Assert.Equal(Noxtend.Domain.Common.ErrorCode.PromptSchemaInvalid, other.ErrorCode);
+        Assert.Equal(Noxtend.Domain.Common.ErrorCode.PromptUnknownVariable, unknown.ErrorCode);
+        Assert.True(saved.IsSuccess, saved.ErrorMessage);
+    }
+
     private static PromptGridCell CellOf(
         IReadOnlyList<PromptGridRow> rows, LlmOperationKind kind, AssetCategory? category)
         => rows.Single(r => r.Kind == kind).Columns.Single(c => c.Category == category).Cell;

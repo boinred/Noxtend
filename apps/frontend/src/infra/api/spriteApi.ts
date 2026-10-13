@@ -8,6 +8,11 @@ import type {
   SpriteAssetsInput,
   SpriteAssetInput,
   RegenerateSpriteFrameInput,
+  CreateSpriteDraftInput,
+  EnhanceSpriteSourceInput,
+  SaveSpriteSourcePromptInput,
+  GenerateSpriteSourceCandidateInput,
+  SelectSpriteSourceInput,
 } from '@/domain/sprites/types'
 
 export async function startSpriteJob(
@@ -27,6 +32,29 @@ export async function startSpriteJob(
       body: {
         requestId,
         ...source,
+        providerConfigId,
+        model,
+        imageProviderConfigId,
+        imageModel,
+        settings: { view, outputKind, tileWidth, repeat },
+      },
+    }),
+  )
+}
+export async function createSpriteDraft(
+  input: CreateSpriteDraftInput,
+  signal?: AbortSignal,
+): Promise<SpriteAccepted> {
+  const { requestId, description, providerConfigId, model, imageProviderConfigId, imageModel } =
+    input
+  const { view, outputKind, tileWidth, repeat } = input.settings
+  return readSpriteAccepted(
+    await apiRequest<unknown>('/api/jobs/sprites/drafts', {
+      method: 'POST',
+      signal,
+      body: {
+        requestId,
+        description,
         providerConfigId,
         model,
         imageProviderConfigId,
@@ -129,6 +157,57 @@ export function exportSprites(
     'POST',
     signal,
   )
+}
+export function enhanceSpriteSource(
+  input: EnhanceSpriteSourceInput,
+  signal?: AbortSignal,
+): Promise<SpriteAccepted> {
+  return mutate(
+    input,
+    'source/enhance',
+    { ...mutationBody(input), description: input.description },
+    'POST',
+    signal,
+  )
+}
+export function saveSpriteSourcePrompt(
+  input: SaveSpriteSourcePromptInput,
+  signal?: AbortSignal,
+): Promise<SpriteAccepted> {
+  return mutate(
+    input,
+    'source/prompt',
+    { ...mutationBody(input), prompt: input.prompt },
+    'PUT',
+    signal,
+  )
+}
+export function generateSpriteSourceCandidate(
+  input: GenerateSpriteSourceCandidateInput,
+  signal?: AbortSignal,
+): Promise<SpriteAccepted> {
+  return mutate(
+    input,
+    'source/generate',
+    { ...mutationBody(input), prompt: input.prompt },
+    'POST',
+    signal,
+  )
+}
+export function selectSpriteSource(
+  input: SelectSpriteSourceInput,
+  signal?: AbortSignal,
+): Promise<SpriteAccepted> {
+  return mutate(
+    input,
+    'source/select',
+    { ...mutationBody(input), candidateId: input.candidateId },
+    'POST',
+    signal,
+  )
+}
+export function spriteSourceCandidateUrl(jobId: string, candidateId: string): string {
+  return apiUrl(`/api/jobs/${jobId}/sprites/source/candidates/${candidateId}`)
 }
 export function spriteImageUrl(jobId: string, imageId: string): string {
   return apiUrl(`/api/jobs/${jobId}/sprites/images/${imageId}`)

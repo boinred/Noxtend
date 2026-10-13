@@ -440,6 +440,18 @@ function JobView({ jobId }: { jobId: string }) {
     )
   }
 
+  // 원본 이미지가 없는 작업은 2D 원본 준비 작업이다 — 이 화면의 대상이 아니다
+  const sourceImageId = job.sourceImageId
+  if (sourceImageId === null) {
+    return (
+      <PageContainer width="max" title="캐릭터 스튜디오" testId="character-studio">
+        <p className={styles.notice} data-testid="job-no-source">
+          원본 이미지가 없는 작업입니다. 2D 작업 화면에서 확인해 주세요.
+        </p>
+      </PageContainer>
+    )
+  }
+
   const failedTask = job.tasks.find((t) => t.status === 'failed')
 
   return (
@@ -462,7 +474,7 @@ function JobView({ jobId }: { jobId: string }) {
               isActive(job.status)
                 ? () => {
                     if (window.confirm('작업을 취소할까요?')) {
-                      cancelJob.mutate(jobId, { onSuccess: () => goToInput(job.sourceImageId) })
+                      cancelJob.mutate(jobId, { onSuccess: () => goToInput(sourceImageId) })
                     }
                   }
                 : undefined
@@ -493,7 +505,7 @@ function JobView({ jobId }: { jobId: string }) {
               ) : null}
               <Button
                 variant="outline"
-                onClick={() => goToInput(job.sourceImageId)}
+                onClick={() => goToInput(sourceImageId)}
                 data-testid="back-to-input"
               >
                 설정 바꿔서 다시 시작
@@ -507,18 +519,18 @@ function JobView({ jobId }: { jobId: string }) {
             </p>
             <Button
               variant="default"
-              onClick={() => goToInput(job.sourceImageId)}
+              onClick={() => goToInput(sourceImageId)}
               data-testid="canceled-back"
             >
               새로 생성하기
             </Button>
           </>
         ) : job.status === 'pendingReview' ? (
-          <ReviewGate jobId={jobId} sourceImageId={job.sourceImageId} onApproved={() => {}} />
+          <ReviewGate jobId={jobId} sourceImageId={sourceImageId} onApproved={() => {}} />
         ) : job.status === 'succeeded' || job.status === 'partiallySucceeded' ? (
           <RunResult
             job={job}
-            onRestart={() => goToInput(job.sourceImageId)}
+            onRestart={() => goToInput(sourceImageId)}
             calls={calls}
             prices={prices}
             onRetryTask={(taskId) => retryTask.mutate(taskId)}
@@ -528,7 +540,7 @@ function JobView({ jobId }: { jobId: string }) {
             onReplanPartMesh={(selection) => replanPartMesh.mutateAsync(selection)}
           />
         ) : (
-          <RunProgress sourceImageId={job.sourceImageId} tasks={job.tasks} />
+          <RunProgress sourceImageId={sourceImageId} tasks={job.tasks} />
         )}
       </div>
     </PageContainer>

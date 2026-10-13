@@ -1,8 +1,0 @@
-@keyframes sprite-prompt-flow {
-  from {
-    transform: translateX(-110%);
-  }
-  to {
-    transform: translateX(395%);
-  }
-}

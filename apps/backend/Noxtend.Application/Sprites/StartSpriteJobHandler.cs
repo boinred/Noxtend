@@ -16,8 +16,6 @@ public sealed class StartSpriteJobHandler(
     IProviderConfigRepository providers, IModelCatalog catalog, IPromptCatalog prompts,
     IImageTranscoder transcoder, JobOrchestrator orchestrator, IClock clock, ILogger<StartSpriteJobHandler> logger)
 {
-    private const long MaxBytes = 12 * 1024 * 1024;
-
     public async Task<Result<SpriteReceipt>> HandleAsync(StartSpriteJobCommand command, CancellationToken ct)
     {
         var upload = command.UploadId is not null;
@@ -66,42 +64,17 @@ public sealed class StartSpriteJobHandler(
         }
         if (sourceKey is null) return Fail(ErrorCode.JobUploadNotFound, "작업에 속한 원본 이미지를 찾을 수 없습니다");
 
-        using var content = new MemoryStream();
-        SpriteImageInfo info;
-        try
-        {
-            await using var source = await blobs.OpenReadAsync(sourceKey, ct);
-            // 비seek 원본에도 적용하는 바이트 상한
-            var buffer = new byte[81920];
-            while (true)
-            {
-                var read = await source.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, MaxBytes + 1 - content.Length)), ct);
-                if (read == 0) break;
-                await content.WriteAsync(buffer.AsMemory(0, read), ct);
-                if (content.Length > MaxBytes) return Fail(ErrorCode.UploadTooLarge, "입력 이미지는 최대 12 MiB입니다");
-            }
-            content.Position = 0;
-            info = await transcoder.InspectSpriteAsync(content, MaxBytes, 16_777_216, ct);
-        }
-        catch (ProviderBadResponseException)
-        {
-            return Fail(ErrorCode.UploadUnsupportedType, "PNG·JPEG·WebP의 유효한 이미지와 최대 16,777,216픽셀이 필요합니다");
-        }
-        catch (FileNotFoundException)
-        {
-            return Fail(ErrorCode.JobUploadNotFound, "원본 이미지 파일이 없습니다");
-        }
-        if (sourceImage is not null && !string.Equals(sourceImage.ContentType, info.ContentType, StringComparison.OrdinalIgnoreCase))
-            return Fail(ErrorCode.UploadUnsupportedType, "업로드 MIME과 실제 이미지 형식이 일치해야 합니다");
+        var inspected = await SpriteSourceInspector.InspectAsync(blobs, transcoder, sourceKey, sourceImage?.ContentType, ct);
+        if (!inspected.IsSuccess) return Fail(inspected.ErrorCode!, inspected.ErrorMessage!);
+        var info = inspected.Value!.Info;
         var sourceCanvas = new SpriteCanvas(info.Width, info.Height);
         var generation = SpriteRules.GenerationCanvas(SpriteRules.OutputCanvas(command.Settings, sourceCanvas), capability.Sizes);
         string? copiedKey = null;
         if (sourceImage is null)
         {
             // 기존 작업 결과만 원본 작업의 삭제 수명에서 분리
-            content.Position = 0;
-            copiedKey = await blobs.SaveAsync(content, info.ContentType, ct);
-            sourceImage = StoredImage.Create(copiedKey, "sprite-input", info.ContentType, content.Length, clock.Now);
+            sourceImage = await SpriteSourceInspector.CopyAsync(blobs, inspected.Value, "sprite-input", clock.Now, ct);
+            copiedKey = sourceImage.BlobKey;
         }
         var created = PipelineJob.CreateSprites(sourceImage.Id, imageProvider.Id, command.ImageModel,
             command.Settings, sourceCanvas, generation, clock.Now);

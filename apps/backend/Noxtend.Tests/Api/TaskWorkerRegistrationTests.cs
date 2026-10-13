@@ -51,8 +51,8 @@ public sealed class TaskWorkerRegistrationTests
 
         var workers = provider.GetServices<IHostedService>().OfType<TaskWorker>().ToList();
 
-        // 이미지 두 종류와 3D 공정의 설정별 워커 수
-        var expected = TaskWorkerRegistration.Stages.Length - 3 + 2 * GenerationWorkers + MeshWorkers;
+        // 이미지 세 종류와 3D 공정의 설정별 워커 수
+        var expected = TaskWorkerRegistration.Stages.Length - 4 + 3 * GenerationWorkers + MeshWorkers;
 
         Assert.Equal(expected, workers.Count);
     }
@@ -77,6 +77,16 @@ public sealed class TaskWorkerRegistrationTests
         using var provider = BuildProvider();
         Assert.Equal(GenerationWorkers, provider.GetServices<IHostedService>()
             .OfType<TaskWorker>().Count(w => w.Kind == TaskKind.GenerateSprite));
+    }
+
+    [Fact]
+    public void SpriteSourceGenerationSharesTheGenerationWorkerGroup()
+    {
+        using var provider = BuildProvider();
+        var workers = provider.GetServices<IHostedService>().OfType<TaskWorker>().ToList();
+
+        Assert.Equal(GenerationWorkers, workers.Count(w => w.Kind == TaskKind.GenerateSpriteSource));
+        Assert.Equal(1, workers.Count(w => w.Kind == TaskKind.EnhanceSpriteSource));
     }
 
     /// <summary>

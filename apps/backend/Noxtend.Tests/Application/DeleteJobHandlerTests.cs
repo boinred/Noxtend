@@ -103,14 +103,14 @@ public sealed class DeleteJobHandlerTests
     {
         var fixture = new PipelineFixture();
         var first = await fixture.StartJobAsync();
-        var second = await fixture.StartJobAsync(first.SourceImageId);
+        var second = await fixture.StartJobAsync(first.SourceImageId!.Value);
 
         await fixture.RunAllStagesAsync(first);
 
         var blobs = await fixture.Jobs.DeleteIfTerminalAsync(first.Id, CancellationToken.None);
 
         Assert.NotNull(blobs);
-        Assert.DoesNotContain(blobs!.Images, key => key.Contains(second.SourceImageId.ToString("n")));
+        Assert.DoesNotContain(blobs!.Images, key => key.Contains(second.SourceImageId!.Value.ToString("n")));
     }
 
     /// <summary>

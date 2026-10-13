@@ -27,7 +27,7 @@
 4. 복구: 중복 배달·종료 공정·다른 owner는 `Skipped`로 Ack한다. 프로세스 종료 시 Ack하지 않고 `SweepStaleTasksHandler`가 lease 만료 공정을 재시도 한도 안에서 다시 적재하고 준비된 대기 공정을 재적재한다. rowversion 경합은 `ConcurrencyConflictException`으로 감싸며 Worker는 오류로 기록하지 않는다.
 5. 유사도 평가는 별도 경로다: `SimilarityController` → `StartSimilarityRunHandler`·`UploadCandidateRenderHandler`·`RetrySimilarityRunHandler` → `ISimilarityQueue` → `SimilarityWorker` → `EvaluateSimilarityHandler`, 회수는 `SimilaritySweeper` → `SweepSimilarityHandler`.
 
-TaskKind별 handler는 `TaskWorkerRegistration`의 표가 정본이다. 텍스트 공정은 `RunTaskHandler`, 이미지 생성은 `RunGenerationTaskHandler`, 3D는 `RunMeshTaskHandler`, 2D는 `Noxtend.Application/Sprites/Run*TaskHandler.cs`다. 단계별 상세는 [Backend 코드 안내](backend.md)와 [공급자와 프롬프트](providers-and-prompts.md)를 본다.
+TaskKind별 handler는 `TaskWorkerRegistration`의 표가 정본이다. 텍스트 공정은 `RunTaskHandler`, 이미지 생성은 `RunGenerationTaskHandler`, 3D는 `RunMeshTaskHandler`, 2D는 `Noxtend.Application/Sprites/Run*TaskHandler.cs`다. 원본 준비 공정은 `EnhanceSpriteSource`가 텍스트 리스(`JobOptions`)와 워커 1개, `GenerateSpriteSource`가 이미지 리스(`GenerationOptions`)와 `generationWorkers` 그룹·`ReclaimPlan` 생성 방치 기준을 쓴다. 보완 JSON 위반·공급자 일시 오류는 재시도, 이미지 장수·형식 위반은 유료 재호출 없이 실패한다. 단계별 상세는 [Backend 코드 안내](backend.md)와 [공급자와 프롬프트](providers-and-prompts.md)를 본다.
 
 ## 3D 메시 공정
 
@@ -67,6 +67,7 @@ TaskKind별 handler는 `TaskWorkerRegistration`의 표가 정본이다. 텍스�
 
 ## 확인 기준과 미확인
 
+- 2D 원본 준비 공정 확인: 2026-10-13, 기준 `0385d0e`. `EnhanceSpriteSource`·`GenerateSpriteSource` 단계 등록과 `ReclaimPlan`을 코드와 대조했고 Backend 전체 회귀(1872 통과, 건너뜀 0)에 포함됐다. 실제 SQL Server migration 적용과 로컬 배포는 확인하지 않았다.
 - 마지막 확인: 2026-10-08, revision `d2cad8d`. 위 경로·심볼은 코드에서 존재와 호출 관계를 확인했다. 이 확인에서는 테스트를 실행하지 않았다.
 - 재확인: 2026-10-09. Migration 절은 `dotnet ef migrations has-pending-model-changes`로 확인했다(Infrastructure를 startup project로 쓰면 성공, Api는 EF Design 미참조로 실패). `Api/ReclaimPlanTests.cs`는 Backend 전체 회귀(`dd73930`, 1,631 통과)와 주석 정리 후 집중 테스트(`a51167a`, 2 통과)로 다시 확인했다.
 - 미확인: Redis 장애·Pod 재시작 중 실제 복구 시간, 실제 SQL Server에 대한 migration 적용 결과, Tripo·Meshy 실 API 응답 형식 변화. 이들은 Fake·Testcontainers 테스트 범위 밖이며 실환경 확인이 필요하다.

@@ -15,6 +15,7 @@ async function chooseSetting(page: Page, label: string, value: string) {
   await page.getByRole('option', { name: value, exact: true }).click()
   await expect(page.getByRole('listbox')).toHaveCount(0)
 }
+const enhanceButton = (page: Page) => page.getByRole('button', { name: '보완하기', exact: true })
 async function start(page: Page, view = 'sideView', kind = 'layers') {
   await page.goto('/2d/background')
   await page.getByTestId('mode-tab-image').click()
@@ -357,6 +358,8 @@ for (const options of [
   test(`invalid model/provider blocks start ${JSON.stringify(options)}`, async ({ page }) => {
     await installFakeApi(page, { sprites: options })
     await page.goto('/2d/background')
+    await expect(enhanceButton(page)).toBeDisabled()
+    await page.getByTestId('mode-tab-image').click()
     await expect(page.getByRole('button', { name: '2D 분석 시작', exact: true })).toBeDisabled()
     if (options.providersEmpty)
       await expect(page.getByTestId('provider-empty-notice').first()).toBeVisible()
@@ -770,13 +773,9 @@ async function promptInput(page: Page) {
   await expect(page.getByTestId('sprite-image-model')).toContainText('Sprite Image Fake')
   await page.getByTestId('sprite-prompt-input').fill('  항구 마을  ')
 }
-async function generateSource(page: Page, count: number) {
-  await page.getByTestId('sprite-prompt-generate').click()
-  await expect(page.getByTestId('sprite-prompt-result')).toHaveCount(count)
-  await expect(page.getByTestId('sprite-prompt-result').nth(count - 1)).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
+async function chooseOutput(page: Page) {
+  await chooseSetting(page, '시점', '횡스크롤')
+  await chooseSetting(page, '결과 유형', '배경 레이어')
 }
 function countFileUploads(page: Page) {
   let count = 0
@@ -785,116 +784,181 @@ function countFileUploads(page: Page) {
   })
   return () => count
 }
+function sourceDraft(page: Page) {
+  const panel = page.getByRole('region', { name: '원본 준비', exact: true })
+  const status = page.getByRole('region', { name: '작업 상태', exact: true })
+  return {
+    panel,
+    status,
+    steps: status.getByRole('navigation', { name: '2D 제작 단계' }),
+    candidates: panel.getByTestId('sprite-source-candidate'),
+    prompt: panel.getByTestId('sprite-source-prompt'),
+    save: panel.getByRole('button', { name: '저장', exact: true }),
+    generate: panel.getByRole('button', { name: '원본 후보 생성', exact: true }),
+    analyze: panel.getByRole('button', { name: '이 원본으로 분석', exact: true }),
+    reenhance: panel.getByRole('button', { name: '다시 보완', exact: true }),
+  }
+}
+const jobPath = `/2d/background/${SPRITE_IDS.job}`
+const uuid = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i
+type Records = NonNullable<SpriteFakeOptions['records']>
+const sourceRecords = (records: Records, command: string) =>
+  records.filter((record) => record.path.endsWith(`/sprites/source/${command}`))
 
-test('prompt sources accumulate and the selected generated upload starts without file upload', async ({
+test('prompt draft enhances, generates the edited prompt, restores after reload and analyzes', async ({
   page,
 }) => {
-  const records: NonNullable<SpriteFakeOptions['records']> = []
+  const records: Records = []
   await installFakeApi(page, { sprites: { records } })
   const uploaded = countFileUploads(page)
   await promptInput(page)
-  await expect(page.getByRole('button', { name: '2D 분석 시작', exact: true })).toBeDisabled()
-  await generateSource(page, 1)
-  await generateSource(page, 2)
-  const results = page.getByTestId('sprite-prompt-result')
-  const ids = await results
+  await expect(enhanceButton(page)).toBeDisabled()
+  await chooseOutput(page)
+  await enhanceButton(page).click()
+  await expect(page).toHaveURL(new RegExp(`${jobPath}$`))
+  const ui = sourceDraft(page)
+  await expect(ui.panel.getByTestId('sprite-source-settings')).toHaveText('횡스크롤 · 배경 레이어')
+  await expect(ui.panel.getByTestId('sprite-source-description')).toHaveText('항구 마을')
+  await expect(ui.prompt).toHaveValue('항구 마을 · 보완 프롬프트')
+  await expect(ui.prompt).toHaveAttribute('aria-describedby', /.+/)
+  await expect(ui.panel.getByText('1000자', { exact: false })).toHaveCount(0)
+  await expect(ui.panel.getByText(`${'항구 마을 · 보완 프롬프트'.length}/4000`)).toBeVisible()
+  await expect(ui.steps.getByRole('listitem')).toHaveCount(6)
+  await expect(ui.steps.locator('[aria-current="step"]')).toContainText('원본 준비')
+  await expect(ui.status.getByLabel('원본 후보', { exact: true })).toHaveText('0 / 8')
+  // 원본 준비 단계에는 분석·배경 요약 없음
+  for (const label of ['원본 분석 성공', '배경 생성 성공'])
+    await expect(ui.status.getByLabel(label, { exact: true })).toHaveCount(0)
+  await expect(ui.generate).toHaveAttribute('data-variant', 'default')
+  await expect(ui.analyze).toHaveAttribute('data-variant', 'outline')
+  await expect(ui.analyze).toBeDisabled()
+  await ui.generate.click()
+  await expect(ui.candidates).toHaveCount(1)
+  // 저장 없이 고친 프롬프트로 바로 생성
+  await ui.prompt.fill('수정한 항구 프롬프트')
+  await ui.generate.click()
+  await expect(ui.candidates).toHaveCount(2)
+  await expect(ui.prompt).toHaveValue('수정한 항구 프롬프트')
+  expect(sourceRecords(records, 'generate').map((record) => record.body)).toEqual([
+    {
+      requestId: expect.stringMatching(uuid),
+      expectedRevision: 2,
+      prompt: '항구 마을 · 보완 프롬프트',
+    },
+    { requestId: expect.stringMatching(uuid), expectedRevision: 4, prompt: '수정한 항구 프롬프트' },
+  ])
+  expect(sourceRecords(records, 'prompt')).toHaveLength(0)
+
+  await page.reload()
+  await expect(ui.candidates).toHaveCount(2)
+  await expect(ui.prompt).toHaveValue('수정한 항구 프롬프트')
+  await expect(ui.status.getByLabel('원본 후보', { exact: true })).toHaveText('2 / 8')
+  const ids = await ui.candidates
     .locator('img')
     .evaluateAll((images) =>
-      images.map((image) => new URL((image as HTMLImageElement).src).pathname.split('/')[3]),
+      images.map((image) => new URL((image as HTMLImageElement).src).pathname.split('/')),
     )
-  expect(new Set(ids).size).toBe(2)
-  expect(ids).not.toContain(SPRITE_IDS.upload)
-  await results.first().focus()
-  await results.first().press('Enter')
-  await expect(results.first()).toHaveAttribute('aria-pressed', 'true')
-  await chooseSetting(page, '시점', '횡스크롤')
-  await chooseSetting(page, '결과 유형', '배경 레이어')
-  await page.getByRole('button', { name: '2D 분석 시작', exact: true }).click()
+  expect(ids.map((parts) => parts.slice(0, 7).join('/'))).toEqual(
+    Array(2).fill(`/api/jobs/${SPRITE_IDS.job}/sprites/source/candidates`),
+  )
+  await ui.panel.getByText('사용한 프롬프트').nth(1).click()
+  await expect(ui.panel.locator('details p').nth(1)).toHaveText('수정한 항구 프롬프트')
+  await expect(ui.panel.locator('details p').nth(1)).toBeVisible()
+  await ui.candidates.first().focus()
+  await ui.candidates.first().press('Enter')
+  await expect(ui.candidates.first()).toHaveAttribute('aria-pressed', 'true')
+  await expect(ui.analyze).toHaveAttribute('data-variant', 'default')
+  await expect(ui.generate).toHaveAttribute('data-variant', 'outline')
+  await ui.analyze.click()
   await expect(page.getByRole('heading', { name: '제작 계획 검수' })).toBeVisible()
-  const generated = records.filter((record) => record.path === '/api/uploads/generate')
-  expect(generated).toHaveLength(2)
-  for (const record of generated) {
-    expect(record.body).toEqual({
-      requestId: expect.stringMatching(
-        /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i,
-      ),
-      prompt: '항구 마을',
-      imageProviderConfigId: SPRITE_IDS.provider,
-      imageModel: 'sprite-image',
-    })
-  }
-  expect(records.find((record) => record.path === '/api/jobs/sprites')!.body.uploadId).toBe(ids[0])
+  await expect(ui.panel).toHaveCount(0)
+  await expect(ui.steps.getByRole('listitem')).toHaveCount(6)
+  // 선택 뒤에는 기존 작업 요약 유지
+  await expect(ui.status.getByLabel('원본 분석 성공', { exact: true })).toBeVisible()
+  await expect(ui.steps.getByRole('listitem').first()).toHaveAttribute('data-state', 'succeeded')
+  expect(records.find((record) => record.path === '/api/jobs/sprites/drafts')!.body).toEqual({
+    requestId: expect.stringMatching(uuid),
+    description: '항구 마을',
+    providerConfigId: SPRITE_IDS.provider,
+    model: 'analysis',
+    imageProviderConfigId: SPRITE_IDS.provider,
+    imageModel: 'sprite-image',
+    settings: { view: 'sideView', outputKind: 'layers', tileWidth: 128, repeat: 'both' },
+  })
+  expect(sourceRecords(records, 'select')[0]!.body.candidateId).toBe(ids[0]![7])
+  expect(records.some((record) => record.path === '/api/jobs/sprites')).toBe(false)
   expect(uploaded()).toBe(0)
 })
 
-test('prompt failure preserves description and retries only on a user action', async ({ page }) => {
-  const records: NonNullable<SpriteFakeOptions['records']> = []
-  await installFakeApi(page, { sprites: { records, generateErrorOnce: true } })
-  await promptInput(page)
-  await page.getByTestId('sprite-prompt-generate').click()
-  await expect(page.getByRole('alert')).toContainText('공급자 호출 실패')
-  await expect(page.getByTestId('sprite-prompt-input')).toHaveValue('  항구 마을  ')
-  expect(records).toHaveLength(1)
-  await generateSource(page, 1)
-  await expect(page.getByRole('alert')).toHaveCount(0)
-  expect(records).toHaveLength(2)
-})
-
-test('later prompt failure keeps results and first selection before appending a retry', async ({
+test('source generation failure keeps candidates and retry clears the failed row', async ({
   page,
 }) => {
-  const records: NonNullable<SpriteFakeOptions['records']> = []
-  await installFakeApi(page, { sprites: { records } })
-  await promptInput(page)
-  await generateSource(page, 1)
-  await generateSource(page, 2)
-  await page.getByTestId('sprite-prompt-result').first().click()
-  await page.route(
-    '**/api/uploads/generate',
-    async (route) => {
-      records.push({ path: '/api/uploads/generate', body: route.request().postDataJSON() })
-      await route.fulfill({
-        status: 502,
-        json: { data: null, error: { code: 'ProviderCallFailed', message: '공급자 호출 실패' } },
-      })
+  const records: Records = []
+  await installFakeApi(page, {
+    sprites: {
+      records,
+      seed: 'sourceDraft',
+      sourceCandidates: 1,
+      sourceFailures: ['generateSpriteSource'],
     },
-    { times: 1 },
-  )
-  await page.getByTestId('sprite-prompt-generate').click()
-  await expect(page.getByRole('alert')).toContainText('공급자 호출 실패')
-  await expect(page.getByTestId('sprite-prompt-result')).toHaveCount(2)
-  await expect(page.getByTestId('sprite-prompt-result').first()).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
-  await expect(page.getByTestId('sprite-prompt-input')).toHaveValue('  항구 마을  ')
-  expect(records).toHaveLength(3)
-  await generateSource(page, 3)
-  expect(records).toHaveLength(4)
+  })
+  await page.goto(jobPath)
+  const ui = sourceDraft(page)
+  await ui.candidates.first().click()
+  await ui.generate.click()
+  await expect(ui.status.getByText('원본 후보 생성 · 실패', { exact: false })).toBeVisible()
+  await expect(ui.status.getByText('Fake 원본 생성 실패', { exact: true })).toBeVisible()
+  await expect(ui.candidates).toHaveCount(1)
+  await expect(ui.candidates.first()).toHaveAttribute('aria-pressed', 'true')
+  await ui.status.getByRole('button', { name: '실패 공정 재시도', exact: true }).click()
+  await expect(ui.candidates).toHaveCount(2)
+  await expect(ui.status.getByRole('button', { name: '실패 공정 재시도' })).toHaveCount(0)
+  await expect(ui.status.getByText('원본 후보 생성 ·', { exact: false })).toHaveCount(0)
+  expect(sourceRecords(records, 'generate')).toHaveLength(1)
+})
+
+test('busy source command keeps the draft and refreshes from the server', async ({ page }) => {
+  const records: Records = []
+  const sprites: SpriteFakeOptions = {
+    records,
+    seed: 'sourceDraft',
+    sourceCandidates: 1,
+    sourceBusyOnce: true,
+    sourceTaskGets: Infinity,
+  }
+  await installFakeApi(page, { sprites })
+  await page.goto(jobPath)
+  const ui = sourceDraft(page)
+  await ui.generate.click()
+  await expect(ui.panel.getByRole('alert')).toHaveText('원본 준비 공정이 실행 중입니다')
+  await expect(ui.generate).toBeDisabled()
+  await expect(ui.status.getByLabel('원본 공정', { exact: true })).toHaveText('원본 후보 생성 중')
+  sprites.sourceTaskGets = 1
+  await expect(ui.candidates).toHaveCount(2)
+  await expect(ui.generate).toBeEnabled()
+  expect(sourceRecords(records, 'generate')).toHaveLength(1)
 })
 
 test('prompt state survives tabs while image mode starts the selected file', async ({ page }) => {
-  const records: NonNullable<SpriteFakeOptions['records']> = []
+  const records: Records = []
   await installFakeApi(page, { sprites: { records } })
   const uploaded = countFileUploads(page)
   await promptInput(page)
-  await generateSource(page, 1)
+  await chooseOutput(page)
   await page.getByTestId('mode-tab-image').press('Enter')
   await page
     .getByTestId('image-input')
     .setInputFiles({ name: 'source.png', mimeType: 'image/png', buffer: SPRITE_SOURCE_PNG })
   await page.getByTestId('mode-tab-prompt').press('Space')
-  await expect(page.getByTestId('sprite-prompt-result')).toHaveCount(1)
-  await expect(page.getByTestId('sprite-prompt-result')).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByTestId('sprite-prompt-input')).toHaveValue('  항구 마을  ')
+  await expect(enhanceButton(page)).toBeEnabled()
   await page.getByTestId('mode-tab-image').click()
-  await chooseSetting(page, '시점', '횡스크롤')
-  await chooseSetting(page, '결과 유형', '배경 레이어')
   await page.getByRole('button', { name: '2D 분석 시작', exact: true }).click()
   await expect(page.getByRole('heading', { name: '제작 계획 검수' })).toBeVisible()
   expect(records.find((record) => record.path === '/api/jobs/sprites')!.body.uploadId).toBe(
     SPRITE_IDS.upload,
   )
+  expect(records.some((record) => record.path === '/api/jobs/sprites/drafts')).toBe(false)
   expect(uploaded()).toBe(1)
 })
 
@@ -905,148 +969,143 @@ test('source query presence selects image mode even for an invalid pair', async 
   await expect(page.getByRole('alert')).toContainText('원본 작업·결과 ID 쌍이 유효하지 않습니다')
 })
 
-test('pending prompt generation blocks start and generation across tabs', async ({ page }) => {
-  await installFakeApi(page, { sprites: {} })
+test('pending enhance blocks duplicate submit across tabs', async ({ page }) => {
+  const records: Records = []
+  await installFakeApi(page, { sprites: { records } })
   await promptInput(page)
-  await generateSource(page, 1)
-  await chooseSetting(page, '시점', '횡스크롤')
-  await chooseSetting(page, '결과 유형', '배경 레이어')
+  await chooseOutput(page)
   let release!: () => void
   const pending = new Promise<void>((resolve) => {
     release = resolve
   })
-  await page.route('**/api/uploads/generate', async (route) => {
+  await page.route('**/api/jobs/sprites/drafts', async (route) => {
     await pending
     await route.fallback()
   })
-  await page.getByTestId('sprite-prompt-generate').click()
-  await expect(page.getByTestId('sprite-prompt-generate')).toHaveCount(0)
-  await expect(page.getByRole('status')).toHaveText('기준 이미지 생성 중')
-  expect(
-    await page.getByRole('status').evaluate((node) => node.closest('[aria-busy="true"]') !== null),
-  ).toBe(false)
-  const progress = page.getByRole('progressbar', { name: '기준 이미지 생성 중' })
-  await expect(progress).toBeVisible()
-  await expect(progress).not.toHaveAttribute('aria-valuenow')
-  await expect(
-    page.getByText('이 화면을 유지해 주세요. 페이지를 떠나면 생성 결과를 다시 볼 수 없습니다.'),
-  ).toBeVisible()
-  await expect(page.getByRole('button', { name: '접수 중…', exact: true })).toBeDisabled()
+  await enhanceButton(page).click()
+  const busy = page.getByRole('button', { name: '보완 중…', exact: true })
+  await expect(busy).toBeDisabled()
+  await expect(page.getByText('이 화면을 유지해 주세요', { exact: false })).toHaveCount(0)
   await page.getByTestId('mode-tab-image').click()
-  await page
-    .getByTestId('image-input')
-    .setInputFiles({ name: 'source.png', mimeType: 'image/png', buffer: SPRITE_SOURCE_PNG })
   await expect(page.getByRole('button', { name: '접수 중…', exact: true })).toBeDisabled()
   await page.getByTestId('mode-tab-prompt').click()
-  await expect(progress).toBeVisible()
-  await expect(page.getByTestId('sprite-prompt-generate')).toHaveCount(0)
+  await expect(busy).toBeDisabled()
   release()
-  await expect(page.getByTestId('sprite-prompt-result')).toHaveCount(2)
-  await expect(progress).toHaveCount(0)
-  await expect(page.getByTestId('sprite-prompt-generate')).toBeEnabled()
+  await expect(page).toHaveURL(new RegExp(`${jobPath}$`))
+  await expect(sourceDraft(page).prompt).toHaveValue('항구 마을 · 보완 프롬프트')
+  expect(records.filter((record) => record.path === '/api/jobs/sprites/drafts')).toHaveLength(1)
 })
 
-for (const width of [1440, 390])
-  for (const theme of ['dark', 'light'])
-    test(`prompt generation pending stays bounded at ${width}px ${theme}`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 900 })
-      await installFakeApi(page, { sprites: {} })
-      await promptInput(page)
-      const toggle = page.getByTestId('theme-toggle')
-      if ((await toggle.getAttribute('data-theme-state')) !== theme) await toggle.click()
-      let release!: () => void
-      const pending = new Promise<void>((resolve) => {
-        release = resolve
-      })
-      await page.route('**/api/uploads/generate', async (route) => {
-        await pending
-        await route.fallback()
-      })
-      await page.getByTestId('sprite-prompt-generate').click()
-      const progress = page.getByRole('progressbar', { name: '기준 이미지 생성 중' })
-      await expect(progress).toBeVisible()
-      const segment = progress.locator('div')
-      const transform = await segment.evaluate((node) => getComputedStyle(node).transform)
-      await expect
-        .poll(() => segment.evaluate((node) => getComputedStyle(node).transform))
-        .not.toBe(transform)
-      await expect
-        .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
-        .toBe(true)
-      await progress.scrollIntoViewIfNeeded()
-      await page.emulateMedia({ reducedMotion: 'reduce' })
-      await expect
-        .poll(() => segment.evaluate((node) => getComputedStyle(node).animationName))
-        .toBe('none')
-      const dimensions = await progress.evaluate((node) => ({
-        track: node.clientWidth,
-        segment: node.firstElementChild!.getBoundingClientRect().width,
-      }))
-      expect(dimensions.segment).toBeGreaterThan(0)
-      expect(dimensions.segment).toBeLessThan(dimensions.track)
-      release()
-      await expect(page.getByTestId('sprite-prompt-result')).toHaveCount(1)
-      await expect(progress).toHaveCount(0)
+for (const [width, height, columns] of [
+  [1440, 900, 3],
+  [390, 844, 2],
+] as const)
+  test(`source draft panel locks while a task runs and stays bounded at ${width}px dark`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height })
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    const sprites: SpriteFakeOptions = {
+      seed: 'sourceDraft',
+      sourceCandidates: 3,
+      sourceDescription: '해질녘 항구 마을. 낮은 채도의 청록과 주황. '.repeat(30) + 'x'.repeat(240),
+      sourcePrompt: '부두와 등대가 보이는 긴 프롬프트 '.repeat(120) + 'y'.repeat(240),
+      sourceTaskGets: Infinity,
+    }
+    await installFakeApi(page, { sprites })
+    await page.goto(jobPath)
+    const toggle = page.getByTestId('theme-toggle')
+    if ((await toggle.getAttribute('data-theme-state')) !== 'dark') await toggle.click()
+    await expect(toggle).toHaveAttribute('data-theme-state', 'dark')
+    const ui = sourceDraft(page)
+    await expect(ui.candidates).toHaveCount(3)
+    await expect
+      .poll(() =>
+        ui.candidates
+          .first()
+          .locator('img')
+          .evaluate((image) => (image as HTMLImageElement).naturalWidth),
+      )
+      .toBe(320)
+    expect(
+      await ui.panel
+        .getByTestId('sprite-source-candidates')
+        .evaluate((node) => getComputedStyle(node).gridTemplateColumns.split(' ').length),
+    ).toBe(columns)
+    await ui.panel.getByText('사용한 프롬프트').first().click()
+    const bounded = async () => {
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+        width,
+      )
+      expect(
+        await page
+          .getByTestId('page-inner')
+          .evaluate((node) => node.scrollWidth <= node.clientWidth),
+      ).toBe(true)
+    }
+    await bounded()
+    await page.screenshot({
+      path: test.info().outputPath(`source-draft-${width}.png`),
+      fullPage: true,
     })
 
-test('prompt generation pending hides old failure and restores retry after failure', async ({
-  page,
-}) => {
-  const records: NonNullable<SpriteFakeOptions['records']> = []
-  await installFakeApi(page, { sprites: { records, generateErrorOnce: true } })
-  await promptInput(page)
-  await page.getByTestId('sprite-prompt-generate').click()
-  await expect(page.getByRole('alert')).toContainText('공급자 호출 실패')
-  await expect(page.getByRole('progressbar')).toHaveCount(0)
-  let release!: () => void
-  const pending = new Promise<void>((resolve) => {
-    release = resolve
+    await ui.generate.click()
+    await expect(ui.status.getByLabel('원본 공정', { exact: true })).toHaveText('원본 후보 생성 중')
+    await expect(ui.steps.locator('[aria-current="step"]')).toContainText('원본 준비')
+    for (const control of [ui.prompt, ui.save, ui.generate, ui.analyze, ui.reenhance])
+      await expect(control).toBeDisabled()
+    for (const item of await ui.candidates.all()) await expect(item).toBeDisabled()
+    await expect(ui.panel.getByRole('progressbar')).toHaveCount(0)
+    await bounded()
+    sprites.sourceTaskGets = 1
+    await expect(ui.candidates).toHaveCount(4)
+    await expect(ui.generate).toBeEnabled()
+    await expect(ui.prompt).toBeEnabled()
   })
-  await page.route('**/api/uploads/generate', async (route) => {
-    await pending
-    await route.fallback()
-  })
-  await page.getByTestId('sprite-prompt-generate').click()
-  await expect(page.getByRole('progressbar', { name: '기준 이미지 생성 중' })).toBeVisible()
-  await expect(page.getByRole('alert')).toHaveCount(0)
-  release()
-  await expect(page.getByTestId('sprite-prompt-result')).toHaveCount(1)
-  await expect(page.getByRole('progressbar')).toHaveCount(0)
-  await expect(page.getByRole('alert')).toHaveCount(0)
-  await expect(page.getByTestId('sprite-prompt-generate')).toBeEnabled()
-  expect(records).toHaveLength(2)
-})
 
-for (const options of [{}, { unsupportedModel: true }, { imageModelsError: true }])
-  test(`prompt validation blocks invalid description or model ${JSON.stringify(options)}`, async ({
+for (const options of [
+  {},
+  { unsupportedModel: true },
+  { imageModelsError: true },
+  { textModelsEmpty: true },
+])
+  test(`prompt enhance requires description, settings and both models ${JSON.stringify(options)}`, async ({
     page,
   }) => {
     await installFakeApi(page, { sprites: options })
     await page.goto('/2d/background')
-    const button = page.getByTestId('sprite-prompt-generate')
+    const button = enhanceButton(page)
+    const reason = page.getByTestId('sprite-submit-reason')
     await expect(button).toBeDisabled()
+    await page.getByTestId('sprite-prompt-input').fill('항구')
+    await expect(button).toBeDisabled()
+    await expect(reason).toHaveText('시점과 결과 유형을 선택해 주세요')
+    await chooseOutput(page)
     await page.getByTestId('sprite-prompt-input').fill('   ')
     await expect(button).toBeDisabled()
+    await expect(reason).toHaveText('장면 설명을 1~1000자로 입력해 주세요')
     await page.getByTestId('sprite-prompt-input').fill('가'.repeat(1001))
     await expect(button).toBeDisabled()
     await page.getByTestId('sprite-prompt-input').fill('항구')
-    if ('unsupportedModel' in options || 'imageModelsError' in options)
+    if (Object.keys(options).length) {
       await expect(button).toBeDisabled()
-    else await expect(button).toBeEnabled()
+      await expect(reason).not.toHaveText('')
+    } else {
+      await expect(button).toBeEnabled()
+      await expect(reason).toHaveCount(0)
+    }
   })
 
 for (const catalog of ['providers', 'image-models'])
-  test(`cached ${catalog} failure preserves source but blocks generation and start`, async ({
+  test(`cached ${catalog} failure preserves the description but blocks enhance`, async ({
     page,
   }) => {
-    const records: NonNullable<SpriteFakeOptions['records']> = []
+    const records: Records = []
     await page.clock.install()
     await installFakeApi(page, { sprites: { records } })
     await promptInput(page)
-    await generateSource(page, 1)
-    await chooseSetting(page, '시점', '횡스크롤')
-    await chooseSetting(page, '결과 유형', '배경 레이어')
-    await expect(page.getByRole('button', { name: '2D 분석 시작', exact: true })).toBeEnabled()
+    await chooseOutput(page)
+    await expect(enhanceButton(page)).toBeEnabled()
     const path =
       catalog === 'providers'
         ? '/api/providers'
@@ -1070,77 +1129,131 @@ for (const catalog of ['providers', 'image-models'])
     await expect(
       page.getByText('이전 이미지 모델 선택: Sprite Image Fake', { exact: true }),
     ).toBeVisible()
-    await expect(page.getByTestId('sprite-prompt-result')).toHaveAttribute('aria-pressed', 'true')
-    await expect(page.getByTestId('sprite-prompt-generate')).toBeDisabled()
-    await expect(page.getByRole('button', { name: '2D 분석 시작', exact: true })).toBeDisabled()
-    expect(records.filter((record) => record.path === '/api/uploads/generate')).toHaveLength(1)
+    await expect(page.getByTestId('sprite-prompt-input')).toHaveValue('  항구 마을  ')
+    await expect(enhanceButton(page)).toBeDisabled()
+    expect(records).toHaveLength(0)
   })
 
-for (const width of [1440, 390])
-  test(`prompt panel images long text error and keyboard stay bounded at ${width}px`, async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width, height: 900 })
-    await page.emulateMedia({ reducedMotion: 'reduce' })
-    await installFakeApi(page, { sprites: {} })
-    await promptInput(page)
-    await page
-      .getByTestId('sprite-prompt-input')
-      .fill('해질녘 항구 마을. 낮은 채도의 청록과 주황. '.repeat(30))
-    await generateSource(page, 1)
-    await generateSource(page, 2)
-    await expect
-      .poll(() =>
-        page
-          .getByTestId('sprite-prompt-result')
-          .locator('img')
-          .evaluateAll((images) =>
-            images.every((image) => (image as HTMLImageElement).naturalWidth === 320),
-          ),
-      )
-      .toBe(true)
-    const longError =
-      '공급자 연결에 실패했습니다. 잠시 후 기준 이미지 생성을 다시 시도해 주세요. '.repeat(8)
-    await page.route(
-      '**/api/uploads/generate',
-      (route) =>
-        route.fulfill({
-          status: 502,
-          json: { data: null, error: { code: 'ProviderCallFailed', message: longError } },
-        }),
-      { times: 1 },
-    )
-    await page.getByTestId('sprite-prompt-generate').click()
-    await expect(page.getByRole('alert')).toContainText(longError)
-    const first = page.getByTestId('sprite-prompt-result').first()
-    await first.focus()
-    await expect(first).toBeFocused()
-    await first.press('Space')
-    await expect(first).toHaveAttribute('aria-pressed', 'true')
-    expect(await first.evaluate((node) => getComputedStyle(node).outlineStyle)).not.toBe('none')
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
-      width,
-    )
-    expect(
-      await page.getByTestId('page-inner').evaluate((node) => node.scrollWidth <= node.clientWidth),
-    ).toBe(true)
-    await page.screenshot({
-      path: `../../.superpowers/sdd/2026-10-08-2d-background-prompt-mode/task-5-prompt-${width}.png`,
-      fullPage: true,
-      animations: 'disabled',
-    })
-    await page.getByRole('region', { name: '원본 입력', exact: true }).screenshot({
-      path: `../../.superpowers/sdd/2026-10-08-2d-background-prompt-mode/task-5-prompt-panel-${width}.png`,
-      animations: 'disabled',
-    })
-    const imageTab = page.getByTestId('mode-tab-image')
-    await imageTab.focus()
-    await imageTab.press('Enter')
-    await expect(imageTab).toHaveAttribute('aria-selected', 'true')
-    await expect(imageTab).toBeFocused()
-    await page.screenshot({
-      path: `../../.superpowers/sdd/2026-10-08-2d-background-prompt-mode/task-5-image-tab-${width}.png`,
-      fullPage: true,
-      animations: 'disabled',
-    })
+test('re-enhance with an existing prompt asks before replacing it', async ({ page }) => {
+  const records: Records = []
+  await installFakeApi(page, { sprites: { records, seed: 'sourceDraft', sourceCandidates: 1 } })
+  await page.goto(jobPath)
+  const ui = sourceDraft(page)
+  await expect(ui.reenhance).toHaveAttribute('data-variant', 'outline')
+  await ui.reenhance.click()
+  const editor = ui.panel.getByTestId('sprite-source-description-input')
+  await expect(editor).toHaveValue('항구 마을')
+  await expect(editor).toBeFocused()
+  await editor.fill('비 오는 항구 마을')
+  let message = ''
+  page.once('dialog', (dialog) => {
+    message = dialog.message()
+    void dialog.dismiss()
   })
+  const run = ui.panel.getByRole('button', { name: '보완 실행', exact: true })
+  await run.click()
+  await expect.poll(() => message).toBe('다시 보완하면 현재 프롬프트가 새 결과로 바뀝니다')
+  await expect(editor).toHaveValue('비 오는 항구 마을')
+  expect(records).toHaveLength(0)
+  page.once('dialog', (dialog) => void dialog.accept())
+  await run.click()
+  await expect(ui.prompt).toHaveValue('비 오는 항구 마을 · 보완 프롬프트')
+  await expect(ui.panel.getByTestId('sprite-source-description')).toHaveText('비 오는 항구 마을')
+  await expect(editor).toHaveCount(0)
+  expect(records.map((record) => record.body)).toEqual([
+    {
+      requestId: expect.stringMatching(uuid),
+      expectedRevision: 1,
+      description: '비 오는 항구 마을',
+    },
+  ])
+})
+
+test('running source generation survives reload with progress, candidates and locked controls', async ({
+  page,
+}) => {
+  const sprites: SpriteFakeOptions = {
+    seed: 'sourceDraft',
+    sourceCandidates: 1,
+    sourceTaskGets: Infinity,
+  }
+  await installFakeApi(page, { sprites })
+  await page.goto(jobPath)
+  const ui = sourceDraft(page)
+  await ui.generate.click()
+  await expect(ui.generate).toBeDisabled()
+  await page.reload()
+  await expect(ui.steps.locator('[aria-current="step"]')).toContainText('원본 준비')
+  await expect(ui.status.getByLabel('원본 공정', { exact: true })).toHaveText('원본 후보 생성 중')
+  await expect(ui.status.getByText('원본 후보 생성 · 실행 중', { exact: false })).toBeVisible()
+  await expect(ui.candidates).toHaveCount(1)
+  await expect(ui.generate).toBeDisabled()
+  await expect(ui.prompt).toBeDisabled()
+  await expect(ui.candidates.first()).toBeDisabled()
+  sprites.sourceTaskGets = 1
+  await expect(ui.candidates).toHaveCount(2)
+  await expect(ui.generate).toBeEnabled()
+})
+
+test('first enhance failure lets the user write a prompt and generate', async ({ page }) => {
+  const records: Records = []
+  await installFakeApi(page, {
+    sprites: { records, sourceFailures: ['enhanceSpriteSource'] },
+  })
+  await promptInput(page)
+  await chooseOutput(page)
+  await enhanceButton(page).click()
+  const ui = sourceDraft(page)
+  await expect(ui.panel.getByText('프롬프트를 직접 입력해 생성할 수 있습니다')).toBeVisible()
+  await expect(ui.status.getByText('원본 프롬프트 보완 · 실패', { exact: false })).toBeVisible()
+  await expect(ui.prompt).toHaveValue('')
+  await expect(ui.generate).toBeDisabled()
+  await ui.prompt.fill('직접 쓴 항구 프롬프트')
+  await ui.generate.click()
+  await expect(ui.candidates).toHaveCount(1)
+  await expect(ui.status.getByRole('button', { name: '실패 공정 재시도' })).toHaveCount(0)
+  await expect(ui.status.getByText('원본 프롬프트 보완 ·', { exact: false })).toHaveCount(0)
+  expect(sourceRecords(records, 'generate')[0]!.body.prompt).toBe('직접 쓴 항구 프롬프트')
+})
+
+test('eight candidates disable generation and cancel leaves candidates read-only', async ({
+  page,
+}) => {
+  const records: Records = []
+  await installFakeApi(page, { sprites: { records, seed: 'sourceDraft', sourceCandidates: 8 } })
+  await page.goto(jobPath)
+  const ui = sourceDraft(page)
+  await expect(ui.candidates).toHaveCount(8)
+  await expect(ui.generate).toBeDisabled()
+  await expect(ui.panel.getByText('후보는 최대 8장입니다', { exact: true })).toBeVisible()
+  await expect(ui.status.getByLabel('원본 후보', { exact: true })).toHaveText('8 / 8')
+  let message = ''
+  page.once('dialog', (dialog) => {
+    message = dialog.message()
+    void dialog.accept()
+  })
+  await ui.status.getByRole('button', { name: '작업 취소', exact: true }).click()
+  await expect(ui.panel.getByRole('link', { name: '새 2D 작업', exact: true })).toHaveAttribute(
+    'href',
+    '/2d/background',
+  )
+  expect(message).toBe(
+    '원본 준비를 취소하면 이 작업에서 더 생성할 수 없습니다. 만든 후보는 볼 수 있습니다.',
+  )
+  await expect(ui.candidates).toHaveCount(8)
+  for (const control of [ui.candidates.first(), ui.prompt, ui.reenhance, ui.generate])
+    await expect(control).toBeDisabled()
+  expect(records.filter((record) => record.path.includes('/sprites/source/'))).toHaveLength(0)
+})
+
+test('canceled draft without a prompt hides the manual input hint', async ({ page }) => {
+  await installFakeApi(page, { sprites: { seed: 'sourceDraft', sourcePrompt: null } })
+  await page.goto(jobPath)
+  const ui = sourceDraft(page)
+  await expect(ui.panel.getByText('프롬프트를 직접 입력해 생성할 수 있습니다')).toBeVisible()
+  page.once('dialog', (dialog) => void dialog.accept())
+  await ui.status.getByRole('button', { name: '작업 취소', exact: true }).click()
+  await expect(ui.panel.getByRole('link', { name: '새 2D 작업', exact: true })).toBeVisible()
+  await expect(ui.prompt).toBeDisabled()
+  await expect(ui.panel.getByText('프롬프트를 직접 입력해 생성할 수 있습니다')).toHaveCount(0)
+})

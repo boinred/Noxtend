@@ -10,6 +10,12 @@ import {
   exportSprites,
   spriteImageUrl,
   spriteExportUrl,
+  createSpriteDraft,
+  enhanceSpriteSource,
+  saveSpriteSourcePrompt,
+  generateSpriteSourceCandidate,
+  selectSpriteSource,
+  spriteSourceCandidateUrl,
 } from './spriteApi'
 
 const context = { jobId: 'job', requestId: 'request', expectedRevision: 3 }
@@ -137,6 +143,80 @@ describe('sprite API', () => {
     expect(fetch.mock.calls[0]![1].signal).toBe(signal)
     expect(spriteImageUrl('job', 'image')).toBe(apiUrl('/api/jobs/job/sprites/images/image'))
     expect(spriteExportUrl('job', 'export')).toBe(apiUrl('/api/jobs/job/sprites/exports/export'))
+  })
+
+  it('posts the draft body with nested settings only, no source fields, and keeps the request ID on resend', async () => {
+    const fetch = success()
+    const signal = new AbortController().signal
+    const draft = {
+      ...input,
+      description: '노을 진 숲',
+      preview: true,
+      settings: { ...input.settings, draft: true },
+    }
+    expect(await createSpriteDraft(draft, signal)).toEqual(receipt)
+    await createSpriteDraft(draft, signal)
+    const expected = {
+      requestId: 'request',
+      description: '노을 진 숲',
+      providerConfigId: 'text',
+      model: 'text-model',
+      imageProviderConfigId: 'image',
+      imageModel: 'image-model',
+      settings: input.settings,
+    }
+    expect(fetch.mock.calls[0]).toEqual([
+      apiUrl('/api/jobs/sprites/drafts'),
+      expect.objectContaining({ method: 'POST', signal, body: JSON.stringify(expected) }),
+    ])
+    expect(fetch.mock.calls[1]![1].body).toEqual(fetch.mock.calls[0]![1].body)
+  })
+
+  it('uses source routes, methods, exact bodies and the signal', async () => {
+    const fetch = success()
+    const signal = new AbortController().signal
+    await enhanceSpriteSource({ ...context, description: '숲', extra: 1 } as never, signal)
+    await saveSpriteSourcePrompt({ ...context, prompt: '프롬프트' }, signal)
+    await generateSpriteSourceCandidate({ ...context, prompt: '프롬프트' }, signal)
+    await selectSpriteSource({ ...context, candidateId: 'candidate' }, signal)
+    const base = { requestId: 'request', expectedRevision: 3 }
+    const calls = [
+      ['POST', '/source/enhance', { ...base, description: '숲' }],
+      ['PUT', '/source/prompt', { ...base, prompt: '프롬프트' }],
+      ['POST', '/source/generate', { ...base, prompt: '프롬프트' }],
+      ['POST', '/source/select', { ...base, candidateId: 'candidate' }],
+    ] as const
+    calls.forEach(([method, path, body], index) => {
+      const [url, init] = fetch.mock.calls[index]!
+      expect(url).toBe(apiUrl(`/api/jobs/job/sprites${path}`))
+      expect(init.method).toBe(method)
+      expect(init.signal).toBe(signal)
+      expect(JSON.parse(init.body)).toEqual(body)
+    })
+    expect(spriteSourceCandidateUrl('job', 'candidate')).toBe(
+      apiUrl('/api/jobs/job/sprites/source/candidates/candidate'),
+    )
+  })
+
+  it.each(['SPRITE_BUSY', 'SPRITE_NOT_READY', 'SPRITE_SOURCE_LIMIT'])(
+    'surfaces %s as a 409 ApiError without resubmitting',
+    async (code) => {
+      const fetch = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ data: null, error: { code, message: '충돌' } }), {
+          status: 409,
+        }),
+      )
+      vi.stubGlobal('fetch', fetch)
+      await expect(
+        generateSpriteSourceCandidate({ ...context, prompt: 'p' }),
+      ).rejects.toMatchObject({ code, status: 409 })
+      expect(fetch).toHaveBeenCalledTimes(1)
+    },
+  )
+
+  it('rejects a malformed source receipt', async () => {
+    success({ ...receipt, taskIds: null })
+    await expect(selectSpriteSource({ ...context, candidateId: 'c' })).rejects.toThrow()
   })
 
   it('surfaces HTTP conflicts without resubmitting or masking', async () => {

@@ -420,7 +420,7 @@ public sealed class SpriteGenerationTestsSql(Noxtend.Tests.Infrastructure.SqlSer
         await using (var setup = Context())
         {
             await setup.Database.MigrateAsync();
-            setup.StoredImages.Add((await f.Images.GetAsync(job.SourceImageId, default))!);
+            setup.StoredImages.Add((await f.Images.GetAsync(job.SourceImageId!.Value, default))!);
             setup.Jobs.Add(job);
             await setup.SaveChangesAsync();
         }
@@ -484,7 +484,7 @@ public sealed class SpriteGenerationTestsSql(Noxtend.Tests.Infrastructure.SqlSer
         await using (var setup = Context())
         {
             await setup.Database.MigrateAsync();
-            setup.StoredImages.Add((await f.Images.GetAsync(job.SourceImageId, default))!);
+            setup.StoredImages.Add((await f.Images.GetAsync(job.SourceImageId!.Value, default))!);
             setup.Jobs.Add(job);
             await setup.SaveChangesAsync();
         }
@@ -571,7 +571,7 @@ public sealed class SpriteGenerationTestsSql(Noxtend.Tests.Infrastructure.SqlSer
         job.PlanSpriteFrames(job.ApproveSpritePlan(job.Sprites!.ReviewRevision).Value!, Guid.NewGuid());
         await using var db = Context();
         await db.Database.MigrateAsync();
-        db.StoredImages.Add((await f.Images.GetAsync(job.SourceImageId, default))!);
+        db.StoredImages.Add((await f.Images.GetAsync(job.SourceImageId!.Value, default))!);
         db.Jobs.Add(job);
         await db.SaveChangesAsync();
         return job;

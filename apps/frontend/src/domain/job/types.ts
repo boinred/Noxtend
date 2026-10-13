@@ -1,4 +1,4 @@
-import type { ProductionMode, SpriteState, SpriteSummary } from '../sprites/types'
+import type { ProductionMode, SpritePhase, SpriteState, SpriteSummary } from '../sprites/types'
 
 /**
  * Design Ref: §3.4 — 작업 도메인 타입. 순수 TS 이며 외부 라이브러리를 쓰지 않는다.
@@ -53,6 +53,8 @@ export type TaskKind =
   | 'analyzeSprites'
   | 'generateSprite'
   | 'packSprites'
+  | 'enhanceSpriteSource'
+  | 'generateSpriteSource'
 
 /** 제작 대상 카테고리 — 서버 wire 값과 동일. */
 export type AssetCategory = 'character' | 'object' | 'background'
@@ -108,6 +110,8 @@ const TASK_KIND_LABELS: Record<TaskKind, string> = {
   analyzeSprites: '2D 배경 분석',
   generateSprite: '2D 배경 생성',
   packSprites: '2D 배경 내보내기',
+  enhanceSpriteSource: '원본 프롬프트 보완',
+  generateSpriteSource: '원본 후보 생성',
 }
 
 /** 작업 상태의 화면 표기. 부분 성공은 성공과 다른 낱말이어야 한다 (C-3). */
@@ -308,7 +312,8 @@ export interface Job {
   sprite?: SpriteState | null
   id: string
   category: AssetCategory
-  sourceImageId: string
+  /** 원본 확정 전 2D 작업(`sourceDraft`)만 `null` — 3D 작업은 항상 값이 있다. */
+  sourceImageId: string | null
   status: JobStatus
   /** 사이클 #5: `consistencyPrompt`(자유 문장)를 대체한다. */
   scene: SceneSpec | null
@@ -333,7 +338,7 @@ export interface JobSummary {
   id: string
   category: AssetCategory
   status: JobStatus
-  sourceImageId: string
+  sourceImageId: string | null
   partCount: number
   createdAt: string
 }
@@ -449,6 +454,37 @@ export function nextPollDelayMs(attempt: number): number {
   if (attempt <= 0) return 2_000
   if (attempt === 1) return 5_000
   return 15_000
+}
+
+/**
+ * 작업 상세 폴링 간격.
+ *
+ * 원본 준비(`sourceDraft`)에서 보완·후보 생성 공정이 도는 동안은 사용자가 결과를 기다리며
+ * 화면을 보고 있으므로 백오프하지 않고 2초로 고정한다. 그 밖에는 `nextPollDelayMs` 를 따른다.
+ */
+export function jobPollDelayMs(
+  job: {
+    sprite?: { phase: SpritePhase } | null
+    tasks: readonly Pick<JobTask, 'kind' | 'status'>[]
+  },
+  attempt: number,
+): number {
+  const sourceTaskActive =
+    job.sprite?.phase === 'sourceDraft' && activeSourceTask(job.tasks) !== undefined
+  return sourceTaskActive ? 2_000 : nextPollDelayMs(attempt)
+}
+
+export function isSourceTask(task: Pick<JobTask, 'kind'>): boolean {
+  return task.kind === 'enhanceSpriteSource' || task.kind === 'generateSpriteSource'
+}
+
+// 원본 준비 공정은 작업당 하나만 실행·대기
+export function activeSourceTask<T extends Pick<JobTask, 'kind' | 'status'>>(
+  tasks: readonly T[],
+): T | undefined {
+  return tasks.find(
+    (task) => isSourceTask(task) && (task.status === 'pending' || task.status === 'running'),
+  )
 }
 
 // ─────────────────── 파츠 생성 (사이클 #7) ───────────────────

@@ -8,9 +8,9 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { useGenerateSpriteSource, useUpload, type UploadResult } from '@/app/queries/useUpload'
+import { useUpload } from '@/app/queries/useUpload'
 import { useProviders, useProviderModels, useProviderImageModels } from '@/app/queries/useProviders'
-import { useStartSpriteJob } from '@/app/queries/useSprites'
+import { useCreateSpriteDraft, useStartSpriteJob } from '@/app/queries/useSprites'
 import { apiErrorMessage, apiErrorStatus } from '@/app/queries/errors'
 import { readSpriteSource, spriteBackgroundJobPath } from '@/routes/paths'
 import type { SpriteView, SpriteOutputKind, SpriteRepeat } from '@/domain/sprites/types'
@@ -29,9 +29,6 @@ export function SpriteInput() {
   const hasSourceQuery = params.has('sourceJobId') || params.has('sourceGeneratedImageId')
   const [mode, setMode] = useState<StudioMode>(hasSourceQuery ? 'image' : 'prompt')
   const [prompt, setPrompt] = useState('')
-  const [generated, setGenerated] = useState<UploadResult[]>([])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [generateError, setGenerateError] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [view, setView] = useState<SpriteView | ''>('')
   const [kind, setKind] = useState<SpriteOutputKind | ''>('')
@@ -67,73 +64,58 @@ export function SpriteInput() {
     )
   const upload = useUpload()
   const start = useStartSpriteJob()
-  const generate = useGenerateSpriteSource()
+  const draft = useCreateSpriteDraft()
   const [uploadError, setUploadError] = useState<string | null>(null)
-  const promptLength = prompt.trim().length
-  const busy = upload.isPending || start.isPending || generate.isPending
-  const hasSource = mode === 'prompt' ? selectedId !== null : !!file || !!source
-  const canGenerate =
-    promptLength >= 1 &&
-    promptLength <= 1000 &&
-    !!imageProvider &&
-    !!imageModel &&
-    supported &&
-    !providers.isError &&
-    !imageModels.errorMessage &&
-    !busy
-  function generateSource() {
-    if (!canGenerate || !imageProvider || !imageModel) return
-    generate.mutate(
-      {
-        requestId: crypto.randomUUID(),
-        prompt: prompt.trim(),
-        imageProviderConfigId: imageProvider.id,
-        imageModel: imageModel.id,
-      },
-      {
-        onSuccess: (result) => {
-          setGenerated((results) => [...results, result])
-          setSelectedId(result.id)
-          setGenerateError(null)
-        },
-        onError: (error) =>
-          setGenerateError(
-            apiErrorMessage(error, '기준 이미지 생성에 실패했습니다. 다시 시도해 주세요'),
-          ),
-      },
-    )
+  const busy = upload.isPending || start.isPending || draft.isPending
+  const prompting = mode === 'prompt'
+  const description = prompt.trim()
+  const hasSource = prompting
+    ? description.length >= 1 && description.length <= 1000
+    : !!file || !!source
+  const blocked =
+    busy ||
+    providers.isError ||
+    !view ||
+    !kind ||
+    !hasSource ||
+    !supported ||
+    !textModel ||
+    !!textModels.errorMessage ||
+    !!imageModels.errorMessage
+  // 프롬프트 모드만 비활성 사유 표시
+  const reason =
+    !prompting || busy || !blocked
+      ? null
+      : !view || !kind
+        ? '시점과 결과 유형을 선택해 주세요'
+        : !hasSource
+          ? '장면 설명을 1~1000자로 입력해 주세요'
+          : providers.isError
+            ? '공급자를 다시 조회해 주세요'
+            : !textModel || textModels.errorMessage
+              ? '분석 모델을 선택해 주세요'
+              : '투명 배경을 지원하는 이미지 모델을 선택해 주세요'
+  const open = {
+    onSuccess: (receipt: { id: string }) => navigate(spriteBackgroundJobPath(receipt.id)),
   }
   async function submit() {
-    if (
-      !view ||
-      !kind ||
-      !textProvider ||
-      !imageProvider ||
-      !textModel ||
-      !imageModel ||
-      !hasSource
-    )
+    if (blocked || !view || !kind || !textProvider || !imageProvider || !imageModel) return
+    const common = {
+      requestId: crypto.randomUUID(),
+      providerConfigId: textProvider.id,
+      model: textModel.id,
+      imageProviderConfigId: imageProvider.id,
+      imageModel: imageModel.id,
+      settings: { view, outputKind: kind, tileWidth, repeat },
+    }
+    if (prompting) {
+      draft.mutate({ ...common, description }, open)
       return
+    }
     setUploadError(null)
     try {
-      const identity =
-        mode === 'prompt'
-          ? { uploadId: selectedId! }
-          : file
-            ? { uploadId: (await upload.mutateAsync(file)).id }
-            : source!
-      start.mutate(
-        {
-          requestId: crypto.randomUUID(),
-          ...identity,
-          providerConfigId: textProvider.id,
-          model: textModel.id,
-          imageProviderConfigId: imageProvider.id,
-          imageModel: imageModel.id,
-          settings: { view, outputKind: kind, tileWidth, repeat },
-        },
-        { onSuccess: (receipt) => navigate(spriteBackgroundJobPath(receipt.id)) },
-      )
+      const identity = file ? { uploadId: (await upload.mutateAsync(file)).id } : source!
+      start.mutate({ ...common, ...identity }, open)
     } catch (error) {
       setUploadError(apiErrorMessage(error, '이미지 업로드에 실패했습니다. 다시 시도해 주세요'))
     }
@@ -143,17 +125,7 @@ export function SpriteInput() {
       <section className={styles.panel} aria-label="원본 입력">
         <ModeTabs mode={mode} onChange={setMode} />
         {mode === 'prompt' ? (
-          <SpritePromptPanel
-            prompt={prompt}
-            onPromptChange={setPrompt}
-            results={generated}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            canGenerate={canGenerate}
-            generating={generate.isPending}
-            error={generateError}
-            onGenerate={generateSource}
-          />
+          <SpritePromptPanel prompt={prompt} onPromptChange={setPrompt} />
         ) : (
           <>
             {source ? (
@@ -338,48 +310,58 @@ export function SpriteInput() {
           {uploadError}
         </p>
       ) : null}
-      {start.error ? (
-        <div role="alert">
-          <p className={styles.error}>
-            {apiErrorStatus(start.error) === 409
-              ? '접수 충돌입니다. 입력을 확인하고 새 작업으로 다시 시작해 주세요. '
-              : ''}
-            {apiErrorMessage(start.error, '접수 응답을 받지 못했습니다')}
-          </p>
-          {(apiErrorStatus(start.error) === null ||
-            apiErrorStatus(start.error) === 0 ||
-            (apiErrorStatus(start.error) ?? 0) >= 500) &&
-          start.variables ? (
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() =>
-                start.mutate(start.variables!, {
-                  onSuccess: (receipt) => navigate(spriteBackgroundJobPath(receipt.id)),
-                })
-              }
-            >
-              같은 접수 요청 재전송
-            </Button>
-          ) : null}
-        </div>
+      {prompting ? (
+        <ReceiptError
+          error={draft.error}
+          busy={busy}
+          onResend={draft.variables ? () => draft.mutate(draft.variables!, open) : undefined}
+        />
+      ) : (
+        <ReceiptError
+          error={start.error}
+          busy={busy}
+          onResend={start.variables ? () => start.mutate(start.variables!, open) : undefined}
+        />
+      )}
+      {reason ? (
+        <p id="sprite-submit-reason" data-testid="sprite-submit-reason" className={styles.hint}>
+          {reason}
+        </p>
       ) : null}
       <Button
-        disabled={
-          busy ||
-          providers.isError ||
-          !view ||
-          !kind ||
-          !hasSource ||
-          !supported ||
-          !textModel ||
-          !!textModels.errorMessage ||
-          !!imageModels.errorMessage
-        }
+        disabled={blocked}
+        aria-describedby={reason ? 'sprite-submit-reason' : undefined}
         onClick={() => void submit()}
       >
-        {busy ? '접수 중…' : '2D 분석 시작'}
+        {prompting ? (busy ? '보완 중…' : '보완하기') : busy ? '접수 중…' : '2D 분석 시작'}
       </Button>
+    </div>
+  )
+}
+
+// 응답 유실·5xx만 같은 requestId 재전송, 409는 새 접수 필요
+function ReceiptError({
+  error,
+  busy,
+  onResend,
+}: {
+  error: unknown
+  busy: boolean
+  onResend?: () => void
+}) {
+  if (!error) return null
+  const status = apiErrorStatus(error)
+  return (
+    <div role="alert">
+      <p className={styles.error}>
+        {status === 409 ? '접수 충돌입니다. 입력을 확인하고 새 작업으로 다시 시작해 주세요. ' : ''}
+        {apiErrorMessage(error, '접수 응답을 받지 못했습니다')}
+      </p>
+      {(status === null || status === 0 || status >= 500) && onResend ? (
+        <Button variant="outline" disabled={busy} onClick={onResend}>
+          같은 접수 요청 재전송
+        </Button>
+      ) : null}
     </div>
   )
 }

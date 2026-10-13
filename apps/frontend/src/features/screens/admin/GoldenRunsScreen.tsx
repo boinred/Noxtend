@@ -152,14 +152,16 @@ function RunPane({
     <div className={styles.pane} data-testid="run-pane">
       <h3 className={styles.paneTitle}>{side}</h3>
 
-      <PartsOverlay
-        sourceImageId={job.sourceImageId}
-        parts={job.parts.map((part) => ({
-          ...part,
-          label: `${part.depthOrder}. ${part.name}`,
-        }))}
-        scene={job.scene}
-      />
+      {job.sourceImageId !== null ? (
+        <PartsOverlay
+          sourceImageId={job.sourceImageId}
+          parts={job.parts.map((part) => ({
+            ...part,
+            label: `${part.depthOrder}. ${part.name}`,
+          }))}
+          scene={job.scene}
+        />
+      ) : null}
 
       {/*
         파츠 이미지를 나란히 놓는다 (사이클 #7 FR-17 · Plan D-4).

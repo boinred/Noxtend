@@ -439,3 +439,38 @@ test('2D 분석·패키징 단계는 현재 공정만 실행·대기 수에 포�
   await expect(spotlight).toContainText('패키징')
   await expect(spotlight).toContainText('실행 0 · 대기 1')
 })
+
+test('2D 원본 준비 작업은 홈 목록과 spotlight에 원본 준비 중으로 보인다', async ({ page }) => {
+  await installFakeApi(page, { sprites: { seed: 'sourceDraft', sourceCandidates: 3 } })
+  const summary = {
+    id: SPRITE_IDS.job,
+    category: 'background',
+    status: 'pendingReview',
+    sourceImageId: null,
+    productionMode: 'twoD',
+    partCount: 0,
+    createdAt: '2026-10-06T00:00:00Z',
+    sprite: {
+      phase: 'sourceDraft',
+      assetCount: 0,
+      approvedAssetCount: 0,
+      imageCount: 0,
+      exportCount: 0,
+    },
+  }
+  await page.route('**/api/jobs?*', (route) =>
+    route.fulfill({ json: { data: { items: [summary], total: 1 }, error: null } }),
+  )
+  await page.goto('/')
+  const spotlight = page.getByTestId('section-running').getByTestId('job-item')
+  await expect(spotlight).toContainText('원본 준비 중 · 후보 3/8')
+  await expect(spotlight.getByTestId('job-thumb-placeholder')).toHaveCount(1)
+  await expect(spotlight.locator('img')).toHaveCount(0)
+  const recent = page.getByTestId('section-recent').getByTestId('job-item')
+  await expect(recent).toContainText('원본 준비 중')
+  await expect(recent.getByTestId('job-thumb-placeholder')).toHaveCount(1)
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await spotlight.click()
+  await expect(page).toHaveURL(new RegExp(`/2d/background/${SPRITE_IDS.job}$`))
+  await expect(page.getByRole('region', { name: '원본 준비', exact: true })).toBeVisible()
+})

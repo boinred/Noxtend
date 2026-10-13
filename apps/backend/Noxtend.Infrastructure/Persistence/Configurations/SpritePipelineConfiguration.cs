@@ -17,6 +17,7 @@ public sealed class SpritePipelineConfiguration : IEntityTypeConfiguration<Pipel
             Json(state.Property(s => s.GenerationCanvas), "SpriteGenerationCanvasJson");
             Json(state.Property(s => s.OutputCanvas), "SpriteOutputCanvasJson");
             Json(state.Property(s => s.Transform), "SpriteTransformJson");
+            Json(state.Property(s => s.SourceDraft), "SpriteSourceDraftJson");
             state.Property(s => s.Phase).HasColumnName("SpritePhase").HasConversion<string>().HasMaxLength(32);
             state.Property(s => s.ReviewRevision).HasColumnName("SpriteReviewRevision");
             state.Property(s => s.CompletedExportId).HasColumnName("SpriteCompletedExportId");

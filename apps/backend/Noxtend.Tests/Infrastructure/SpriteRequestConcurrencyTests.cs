@@ -64,6 +64,44 @@ public sealed class SpriteRequestConcurrencyTests(SqlServerFixture sql)
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConcurrentSourceGenerate_AcceptsOne(bool distinctRequest)
+    {
+        var f = new PipelineFixture();
+        var job = await SpriteSourceCommandTests.Draft(f);
+        await Seed(f, job);
+        var context = SpriteCommandTests.Context(job);
+        var barrier = new SaveBarrier();
+        async Task<Result<SpriteReceipt>> Submit(Guid requestId, string body)
+        {
+            await using var db = Context(barrier);
+            return await SourceHandler(f, new EfJobRepository(db)).GenerateAsync(context with { RequestId = requestId }, body, default);
+        }
+        // 저장된 프롬프트와 같아 revision만 Jobs 행을 바꾸는 경우
+        var prompt = job.Sprites!.SourceDraft!.Prompt!;
+        var results = await Task.WhenAll(Submit(context.RequestId, prompt),
+                Submit(distinctRequest ? Guid.NewGuid() : context.RequestId, prompt))
+            .WaitAsync(TimeSpan.FromSeconds(45));
+        if (distinctRequest)
+        {
+            Assert.Single(results, r => r.IsSuccess);
+            Assert.Equal(ErrorCode.SpriteRevisionConflict, results.Single(r => !r.IsSuccess).ErrorCode);
+        }
+        else
+        {
+            Assert.All(results, r => Assert.True(r.IsSuccess, r.ErrorMessage));
+            Assert.Equal(results[0].Value!.TaskIds, results[1].Value!.TaskIds);
+        }
+        await using var verification = Context();
+        var saved = (await new EfJobRepository(verification).GetAsync(job.Id, default))!;
+        var generate = Assert.Single(saved.Tasks, t => t.Kind == TaskKind.GenerateSpriteSource);
+        Assert.Equal(results.First(r => r.IsSuccess).Value!.TaskIds.Single(), generate.Id);
+        Assert.Equal(generate.SourceInput!.Prompt, saved.Sprites!.SourceDraft!.Prompt);
+        Assert.Equal(2, saved.Sprites.Requests.Count);
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]
     [InlineData(true, true)]
@@ -164,7 +202,7 @@ public sealed class SpriteRequestConcurrencyTests(SqlServerFixture sql)
         var receipt = await f.SpriteCommands.ExportAsync(SpriteCommandTests.Context(job), [job.Sprites!.Assets[0].Id], default);
         await Seed(f, job);
         await using var db = Context();
-        var shared = PipelineJob.CreateSprites(job.SourceImageId, job.ImageProviderConfigId!.Value, job.ImageModel!,
+        var shared = PipelineJob.CreateSprites(job.SourceImageId!.Value, job.ImageProviderConfigId!.Value, job.ImageModel!,
             job.Sprites.Settings, job.Sprites.SourceCanvas, job.Sprites.GenerationCanvas, f.Clock.Now).Value!;
         db.Jobs.Add(shared);
         await db.SaveChangesAsync();
@@ -257,7 +295,7 @@ public sealed class SpriteRequestConcurrencyTests(SqlServerFixture sql)
     {
         await using var db = Context();
         await db.Database.MigrateAsync();
-        db.StoredImages.Add((await f.Images.GetAsync(job.SourceImageId, default))!);
+        if (job.SourceImageId is { } sourceImageId) db.StoredImages.Add((await f.Images.GetAsync(sourceImageId, default))!);
         db.Jobs.Add(job);
         await db.SaveChangesAsync();
     }
@@ -265,6 +303,9 @@ public sealed class SpriteRequestConcurrencyTests(SqlServerFixture sql)
         => new(new DbContextOptionsBuilder<NoxtendDbContext>().UseSqlServer(connectionString).AddInterceptors(interceptors).Options);
     private static SpriteCommandsHandler Handler(PipelineFixture f, EfJobRepository jobs)
         => new(jobs, new JobOrchestrator(f.Queue, jobs, f.Clock), f.Providers, f.Catalog);
+    private static SpriteSourceCommandsHandler SourceHandler(PipelineFixture f, EfJobRepository jobs)
+        => new(jobs, f.Images, f.Blobs, f.Providers, f.Catalog, f.Prompts, new SkiaImageTranscoder(),
+            new JobOrchestrator(f.Queue, jobs, f.Clock), f.Clock, NullLogger<SpriteSourceCommandsHandler>.Instance);
     private sealed class JobReadGate(Guid jobId) : DbCommandInterceptor
     {
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);

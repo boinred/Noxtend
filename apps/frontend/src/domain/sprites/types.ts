@@ -6,6 +6,7 @@ export type SpriteOutputKind = 'layers' | 'tiles'
 export type SpriteRepeat = 'x' | 'y' | 'both'
 export type SpriteTileLayout = 'square' | 'diamond'
 export type SpritePhase =
+  | 'sourceDraft'
   | 'analyzing'
   | 'planReview'
   | 'baseGeneration'
@@ -97,6 +98,20 @@ export interface SpriteExport {
   includedAssetIds: string[]
   excludedAssetIds: string[]
 }
+export interface SpriteSourceCandidate {
+  id: string
+  prompt: string
+  width: number
+  height: number
+  createdAt: string
+}
+// 서버 `SpriteSourceDraft.MaxCandidates` 와 같은 값
+export const SPRITE_SOURCE_CANDIDATE_LIMIT = 8
+export interface SpriteSourceDraft {
+  description: string
+  prompt: string | null
+  candidates: SpriteSourceCandidate[]
+}
 export interface SpriteState {
   settings: SpriteSettings
   sourceCanvas: SpriteCanvas
@@ -109,6 +124,8 @@ export interface SpriteState {
   assets: SpriteAsset[]
   images: SpriteImage[]
   exports: SpriteExport[]
+  // 원본 준비 전용 — 원본 확정 전 2D 작업만 값을 갖는다
+  source: SpriteSourceDraft | null
 }
 export interface SpriteSummary {
   phase: SpritePhase
@@ -132,6 +149,10 @@ export type UpdateSpritePlanInput = SpriteMutationContext & { assets: SpriteAsse
 export type SpriteAssetsInput = SpriteMutationContext & { assetIds: string[] }
 export type SpriteAssetInput = SpriteMutationContext & { assetId: string }
 export type RegenerateSpriteFrameInput = SpriteAssetInput & { index: number }
+export type EnhanceSpriteSourceInput = SpriteMutationContext & { description: string }
+export type SaveSpriteSourcePromptInput = SpriteMutationContext & { prompt: string }
+export type GenerateSpriteSourceCandidateInput = SpriteMutationContext & { prompt: string }
+export type SelectSpriteSourceInput = SpriteMutationContext & { candidateId: string }
 
 interface SpriteStartSettings {
   view: SpriteView
@@ -147,23 +168,27 @@ interface SpriteStartCommon {
   imageModel: string
   settings: SpriteStartSettings
 }
+export type CreateSpriteDraftInput = SpriteStartCommon & { description: string }
 export type StartSpriteJobInput = SpriteStartCommon &
   (
     | { uploadId: string; sourceJobId?: never; sourceGeneratedImageId?: never }
     | { uploadId?: never; sourceJobId: string; sourceGeneratedImageId: string }
   )
 
-const PHASES: readonly SpritePhase[] = [
-  'analyzing',
-  'planReview',
-  'baseGeneration',
-  'baseReview',
-  'frameGeneration',
-  'frameReview',
-  'exportReady',
-  'packaging',
-  'completed',
-]
+// satisfies 로 SpritePhase 와 양방향 일치 강제
+const PHASE_KEYS = {
+  sourceDraft: true,
+  analyzing: true,
+  planReview: true,
+  baseGeneration: true,
+  baseReview: true,
+  frameGeneration: true,
+  frameReview: true,
+  exportReady: true,
+  packaging: true,
+  completed: true,
+} satisfies Record<SpritePhase, true>
+const PHASES = Object.keys(PHASE_KEYS)
 const STATUSES: readonly JobStatus[] = [
   'pending',
   'running',
@@ -287,6 +312,21 @@ function readExport(value: unknown): void {
       strings(exported.excludedAssetIds),
   )
 }
+function readSource(value: unknown): void {
+  if (value === null) return
+  const source = record(value)
+  requireShape(
+    typeof source.description === 'string' &&
+      (source.prompt === null || typeof source.prompt === 'string'),
+  )
+  items(source.candidates, (value) => {
+    const candidate = record(value)
+    requireShape(
+      text(candidate.id) && typeof candidate.prompt === 'string' && text(candidate.createdAt),
+    )
+    readCanvas(candidate)
+  })
+}
 function readState(value: unknown): void {
   const state = record(value)
   const settings = record(state.settings)
@@ -312,6 +352,7 @@ function readState(value: unknown): void {
   items(state.assets, readAsset)
   items(state.images, readImage)
   items(state.exports, readExport)
+  readSource(state.source)
 }
 function readModeAndSprite(raw: Record<string, unknown>): {
   productionMode: ProductionMode

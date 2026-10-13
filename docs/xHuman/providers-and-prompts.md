@@ -22,11 +22,13 @@
 
 `AnalyzeSprites`는 TaskKind=7, LlmOperationKind=5의 독립 분석 operation이며 Background 전용 프롬프트다. `RunSpriteAnalysisTaskHandler`는 settings·sourceCanvas를 camelCase JSON 데이터로 렌더하고 접수 시 실제 codec 형식과 일치 확인된 업로드 또는 기존 결과의 독립 복사 이미지를 첨부한다. 업로드 MIME 불일치는 접수 단계에서 거부하며 분석 공급자에 잘못된 MIME을 보내지 않는다. `PromptTemplate.Render`는 원래 템플릿만 한 번 치환하여 삽입한 notes의 `{{...}}`를 재확장하거나 미치환 변수로 거부하지 않는다. 원래 템플릿의 누락 변수는 계속 실패한다.
 
-`SeedPrompts.AnalyzeSprites()`와 `SeedSpriteAnalyzePrompt` migration은 정확한 시점·유형과 대상 schema를 등록한다. 기존 AnalyzeSprites/Background 슬롯이 있으면 운영자 내용을 보존하며 기존 3D·평가 프롬프트는 변경하지 않는다. `FakeLlmProvider`도 같은 schema를 반환하고 관리자 격자·편집·Frontend operation 라벨은 새 분석을 포함한다. 단가가 없는 모델 비용은 기존 ModelPriceBook의 null 규칙을 따른다.
+`SeedPrompts.AnalyzeSprites()`와 `SeedSpriteAnalyzePrompt` migration은 정확한 시점·유형과 대상 schema를 등록한다. `SeedPrompts.AnalyzeSpritesV2()`와 `ReviseSpriteAnalyzePrompt` migration은 `sourceBounds` x·y·w·h를 원본 너비·높이 대비 0~1 비율(픽셀 아님)로 안내하는 개정이며 schema 구조는 V1과 같고 좌표 필드에 `description`만 더한다. Background 슬롯을 비활성화하고 `MAX(Version)+1`로 새 행을 추가하며 Down은 새 행 삭제 후 이전 최신 버전을 재활성화한다. 운영자가 만든 버전은 덮어쓰지 않지만 새 버전이 활성 행이 된다. 확인: `SpriteAnalyzePromptMigrationTests`, `SeedPromptVariableTests`. 기존 AnalyzeSprites/Background 슬롯이 있으면 운영자 내용을 보존하며 기존 3D·평가 프롬프트는 변경하지 않는다. `FakeLlmProvider`도 같은 schema를 반환하고 관리자 격자·편집·Frontend operation 라벨은 새 분석을 포함한다. 단가가 없는 모델 비용은 기존 ModelPriceBook의 null 규칙을 따른다.
 
 ### 2D 배경 이미지 생성
 
-`GenerateSpriteSource`는 Background 전용이며 변수 `{{prompt}}`로 참조 없는 업로드용 기준 이미지 생성을 위한 프롬프트를 정의한다. `SeedPrompts.GenerateSpriteSource()`와 `SeedSpriteSourcePrompt` migration은 기존 운영자 슬롯을 보존한다.
+`GenerateSpriteSource`는 Background 전용이며 변수 `{{prompt}}`·`{{settings}}`로 참조 없는 원본 후보 생성 프롬프트를 정의한다. `SeedPrompts.GenerateSpriteSource()`와 `SeedSpriteSourcePrompt` migration은 기존 운영자 슬롯을 보존한다. `SeedPrompts.GenerateSpriteSourceV2()`와 `ReviseSpriteSourcePrompt` migration은 설정의 시점·형식이 프롬프트 문장보다 우선한다고 명시한 개정이며 `AnalyzeSpritesV2`와 같은 방식(슬롯 비활성화 후 `MAX(Version)+1`)으로 새 활성 행을 추가한다. 설정을 렌더하는 곳은 `RunSpriteSourceGenerationTaskHandler`다. V2와 보완 프롬프트는 isometric + tiles를 2:1 다이아몬드 셀의 가장자리 맞닿음 타일로 명시한다(하류 sprite 생성이 같은 다이아몬드 셀 규약을 쓴다).
+
+`EnhanceSpriteSource`(TaskKind=10, LlmOperationKind=8)는 Background 전용 텍스트 프롬프트이며 변수는 `{{description}}`·`{{settings}}`, 출력 schema는 `{ "prompt": string }`이다. `SeedPrompts.EnhanceSpriteSource()`와 `SeedSpriteSourceEnhancePrompt` migration은 `IF NOT EXISTS`로 v1을 심어 기존 운영자 슬롯을 보존한다. `RunSpriteSourceEnhanceTaskHandler`는 공정 고정 입력의 설명(`SourceInput.Description`)과 작업 설정을 렌더하고 응답이 1~4000자 `prompt` 문자열이 아니면 재시도 분류하며, 반영은 commit 클로저의 `TryApplySourcePrompt`만 한다. `TaskKind.GenerateSpriteSource`(11)는 `RunSpriteSourceGenerationTaskHandler`가 고정 프롬프트 snapshot·설정을 렌더하고 작업의 이미지 공급자·모델, 잠정 `SourceCanvas` 크기, 참조 없는 Opaque 요청으로 한 장을 만든다. 장수가 1이 아니거나 이미지가 아니거나 선택 단계 상한(`SpriteSourceInspector.MaxBytes`, 12 MiB)을 넘으면 재시도 없이 실패하고, 검사한 MIME·크기로 `IBlobStorage.SaveAsync` 키를 후보로 반영하며, 공개되지 않은 Blob은 finally에서 `CancellationToken.None`으로 다시 조회해 지운다. 생성 크기 선택은 `SpriteSourceSizes.Pick`이다. 확인: `SpriteSourceTaskTests`, `SpriteSourcePromptMigrationTests`, `SeedPromptVariableTests`. `FakeLlmProvider`는 `{"prompt":"..."}`를 반환하고 `FakeImageProvider`는 `GenerateSpriteSource` 요청 크기에 맞는 PNG를 만든다.
 
 `RunSpriteGenerationTaskHandler`는 `LlmOperationKind.GenerateSprite=6`·Background 전용 활성 프롬프트를 사용한다. `SeedPrompts.GenerateSprite()`와 `SeedSpriteGeneratePrompt` migration은 기존 운영자 슬롯을 보존한다. 허용 변수는 settings·asset·frame·sourceCanvas·outputCanvas이며, asset은 `SpriteFrameInput.Plan` snapshot이다. frame JSON에는 index·count·phase·BaseImageId와 고정 GenerationCanvas·anchor·transform을 전달한다. 이름·FPS를 나중에 편집해도 접수한 입력은 바뀌지 않는다. `ViewDirection`은 사용하지 않는다.
 
@@ -110,6 +112,7 @@
 
 ## 확인 기준과 미확인
 
+- 2D 원본 준비 프롬프트 확인: 2026-10-13, 기준 `0385d0e`. `EnhanceSpriteSource`·`GenerateSpriteSource`·`AnalyzeSprites` V2 시드·변수·migration을 코드·테스트와 대조했고 Backend 전체 회귀(1872 통과, 건너뜀 0)에 포함됐다. 실제 모델 출력 품질은 확인하지 않았다(Fake만 사용).
 - Anthropic 스키마 정리 확인: 2026-10-13. `AnthropicJsonSchemaTests`가 2D 분석 시드 스키마와 이름 보존·중첩 정리 사례를 검증하고, 제거 대상 제약을 쓰는 시드 스키마별 파서·도메인 검증 위치를 대조했다. 실제 Anthropic 호출은 하지 않았으므로 실 API 수락 여부는 미확인이다.
 - Anthropic 두 구간 수집·저장·비용 경계 및 UI 경계 문구 확인: 2026-10-13. 이번 확인 범위는 parser의 연속 두 행 검증, SQL Testcontainers 저장→재조회→`ModelPriceBook.Estimate`의 100000/100001 경계, 단가 화면의 `이상` 표기다. 나머지 영역의 확인 기준은 아래 기록을 유지한다.
 

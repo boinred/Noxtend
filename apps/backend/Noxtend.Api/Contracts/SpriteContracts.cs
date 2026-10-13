@@ -5,9 +5,6 @@ using Noxtend.Domain.Sprites;
 namespace Noxtend.Api.Contracts;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record GenerateSpriteSourceRequest(Guid RequestId, string Prompt, Guid ImageProviderConfigId, string ImageModel);
-
-[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record StartSpriteJobRequest(Guid RequestId, Guid? UploadId, Guid? SourceJobId,
     Guid? SourceGeneratedImageId, Guid ProviderConfigId, string Model,
     Guid ImageProviderConfigId, string ImageModel, SpriteSettingsRequest? Settings);
@@ -29,6 +26,19 @@ public sealed record SpriteSettingsRequest(string View, string OutputKind, int T
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SpriteMutationRequest(Guid RequestId, int ExpectedRevision);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record CreateSpriteDraftRequest(Guid RequestId, string Description, Guid ProviderConfigId, string Model,
+    Guid ImageProviderConfigId, string ImageModel, SpriteSettingsRequest? Settings);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record SpriteSourceEnhanceRequest(Guid RequestId, int ExpectedRevision, string Description);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record SpriteSourcePromptRequest(Guid RequestId, int ExpectedRevision, string Prompt);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record SpriteSourceSelectRequest(Guid RequestId, int ExpectedRevision, Guid CandidateId);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SpriteAssetsRequest(Guid RequestId, int ExpectedRevision, IReadOnlyList<Guid>? AssetIds);
@@ -60,7 +70,8 @@ public sealed record SpriteAcceptedResponse(Guid Id, string Status, int Revision
 public sealed record SpriteResponse(SpriteSettingsResponse Settings, SpriteCanvasResponse SourceCanvas,
     SpriteCanvasResponse GenerationCanvas, SpriteCanvasResponse OutputCanvas, SpriteTransformResponse Transform,
     string Phase, int ReviewRevision, Guid? CompletedExportId, IReadOnlyList<SpriteAssetResponse> Assets,
-    IReadOnlyList<SpriteImageResponse> Images, IReadOnlyList<SpriteExportResponse> Exports)
+    IReadOnlyList<SpriteImageResponse> Images, IReadOnlyList<SpriteExportResponse> Exports,
+    SpriteSourceResponse? Source)
 {
     public static SpriteResponse From(SpritePipelineState state)
         => new(new(JobResponse.Wire(state.Settings.View), JobResponse.Wire(state.Settings.OutputKind),
@@ -76,8 +87,15 @@ public sealed record SpriteResponse(SpriteSettingsResponse Settings, SpriteCanva
                 image.ContentType, image.CreatedAt)).ToArray(),
             state.Exports.Select(export => new SpriteExportResponse(export.Id, export.TaskId,
                 export.Input.ReviewRevision, export.IsCurrent, export.CreatedAt,
-                export.Input.Assets.Select(asset => asset.Id).ToArray(), export.Input.ExcludedAssetIds)).ToArray());
+                export.Input.Assets.Select(asset => asset.Id).ToArray(), export.Input.ExcludedAssetIds)).ToArray(),
+            state.SourceDraft is { } draft ? new(draft.Description, draft.Prompt,
+                draft.Candidates.Select(candidate => new SpriteSourceCandidateResponse(candidate.Id, candidate.Prompt,
+                    candidate.Width, candidate.Height, candidate.CreatedAt)).ToArray()) : null);
 }
+
+// Blob 키 없이 후보 이미지는 전용 경로로 제공
+public sealed record SpriteSourceResponse(string Description, string? Prompt, IReadOnlyList<SpriteSourceCandidateResponse> Candidates);
+public sealed record SpriteSourceCandidateResponse(Guid Id, string Prompt, int Width, int Height, DateTimeOffset CreatedAt);
 
 public sealed record SpriteSettingsResponse(string View, string OutputKind, int TileWidth, string Repeat);
 public sealed record SpriteCanvasResponse(int Width, int Height)

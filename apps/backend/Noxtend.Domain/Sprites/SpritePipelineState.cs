@@ -12,14 +12,13 @@ public sealed class SpritePipelineState
         // EF Core 재구성용
     }
 
-    internal SpritePipelineState(SpriteSettings settings, SpriteCanvas sourceCanvas, SpriteCanvas generationCanvas)
+    internal SpritePipelineState(SpriteSettings settings, SpriteCanvas sourceCanvas, SpriteCanvas generationCanvas,
+        SpriteSourceDraft? sourceDraft = null)
     {
         Settings = settings;
-        SourceCanvas = sourceCanvas;
-        GenerationCanvas = generationCanvas;
-        OutputCanvas = SpriteRules.OutputCanvas(settings, sourceCanvas);
-        Transform = SpriteRules.Transform(generationCanvas, OutputCanvas);
-        Phase = SpritePhase.Analyzing;
+        ReplaceCanvases(sourceCanvas, generationCanvas);
+        SourceDraft = sourceDraft;
+        Phase = sourceDraft is null ? SpritePhase.Analyzing : SpritePhase.SourceDraft;
     }
 
     public SpriteSettings Settings { get; private set; } = null!;
@@ -28,6 +27,7 @@ public sealed class SpritePipelineState
     public SpriteCanvas OutputCanvas { get; private set; } = null!;
     public SpriteTransform Transform { get; private set; } = null!;
     public SpritePhase Phase { get; private set; }
+    public SpriteSourceDraft? SourceDraft { get; private set; }
     public int ReviewRevision { get; private set; }
     public Guid? CompletedExportId { get; private set; }
     public IReadOnlyList<SpriteAsset> Assets => _assets.AsReadOnly();
@@ -35,6 +35,15 @@ public sealed class SpritePipelineState
     public IReadOnlyList<SpriteExport> Exports => _exports.AsReadOnly();
     public IReadOnlyList<SpriteAcceptedRequest> Requests => _requests.AsReadOnly();
     internal void SetPhase(SpritePhase phase) => Phase = phase;
+    // 값 비교 없는 JSON 열이라 변경마다 새 기록으로 교체
+    internal void ReplaceSourceDraft(SpriteSourceDraft draft) => SourceDraft = draft;
+    internal void ReplaceCanvases(SpriteCanvas sourceCanvas, SpriteCanvas generationCanvas)
+    {
+        SourceCanvas = sourceCanvas;
+        GenerationCanvas = generationCanvas;
+        OutputCanvas = SpriteRules.OutputCanvas(Settings, sourceCanvas);
+        Transform = SpriteRules.Transform(generationCanvas, OutputCanvas);
+    }
     internal void CompleteExport(Guid exportId)
     {
         CompletedExportId = exportId;

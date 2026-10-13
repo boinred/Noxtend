@@ -94,6 +94,25 @@ public sealed class SpriteAnalysisTests
     }
 
     [Fact]
+    public async Task TransientAnalysisFailure_KeepsAnalyzingUntilRetrySucceeds()
+    {
+        var calls = 0;
+        var f = new PipelineFixture(FakeLlmProvider.Throwing(() => calls++ == 0
+            ? new ProviderCallFailedException("일시 장애", isTransient: true) : null), new() { MaxAttempts = 3 });
+        var receipt = await f.StartSprites.HandleAsync(await Prepare(f), Ct);
+        var job = (await f.Jobs.GetAsync(receipt.Value!.JobId, Ct))!;
+        var task = job.Tasks.Single();
+        await f.RunSpriteAnalysis.HandleAsync(task.Id, Ct);
+        Assert.Equal(Noxtend.Domain.Job.TaskStatus.Pending, task.Status);
+        Assert.Equal(SpritePhase.Analyzing, job.Sprites!.Phase);
+        Assert.True(job.IsCurrentTask(task));
+        await f.RunSpriteAnalysis.HandleAsync(task.Id, Ct);
+        Assert.Equal(Noxtend.Domain.Job.TaskStatus.Succeeded, task.Status);
+        Assert.Equal(SpritePhase.PlanReview, job.Sprites.Phase);
+        Assert.Single(job.Sprites.Assets);
+    }
+
+    [Fact]
     public void Parser_AssignsIdsAndRejectsMalformedSchema()
     {
         var settings = new SpriteSettings(SpriteView.SideView, SpriteOutputKind.Layers);
@@ -140,7 +159,7 @@ public sealed class SpriteAnalysisTests
         var result = await f.StartSprites.HandleAsync(command, Ct);
         Assert.True(result.IsSuccess, result.ErrorMessage);
         var job = (await f.Jobs.GetAsync(result.Value!.JobId, Ct))!;
-        var copy = (await f.Images.GetAsync(job.SourceImageId, Ct))!;
+        var copy = (await f.Images.GetAsync(job.SourceImageId!.Value, Ct))!;
         Assert.NotEqual(original.BlobKey, copy.BlobKey);
         await f.Cancel.HandleAsync(source.Id, Ct);
         Assert.True((await f.Delete.HandleAsync(source.Id, Ct)).IsSuccess);
@@ -205,7 +224,7 @@ public sealed class SpriteAnalysisTests
         var job = (await f.Jobs.GetAsync(receipt.Value!.JobId, Ct))!;
         Assert.Equal(uploaded.Value.Id, job.SourceImageId);
         Assert.Equal(rotate ? new SpriteCanvas(16, 24) : new(24, 16), job.Sprites!.SourceCanvas);
-        Assert.Equal(mime, (await f.Images.GetAsync(job.SourceImageId, Ct))!.ContentType);
+        Assert.Equal(mime, (await f.Images.GetAsync(job.SourceImageId!.Value, Ct))!.ContentType);
     }
 
     [Fact]
@@ -251,7 +270,7 @@ public sealed class SpriteAnalysisTests
         await f.Cancel.HandleAsync(source.Id, Ct);
         await f.Delete.HandleAsync(source.Id, Ct);
         var copiedJob = (await f.Jobs.GetAsync(receipt.Value!.JobId, Ct))!;
-        var copy = (await f.Images.GetAsync(copiedJob.SourceImageId, Ct))!;
+        var copy = (await f.Images.GetAsync(copiedJob.SourceImageId!.Value, Ct))!;
         Assert.NotEqual(key, copy.BlobKey);
         await using var readable = await f.Blobs.OpenReadAsync(copy.BlobKey, Ct);
         Assert.Equal(24, (await new SkiaImageTranscoder().InspectSpriteAsync(readable, 12 * 1024 * 1024, 16_777_216, Ct)).Width);

@@ -28,6 +28,7 @@ public sealed class SpriteApiTests
     [InlineData(ErrorCode.SpriteBusy, 409)]
     [InlineData(ErrorCode.SpriteNotReady, 409)]
     [InlineData(ErrorCode.SpriteAssetNotFound, 404)]
+    [InlineData(ErrorCode.SpriteSourceLimit, 409)]
     public void SpriteErrors_UseCentralHttpMapping(string code, int status)
         => Assert.Equal(status, Assert.IsType<ObjectResult>(ApiResults.Failure<object>(code, "거부")).StatusCode);
 
@@ -343,25 +344,104 @@ public sealed class SpriteApiTests
         Status(await Sprites(f).GetExportAsync(job.Id, task.SpriteExportInput.ExportId, default), 409);
     }
 
-    [Fact]
-    public async Task GenerateUpload_RejectsUnknownFieldsAndReturnsUploadEnvelope()
+    [Theory]
+    [InlineData("draft")]
+    [InlineData("enhance")]
+    [InlineData("prompt")]
+    [InlineData("select")]
+    public async Task SourceRequests_RejectUnknownFields(string kind)
     {
-        var f = new PipelineFixture();
-        var command = await SpriteSourceGenerationTests.Prepare(f);
-        var request = new GenerateSpriteSourceRequest(command.RequestId, command.Prompt, command.ImageProviderConfigId, command.ImageModel);
-        var json = JsonSerializer.Serialize(request, new JsonSerializerOptions(JsonSerializerDefaults.Web));
-        Assert.False((await Bind<GenerateSpriteSourceRequest>(json)).HasError);
-        Assert.True((await Bind<GenerateSpriteSourceRequest>(json[..^1] + ",\"blobKey\":\"foreign\"}")).HasError);
-        var api = new UploadsController(f.Upload, f.Images, f.Blobs, f.GenerateSpriteSource);
-        var response = await api.GenerateAsync(request, default);
-        Status(response, 201);
-        var upload = Data<UploadResponse>(response);
-        Assert.Equal("sprite-prompt", upload.OriginalName);
-        Assert.NotNull(await f.Images.GetAsync(upload.Id, default));
-        Status(await api.GenerateAsync(request with { Prompt = " " }, default), 400);
+        var web = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var (type, json) = kind switch
+        {
+            "draft" => (typeof(CreateSpriteDraftRequest), JsonSerializer.Serialize(new CreateSpriteDraftRequest(Guid.NewGuid(), "설명",
+                Guid.NewGuid(), "model", Guid.NewGuid(), "image", new("sideView", "layers")), web)),
+            "enhance" => (typeof(SpriteSourceEnhanceRequest), JsonSerializer.Serialize(new SpriteSourceEnhanceRequest(Guid.NewGuid(), 0, "설명"), web)),
+            "prompt" => (typeof(SpriteSourcePromptRequest), JsonSerializer.Serialize(new SpriteSourcePromptRequest(Guid.NewGuid(), 0, "프롬프트"), web)),
+            _ => (typeof(SpriteSourceSelectRequest), JsonSerializer.Serialize(new SpriteSourceSelectRequest(Guid.NewGuid(), 0, Guid.NewGuid()), web)),
+        };
+        Assert.False((await Bind(type, json)).HasError);
+        Assert.True((await Bind(type, json[..^1] + ",\"blobKey\":\"images/foreign\"}")).HasError);
     }
 
-    private static SpriteJobsController Sprites(PipelineFixture f) => new(f.StartSprites, f.SpriteCommands, f.Jobs, f.Blobs)
+    [Fact]
+    public async Task SourceDraftFlow_UsesAcceptedEnvelopeAndSerializesSource()
+    {
+        var f = new PipelineFixture();
+        var command = await SpriteSourceCommandTests.Prepare(f);
+        var api = Sprites(f);
+        var request = new CreateSpriteDraftRequest(command.RequestId, command.Description, command.ProviderConfigId,
+            command.Model, command.ImageProviderConfigId, command.ImageModel, new("sideView", "layers"));
+        var created = Receipt(await api.CreateDraftAsync(request, default));
+        Assert.Equal("running", created.Status);
+        Assert.Equal(created.TaskIds, Receipt(await api.CreateDraftAsync(request, default)).TaskIds);
+        Status(await api.CreateDraftAsync(request with { Description = "다른 설명" }, default), 409);
+        Status(await api.CreateDraftAsync(request with { RequestId = Guid.NewGuid(), Settings = null }, default), 400);
+        await f.RunSpriteSourceEnhance.HandleAsync(created.TaskIds.Single(), default);
+        var job = (await f.Jobs.GetAsync(created.Id, default))!;
+
+        var saved = Receipt(await api.SaveSourcePromptAsync(job.Id, new(Guid.NewGuid(), job.Sprites!.ReviewRevision, "저장한 프롬프트"), default));
+        Assert.Empty(saved.TaskIds);
+        Status(await api.EnhanceSourceAsync(job.Id, new(Guid.NewGuid(), saved.Revision - 1, "설명"), default), 409);
+        var generated = Receipt(await api.GenerateSourceAsync(job.Id, new(Guid.NewGuid(), saved.Revision, "생성 프롬프트"), default));
+        Status(await api.EnhanceSourceAsync(job.Id, new(Guid.NewGuid(), generated.Revision, "설명"), default), 409);
+        await f.RunSpriteSourceGeneration.HandleAsync(generated.TaskIds.Single(), default);
+        var candidate = job.Sprites.SourceDraft!.Candidates.Single();
+
+        var result = Assert.IsType<ObjectResult>(await Jobs(f).GetAsync(job.Id, default));
+        var json = JsonSerializer.Serialize(result.Value, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        using var doc = JsonDocument.Parse(json);
+        var data = doc.RootElement.GetProperty("data");
+        Assert.Equal(JsonValueKind.Null, data.GetProperty("sourceImageId").ValueKind);
+        Assert.Equal("sourceDraft", data.GetProperty("sprite").GetProperty("phase").GetString());
+        var source = data.GetProperty("sprite").GetProperty("source");
+        Assert.Equal("80년대 서울", source.GetProperty("description").GetString());
+        Assert.Equal("생성 프롬프트", source.GetProperty("prompt").GetString());
+        var wire = source.GetProperty("candidates").EnumerateArray().Single();
+        Assert.Equal(["id", "prompt", "width", "height", "createdAt"], wire.EnumerateObject().Select(p => p.Name));
+        Assert.Equal(candidate.Id, wire.GetProperty("id").GetGuid());
+        Assert.Equal(candidate.Width, wire.GetProperty("width").GetInt32());
+        Assert.DoesNotContain(candidate.BlobKey, json);
+        Assert.DoesNotContain("blobKey", json, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(Data<JobListResponse>(await Jobs(f).ListAsync("active", null, 10, default)).Items.Single().SourceImageId);
+
+        var image = Assert.IsType<FileStreamResult>(await api.GetSourceCandidateAsync(job.Id, candidate.Id, default));
+        Assert.Equal(candidate.ContentType, (await ExecuteFile(image)).Response.ContentType);
+        Assert.Equal("private, max-age=31536000, immutable", api.Response.Headers.CacheControl);
+
+        var selected = Receipt(await api.SelectSourceAsync(job.Id, new(Guid.NewGuid(), job.Sprites.ReviewRevision, candidate.Id), default));
+        Assert.Equal(SpritePhase.Analyzing, job.Sprites.Phase);
+        Assert.NotNull(job.SourceImageId);
+        Assert.Single(selected.TaskIds);
+        Assert.Equal(candidate.Id, Data<JobResponse>(await Jobs(f).GetAsync(job.Id, default)).Sprite!.Source!.Candidates.Single().Id);
+    }
+
+    [Fact]
+    public async Task SourceCandidateImage_RequiresOwningJob()
+    {
+        var f = new PipelineFixture();
+        var job = await SpriteSourceCommandTests.Draft(f);
+        var own = await SpriteSourceCommandTests.AddCandidate(f, job);
+        var foreign = await SpriteSourceCommandTests.Draft(f);
+        var foreignCandidate = await SpriteSourceCommandTests.AddCandidate(f, foreign);
+        var api = Sprites(f);
+        Assert.IsType<FileStreamResult>(await api.GetSourceCandidateAsync(job.Id, own, default));
+        Status(await api.GetSourceCandidateAsync(job.Id, foreignCandidate, default), 404);
+        Status(await api.GetSourceCandidateAsync(job.Id, Guid.NewGuid(), default), 404);
+        Status(await api.GetSourceCandidateAsync(Guid.NewGuid(), own, default), 404);
+        var uploaded = await SpriteCommandTests.Plan(f);
+        Status(await api.GetSourceCandidateAsync(uploaded.Id, own, default), 404);
+    }
+
+    [Fact]
+    public void SyncSourceGenerationRoute_IsRemoved()
+    {
+        Assert.DoesNotContain(typeof(UploadsController).GetMethods(), method => method.GetCustomAttributes(typeof(HttpPostAttribute), true)
+            .Cast<HttpPostAttribute>().Any(post => post.Template == "generate"));
+        Assert.Null(typeof(JobResponse).Assembly.GetType("Noxtend.Api.Contracts.GenerateSpriteSourceRequest"));
+    }
+
+    private static SpriteJobsController Sprites(PipelineFixture f) => new(f.StartSprites, f.SpriteCommands, f.SpriteSource, f.Jobs, f.Blobs)
     {
         ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
     };
@@ -376,7 +456,7 @@ public sealed class SpriteApiTests
     }
     private static async Task FinishFrames(PipelineFixture f, PipelineJob job, IReadOnlyList<Guid> ids)
     {
-        var source = (await f.Images.GetAsync(job.SourceImageId, default))!;
+        var source = (await f.Images.GetAsync(job.SourceImageId!.Value, default))!;
         foreach (var id in ids)
         {
             var task = job.Tasks.Single(task => task.Id == id);
@@ -388,7 +468,8 @@ public sealed class SpriteApiTests
         }
         job.ReconcileFromTasks(f.Clock.Now);
     }
-    private static async Task<InputFormatterResult> Bind<T>(string json)
+    private static Task<InputFormatterResult> Bind<T>(string json) => Bind(typeof(T), json);
+    private static async Task<InputFormatterResult> Bind(Type type, string json)
     {
         var services = new ServiceCollection();
         services.AddLogging().AddControllers();
@@ -396,7 +477,7 @@ public sealed class SpriteApiTests
         var http = new DefaultHttpContext { RequestServices = provider };
         http.Request.ContentType = "application/json";
         http.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(json));
-        var metadata = provider.GetRequiredService<IModelMetadataProvider>().GetMetadataForType(typeof(T));
+        var metadata = provider.GetRequiredService<IModelMetadataProvider>().GetMetadataForType(type);
         var context = new InputFormatterContext(http, "", new ModelStateDictionary(), metadata,
             (stream, encoding) => new StreamReader(stream, encoding));
         return await provider.GetRequiredService<IOptions<MvcOptions>>().Value.InputFormatters

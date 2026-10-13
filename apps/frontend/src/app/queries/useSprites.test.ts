@@ -11,6 +11,11 @@ import {
   useRegenerateSpriteFrame,
   useApproveSpriteAsset,
   useExportSprites,
+  useCreateSpriteDraft,
+  useEnhanceSpriteSource,
+  useSaveSpriteSourcePrompt,
+  useGenerateSpriteSourceCandidate,
+  useSelectSpriteSource,
 } from './useSprites'
 import { queryKeys } from './keys'
 import { ApiError } from '@/infra/api/client'
@@ -111,6 +116,24 @@ describe('shared query boundaries', () => {
     expect(poll({ state: { dataUpdateCount: 0 } })).toBe(false)
   })
 
+  it('keeps a fixed 2s interval while a source task runs in sourceDraft', () => {
+    useJob('job')
+    const poll = queryOptions().refetchInterval
+    const draft = (taskStatus: string) => ({
+      state: {
+        data: {
+          status: 'running',
+          sprite: { phase: 'sourceDraft' },
+          tasks: [{ kind: 'generateSpriteSource', status: taskStatus }],
+        },
+        dataUpdateCount: 9,
+      },
+    })
+    expect(poll(draft('running'))).toBe(2000)
+    expect(poll(draft('pending'))).toBe(2000)
+    expect(poll(draft('succeeded'))).toBe(15000)
+  })
+
   it('uses mode and limit in the list key and propagates errors and AbortSignal', async () => {
     const error = new ApiError('NETWORK_UNREACHABLE', 'offline', 0)
     mocks.result.error = error
@@ -160,6 +183,11 @@ describe('sprite mutation cache and retry', () => {
       useRegenerateSpriteFrame,
       useApproveSpriteAsset,
       useExportSprites,
+      useCreateSpriteDraft,
+      useEnhanceSpriteSource,
+      useSaveSpriteSourcePrompt,
+      useGenerateSpriteSourceCandidate,
+      useSelectSpriteSource,
     ]) {
       hook()
       expect(mutationOptions().retry).toBe(false)
@@ -190,6 +218,42 @@ describe('sprite mutation cache and retry', () => {
       {} as never,
     )
     expect(mocks.invalidate).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    useEnhanceSpriteSource,
+    useSaveSpriteSourcePrompt,
+    useGenerateSpriteSourceCandidate,
+    useSelectSpriteSource,
+  ])('source command invalidates detail and lists on success and 409 only', async (hook) => {
+    hook()
+    const options = mutationOptions()
+    await options.onSuccess!(receipt, context, undefined, {} as never)
+    expect(mocks.invalidate.mock.calls).toEqual([
+      [{ queryKey: queryKeys.job('job') }],
+      [{ queryKey: queryKeys.jobLists() }],
+    ])
+    for (const code of ['SPRITE_BUSY', 'SPRITE_NOT_READY', 'SPRITE_SOURCE_LIMIT']) {
+      mocks.invalidate.mockClear()
+      await options.onError!(new ApiError(code, 'conflict', 409), context, undefined, {} as never)
+      expect(mocks.invalidate).toHaveBeenCalledTimes(2)
+    }
+    mocks.invalidate.mockClear()
+    await options.onError!(new ApiError('SERVER', 'boom', 500), context, undefined, {} as never)
+    expect(mocks.invalidate).not.toHaveBeenCalled()
+  })
+
+  it('draft creation invalidates the new job detail and lists, and lists on 409', async () => {
+    useCreateSpriteDraft()
+    const options = mutationOptions() as unknown as MutationOptions<SpriteAccepted, Error, unknown>
+    await options.onSuccess!({ ...receipt, id: 'draft' }, undefined, undefined, {} as never)
+    expect(mocks.invalidate.mock.calls).toEqual([
+      [{ queryKey: queryKeys.job('draft') }],
+      [{ queryKey: queryKeys.jobLists() }],
+    ])
+    mocks.invalidate.mockClear()
+    await options.onError!(new ApiError('CONFLICT', 'x', 409), undefined, undefined, {} as never)
+    expect(mocks.invalidate.mock.calls).toEqual([[{ queryKey: queryKeys.jobLists() }]])
   })
 
   it('keeps the supplied request ID and revision on user resend after response loss', async () => {

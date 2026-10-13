@@ -27,7 +27,7 @@ public sealed class RunSpriteAnalysisTaskHandler(
             throw new ProviderBadResponseException("2D 분석 공정이 필요합니다");
         var prompt = await prompts.GetActiveAsync(LlmOperationKind.AnalyzeSprites, job.Category, ct)
             ?? throw new ProviderCallFailedException("2D 분석 활성 프롬프트가 없습니다");
-        var image = await images.GetAsync(job.SourceImageId, ct)
+        var image = (job.SourceImageId is { } sourceId ? await images.GetAsync(sourceId, ct) : null)
             ?? throw new ProviderCallFailedException("입력 이미지가 없습니다");
         await using var stream = await blobs.OpenReadAsync(image.BlobKey, ct);
         using var buffer = new MemoryStream();

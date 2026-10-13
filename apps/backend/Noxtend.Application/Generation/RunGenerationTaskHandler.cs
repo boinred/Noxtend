@@ -184,9 +184,11 @@ public sealed class RunGenerationTaskHandler(
         return references;
     }
 
-    private async Task<ImageContent?> LoadOriginalAsync(Guid sourceImageId, CancellationToken ct)
+    private async Task<ImageContent?> LoadOriginalAsync(Guid? sourceImageId, CancellationToken ct)
     {
-        var image = await images.GetAsync(sourceImageId, ct);
+        // 원본 없는 작업은 2D 원본 준비뿐이라 3D 생성에 도달하면 계약 위반
+        var image = await images.GetAsync(sourceImageId
+            ?? throw new ProviderCallFailedException("원본 이미지가 없습니다"), ct);
         if (image is null)
         {
             return null;   // 원본이 사라졌어도 장면 명세와 서술만으로 그린다

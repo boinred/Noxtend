@@ -202,9 +202,9 @@ public sealed class EvaluateSimilarityHandler(
     /// 만든다. 프레임이 다르면 비교가 공정하지 않다.
     /// </summary>
     private async Task<ImageContent> LoadReferenceAsync(
-        Guid sourceImageId, int frameWidth, int frameHeight, CancellationToken ct)
+        Guid? sourceImageId, int frameWidth, int frameHeight, CancellationToken ct)
     {
-        var image = await images.GetAsync(sourceImageId, ct)
+        var image = (sourceImageId is { } id ? await images.GetAsync(id, ct) : null)
             ?? throw new SimilarityEvaluationFormatException("원본 이미지를 찾을 수 없습니다");
 
         await using var stream = await blobs.OpenReadAsync(image.BlobKey, ct);

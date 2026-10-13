@@ -64,6 +64,17 @@ internal static class SpriteJsonSerializer
                 && i.Assets.All(Valid) && i.Assets.Sum(a => a.ImageIds.Count) <= 64
                 && Ids(i.Assets.Select(a => a.Id).ToArray()) && i.ExcludedAssetIds is not null
                 && Ids(i.ExcludedAssetIds) && !i.Assets.Any(a => i.ExcludedAssetIds.Contains(a.Id)),
+            SpriteSourceDraft d => SpriteSourceDraft.ValidDescription(d.Description) && d.Description == d.Description.Trim()
+                && (d.Prompt is null || SpriteSourceDraft.ValidPrompt(d.Prompt)) && d.TextProviderConfigId != Guid.Empty
+                && !string.IsNullOrWhiteSpace(d.TextModel) && d.TextModel.Length <= 128
+                && d.Candidates is { Count: <= SpriteSourceDraft.MaxCandidates } && d.Candidates.All(Valid)
+                && Ids(d.Candidates.Select(c => c.Id).ToArray()),
+            SpriteSourceCandidate c => c.Id != Guid.Empty && SafePath(c.BlobKey) && c.BlobKey.Length <= 512
+                && !string.IsNullOrWhiteSpace(c.ContentType) && c.ContentType.Length <= 64
+                && Valid(new SpriteCanvas(c.Width, c.Height)) && SpriteSourceDraft.ValidPrompt(c.Prompt),
+            SpriteSourceInput i => (i.Description is null) != (i.Prompt is null)
+                && (i.Description is null || SpriteSourceDraft.ValidDescription(i.Description))
+                && (i.Prompt is null || SpriteSourceDraft.ValidPrompt(i.Prompt)),
             SpriteReceipt r => r.JobId != Guid.Empty && Enum.IsDefined(r.Status) && r.Revision >= 0 && Ids(r.TaskIds),
             SpriteManifest m => m.SchemaVersion == 1 && m.JobId != Guid.Empty
                 && m.ProductionMode == ProductionMode.TwoD && Valid(m.Input)

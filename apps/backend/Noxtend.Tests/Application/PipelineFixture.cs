@@ -56,8 +56,6 @@ public sealed class PipelineFixture
             Jobs, Orchestrator, Clock, Scheduler, NullLogger<TaskExecution>.Instance);
 
         RateLimitGate = new RateLimitGate(RateLimiter, Clock);
-        GenerateSpriteSource = new GenerateSpriteSourceHandler(Providers, Catalog, Prompts,
-            new StubImageProviderFactory(Images_), RateLimitGate, Upload);
         Run = new RunTaskHandler(
             Images, Blobs, new StubProviderFactory(Llm), Prompts,
             new StageRegistry(
@@ -75,11 +73,15 @@ public sealed class PipelineFixture
             Execution, Clock, Options, NullLogger<RunSpritePackTaskHandler>.Instance);
         StartSprites = new StartSpriteJobHandler(Jobs, Images, Blobs, Providers, Catalog, Prompts,
             new SkiaImageTranscoder(), Orchestrator, Clock, NullLogger<StartSpriteJobHandler>.Instance);
+        SpriteSource = new SpriteSourceCommandsHandler(Jobs, Images, Blobs, Providers, Catalog, Prompts,
+            new SkiaImageTranscoder(), Orchestrator, Clock, NullLogger<SpriteSourceCommandsHandler>.Instance);
         RunSpriteAnalysis = new RunSpriteAnalysisTaskHandler(Images, Blobs, new StubProviderFactory(Llm),
             Prompts, Execution, Options, RateLimitGate);
         RunSpriteGeneration = new RunSpriteGenerationTaskHandler(Jobs, Images, Blobs,
             new StubImageProviderFactory(Images_), Prompts, new SkiaImageTranscoder(), Execution,
             Clock, Options, GenerationOptions, RateLimitGate, NullLogger<RunSpriteGenerationTaskHandler>.Instance);
+        RunSpriteSourceEnhance = NewSpriteSourceEnhance(Llm);
+        RunSpriteSourceGeneration = NewSpriteSourceGeneration(Images_);
         Cancel = new CancelJobHandler(Jobs, Clock);
         Retry = new RetryTaskHandler(Jobs, MeshRuns, Orchestrator);
         Get = new GetJobHandler(Jobs, MeshRuns);
@@ -146,13 +148,23 @@ public sealed class PipelineFixture
 
     public JobOrchestrator Orchestrator { get; }
     public CreateUploadHandler Upload { get; }
-    public GenerateSpriteSourceHandler GenerateSpriteSource { get; }
     public StartJobHandler Start { get; }
     public SpriteCommandsHandler SpriteCommands { get; }
     public RunSpritePackTaskHandler RunSpritePack { get; }
     public StartSpriteJobHandler StartSprites { get; }
+    public SpriteSourceCommandsHandler SpriteSource { get; }
     public RunSpriteAnalysisTaskHandler RunSpriteAnalysis { get; }
     public RunSpriteGenerationTaskHandler RunSpriteGeneration { get; }
+    public RunSpriteSourceEnhanceTaskHandler RunSpriteSourceEnhance { get; }
+    public RunSpriteSourceGenerationTaskHandler RunSpriteSourceGeneration { get; }
+
+    // 공급자 대역만 바꿔 같은 배선으로 새 핸들러를 만든다
+    public RunSpriteSourceEnhanceTaskHandler NewSpriteSourceEnhance(ILlmProvider llm)
+        => new(new StubProviderFactory(llm), Prompts, Execution, Options, RateLimitGate);
+
+    public RunSpriteSourceGenerationTaskHandler NewSpriteSourceGeneration(IImageProvider image)
+        => new(Jobs, Blobs, new StubImageProviderFactory(image), Prompts, new SkiaImageTranscoder(), Execution,
+            Clock, Options, GenerationOptions, RateLimitGate, NullLogger<RunSpriteSourceGenerationTaskHandler>.Instance);
     public RunTaskHandler Run { get; }
 
     /// <summary>이미지 경로의 핸들러 (사이클 #7). 같은 <see cref="TaskExecution"/> 위에 선다.</summary>
@@ -428,6 +440,7 @@ public sealed class StubPromptCatalog : IPromptCatalog
     private readonly Dictionary<LlmOperationKind, PromptSnapshot> _active = new()
     {
         [LlmOperationKind.GenerateSpriteSource] = Snapshot(LlmOperationKind.GenerateSpriteSource, "2D 기준 장면", "{{prompt}}"),
+        [LlmOperationKind.EnhanceSpriteSource] = Snapshot(LlmOperationKind.EnhanceSpriteSource, "원본 보완 {{settings}}", "{{description}}"),
         [LlmOperationKind.GenerateSprite] = Snapshot(LlmOperationKind.GenerateSprite, "{{settings}}", "{{asset}}\n{{frame}}\n{{sourceCanvas}}\n{{outputCanvas}}"),
         [LlmOperationKind.AnalyzeSprites] = Snapshot(LlmOperationKind.AnalyzeSprites, "2D 분석", "{{settings}} {{sourceCanvas}}"),
         [LlmOperationKind.Analyze] = Snapshot(LlmOperationKind.Analyze, "장면을 분석하라", string.Empty),
