@@ -26,7 +26,9 @@
 
 ### 2D 배경 이미지 생성
 
-`GenerateSpriteSource`는 Background 전용이며 변수 `{{prompt}}`로 참조 없는 업로드용 기준 이미지 생성을 위한 프롬프트를 정의한다. `SeedPrompts.GenerateSpriteSource()`와 `SeedSpriteSourcePrompt` migration은 기존 운영자 슬롯을 보존한다.
+`GenerateSpriteSource`는 Background 전용이며 변수 `{{prompt}}`·`{{settings}}`로 참조 없는 업로드용 기준 이미지 생성을 위한 프롬프트를 정의한다. `SeedPrompts.GenerateSpriteSource()`와 `SeedSpriteSourcePrompt` migration은 기존 운영자 슬롯을 보존한다. `SeedPrompts.GenerateSpriteSourceV2()`와 `ReviseSpriteSourcePrompt` migration은 설정의 시점·형식이 프롬프트 문장보다 우선한다고 명시한 개정이며 `AnalyzeSpritesV2`와 같은 방식(슬롯 비활성화 후 `MAX(Version)+1`)으로 새 활성 행을 추가한다. 옛 동기 `GenerateSpriteSourceHandler`는 `{{prompt}}`만 렌더하므로 V2 활성 상태에서는 `{{settings}}` 미치환으로 실패하며 Task 5에서 제거된다.
+
+`EnhanceSpriteSource`(TaskKind=10, LlmOperationKind=8)는 Background 전용 텍스트 프롬프트이며 변수는 `{{description}}`·`{{settings}}`, 출력 schema는 `{ "prompt": string }`이다. `SeedPrompts.EnhanceSpriteSource()`와 `SeedSpriteSourceEnhancePrompt` migration은 `IF NOT EXISTS`로 v1을 심어 기존 운영자 슬롯을 보존한다. `RunSpriteSourceEnhanceTaskHandler`는 공정 고정 입력의 설명(`SourceInput.Description`)과 작업 설정을 렌더하고 응답이 1~4000자 `prompt` 문자열이 아니면 재시도 분류하며, 반영은 commit 클로저의 `TryApplySourcePrompt`만 한다. `TaskKind.GenerateSpriteSource`(11)는 `RunSpriteSourceGenerationTaskHandler`가 고정 프롬프트 snapshot·설정을 렌더하고 작업의 이미지 공급자·모델, 잠정 `SourceCanvas` 크기, 참조 없는 Opaque 요청으로 한 장을 만든다. 장수가 1이 아니거나 이미지가 아니면 재시도 없이 실패하고, 검사한 MIME·크기로 `IBlobStorage.SaveAsync` 키를 후보로 반영하며, 공개되지 않은 Blob은 finally에서 `CancellationToken.None`으로 다시 조회해 지운다. 생성 크기 선택은 `SpriteSourceSizes.Pick`이다. 확인: `SpriteSourceTaskTests`, `SpriteSourcePromptMigrationTests`, `SeedPromptVariableTests`. `FakeLlmProvider`는 `{"prompt":"..."}`를 반환하고 `FakeImageProvider`는 `GenerateSpriteSource` 요청 크기에 맞는 PNG를 만든다.
 
 `RunSpriteGenerationTaskHandler`는 `LlmOperationKind.GenerateSprite=6`·Background 전용 활성 프롬프트를 사용한다. `SeedPrompts.GenerateSprite()`와 `SeedSpriteGeneratePrompt` migration은 기존 운영자 슬롯을 보존한다. 허용 변수는 settings·asset·frame·sourceCanvas·outputCanvas이며, asset은 `SpriteFrameInput.Plan` snapshot이다. frame JSON에는 index·count·phase·BaseImageId와 고정 GenerationCanvas·anchor·transform을 전달한다. 이름·FPS를 나중에 편집해도 접수한 입력은 바뀌지 않는다. `ViewDirection`은 사용하지 않는다.
 

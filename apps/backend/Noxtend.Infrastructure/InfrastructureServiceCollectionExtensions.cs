@@ -290,6 +290,8 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<Noxtend.Application.Sprites.GenerateSpriteSourceHandler>();
         services.AddScoped<Noxtend.Application.Sprites.RunSpriteAnalysisTaskHandler>();
         services.AddScoped<Noxtend.Application.Sprites.RunSpriteGenerationTaskHandler>();
+        services.AddScoped<Noxtend.Application.Sprites.RunSpriteSourceEnhanceTaskHandler>();
+        services.AddScoped<Noxtend.Application.Sprites.RunSpriteSourceGenerationTaskHandler>();
 
         // 공유 실행 골격 — 텍스트·이미지 핸들러가 함께 쓴다 (§2.0)
         services.AddScoped<TaskExecution>();

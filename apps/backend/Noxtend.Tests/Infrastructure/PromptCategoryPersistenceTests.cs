@@ -24,7 +24,7 @@ public sealed class PromptCategoryPersistenceTests(SqlServerFixture sql)
     // 캐릭터 3개·배경 8개의 활성 전용 시드
     // CharacterPromptSeedMigrationTests의 캐릭터 슬롯 검증과 전체 목록 대조
     [Fact]
-    public async Task MigratedCategorizedSeeds_AreTheCharacterTripletPlusEightBackgroundSlots()
+    public async Task MigratedCategorizedSeeds_AreTheCharacterTripletPlusNineBackgroundSlots()
     {
         await using var db = Context();
         await db.Database.MigrateAsync();
@@ -37,8 +37,8 @@ public sealed class PromptCategoryPersistenceTests(SqlServerFixture sql)
             .Select(p => new { p.Kind, p.Category })
             .ToListAsync();
 
-        // 캐릭터 3개·배경 8개의 독립 슬롯
-        Assert.Equal(11, categorized.Count);
+        // 캐릭터 3개·배경 9개의 독립 슬롯
+        Assert.Equal(12, categorized.Count);
         Assert.DoesNotContain(categorized, row => row.Category == AssetCategory.Object);
         Assert.Equal(
             [LlmOperationKind.Extract, LlmOperationKind.Decompose, LlmOperationKind.Generate],
@@ -46,7 +46,8 @@ public sealed class PromptCategoryPersistenceTests(SqlServerFixture sql)
                 .Select(row => row.Kind).OrderBy(k => k));
         Assert.Equal(
             [LlmOperationKind.Analyze, LlmOperationKind.Extract, LlmOperationKind.Decompose,
-             LlmOperationKind.Generate, LlmOperationKind.AnalyzeSprites, LlmOperationKind.GenerateSprite, LlmOperationKind.GenerateSpriteSource, LlmOperationKind.SimilarityEvaluate],
+             LlmOperationKind.Generate, LlmOperationKind.AnalyzeSprites, LlmOperationKind.GenerateSprite, LlmOperationKind.GenerateSpriteSource,
+             LlmOperationKind.EnhanceSpriteSource, LlmOperationKind.SimilarityEvaluate],
             categorized.Where(row => row.Category == AssetCategory.Background)
                 .Select(row => row.Kind).OrderBy(kind => kind));
     }

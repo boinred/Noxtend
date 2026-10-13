@@ -27,7 +27,7 @@
 4. 복구: 중복 배달·종료 공정·다른 owner는 `Skipped`로 Ack한다. 프로세스 종료 시 Ack하지 않고 `SweepStaleTasksHandler`가 lease 만료 공정을 재시도 한도 안에서 다시 적재하고 준비된 대기 공정을 재적재한다. rowversion 경합은 `ConcurrencyConflictException`으로 감싸며 Worker는 오류로 기록하지 않는다.
 5. 유사도 평가는 별도 경로다: `SimilarityController` → `StartSimilarityRunHandler`·`UploadCandidateRenderHandler`·`RetrySimilarityRunHandler` → `ISimilarityQueue` → `SimilarityWorker` → `EvaluateSimilarityHandler`, 회수는 `SimilaritySweeper` → `SweepSimilarityHandler`.
 
-TaskKind별 handler는 `TaskWorkerRegistration`의 표가 정본이다. 텍스트 공정은 `RunTaskHandler`, 이미지 생성은 `RunGenerationTaskHandler`, 3D는 `RunMeshTaskHandler`, 2D는 `Noxtend.Application/Sprites/Run*TaskHandler.cs`다. 단계별 상세는 [Backend 코드 안내](backend.md)와 [공급자와 프롬프트](providers-and-prompts.md)를 본다.
+TaskKind별 handler는 `TaskWorkerRegistration`의 표가 정본이다. 텍스트 공정은 `RunTaskHandler`, 이미지 생성은 `RunGenerationTaskHandler`, 3D는 `RunMeshTaskHandler`, 2D는 `Noxtend.Application/Sprites/Run*TaskHandler.cs`다. 원본 준비 공정은 `EnhanceSpriteSource`가 텍스트 리스(`JobOptions`)와 워커 1개, `GenerateSpriteSource`가 이미지 리스(`GenerationOptions`)와 `generationWorkers` 그룹·`ReclaimPlan` 생성 방치 기준을 쓴다. 보완 JSON 위반·공급자 일시 오류는 재시도, 이미지 장수·형식 위반은 유료 재호출 없이 실패한다. 단계별 상세는 [Backend 코드 안내](backend.md)와 [공급자와 프롬프트](providers-and-prompts.md)를 본다.
 
 ## 3D 메시 공정
 

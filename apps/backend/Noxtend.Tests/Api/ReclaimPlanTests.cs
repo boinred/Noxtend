@@ -48,6 +48,8 @@ public sealed class ReclaimPlanTests
         Assert.Equal(TimeSpan.FromSeconds(200), plan[TaskKind.Extract]);
         Assert.Equal(TimeSpan.FromSeconds(800), plan[TaskKind.Generate]);
         Assert.Equal(TimeSpan.FromSeconds(800), plan[TaskKind.GenerateSprite]);
+        Assert.Equal(TimeSpan.FromSeconds(800), plan[TaskKind.GenerateSpriteSource]);
+        Assert.Equal(TimeSpan.FromSeconds(200), plan[TaskKind.EnhanceSpriteSource]);
         Assert.Equal(TimeSpan.FromSeconds(2000), plan[TaskKind.Reconstruct]);
     }
 }

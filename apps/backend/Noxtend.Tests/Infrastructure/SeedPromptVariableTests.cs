@@ -51,13 +51,34 @@ public sealed class SeedPromptVariableTests
     }
 
     [Fact]
-    public void SpriteSourceSeedUsesOnlyPromptVariable()
+    public void SpriteSourceSeedV1IsASubsetAndV2MatchesAllowedVariables()
     {
-        var (system, user, _, _) = SeedPrompts.GenerateSpriteSource();
+        var allowed = PromptTemplate.AllowedVariables(LlmOperationKind.GenerateSpriteSource);
+        var (v1System, v1User, _, _) = SeedPrompts.GenerateSpriteSource();
+        var v1 = Placeholder.Matches(v1System + v1User).Select(m => m.Groups[1].Value).ToHashSet();
+        var v2Seed = SeedPrompts.GenerateSpriteSourceV2();
+        var v2 = Placeholder.Matches(v2Seed.System + v2Seed.User).Select(m => m.Groups[1].Value).ToHashSet();
+
+        Assert.Equal(new[] { "prompt" }, v1.OrderBy(v => v));
+        Assert.True(v1.IsSubsetOf(allowed));
+        Assert.Equal(allowed.OrderBy(v => v), v2.OrderBy(v => v));
+        Assert.Contains("authoritative", v2Seed.System);
+        Assert.True(v2Seed.Note.Length <= 500);
+    }
+
+    [Fact]
+    public void EnhanceSeedUsesDescriptionAndSettingsAndReturnsOnlyPrompt()
+    {
+        var (system, user, schema, note) = SeedPrompts.EnhanceSpriteSource();
         var used = Placeholder.Matches(system + user).Select(m => m.Groups[1].Value).ToHashSet();
 
-        Assert.Equal(new[] { "prompt" }, used.OrderBy(v => v));
-        Assert.Equal(PromptTemplate.AllowedVariables(LlmOperationKind.GenerateSpriteSource).OrderBy(v => v), used.OrderBy(v => v));
+        Assert.Equal(PromptTemplate.AllowedVariables(LlmOperationKind.EnhanceSpriteSource).OrderBy(v => v), used.OrderBy(v => v));
+        Assert.Contains("2:1 diamond", system);
+        Assert.Contains("tile", system);
+        Assert.True(note.Length <= 500);
+        using var document = JsonDocument.Parse(schema);
+        Assert.Equal(new[] { "prompt" }, document.RootElement.GetProperty("required").EnumerateArray().Select(v => v.GetString()));
+        Assert.Equal(new[] { "prompt" }, document.RootElement.GetProperty("properties").EnumerateObject().Select(p => p.Name));
     }
 
     /// <summary>
@@ -69,6 +90,7 @@ public sealed class SeedPromptVariableTests
     [InlineData(TaskKind.RewriteDescriptions)]
     [InlineData(TaskKind.AnalyzeSprites)]
     [InlineData(TaskKind.GenerateSprite)]
+    [InlineData(TaskKind.EnhanceSpriteSource)]
     public void SeedUsesEveryVariableTheStageProduces(TaskKind kind)
     {
         var (system, user, _, _) = PromptFor(kind);
@@ -88,6 +110,7 @@ public sealed class SeedPromptVariableTests
     [InlineData(TaskKind.RewriteDescriptions)]
     [InlineData(TaskKind.AnalyzeSprites)]
     [InlineData(TaskKind.GenerateSprite)]
+    [InlineData(TaskKind.EnhanceSpriteSource)]
     [InlineData(TaskKind.Analyze)]
     [InlineData(TaskKind.Extract)]
     [InlineData(TaskKind.Decompose)]
@@ -142,6 +165,7 @@ public sealed class SeedPromptVariableTests
     [InlineData(TaskKind.RewriteDescriptions)]
     [InlineData(TaskKind.AnalyzeSprites)]
     [InlineData(TaskKind.GenerateSprite)]
+    [InlineData(TaskKind.EnhanceSpriteSource)]
     [InlineData(TaskKind.Analyze)]
     [InlineData(TaskKind.Extract)]
     [InlineData(TaskKind.Decompose)]
@@ -158,6 +182,7 @@ public sealed class SeedPromptVariableTests
         {
             TaskKind.GenerateSprite => SeedPrompts.GenerateSprite(),
             TaskKind.AnalyzeSprites => SeedPrompts.AnalyzeSprites(),
+            TaskKind.EnhanceSpriteSource => SeedPrompts.EnhanceSpriteSource(),
             TaskKind.RewriteDescriptions => SeedPrompts.RewriteDescriptions(),
             TaskKind.Analyze => SeedPrompts.AnalyzeV2(),
             TaskKind.Extract => SeedPrompts.CharacterExtract(),

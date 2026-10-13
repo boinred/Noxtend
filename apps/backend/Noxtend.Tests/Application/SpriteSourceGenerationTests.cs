@@ -44,9 +44,9 @@ public sealed class SpriteSourceGenerationTests
     [Fact]
     public void PickSize_PrefersLandscapeOrSquareThenLargestArea()
     {
-        Assert.Equal(new(1024, 1024), GenerateSpriteSourceHandler.PickSize([new(1024, 1536), new(1024, 1024)]));
-        Assert.Equal(new(1024, 1536), GenerateSpriteSourceHandler.PickSize([new(1024, 1536)]));
-        Assert.Equal(new(1792, 1024), GenerateSpriteSourceHandler.PickSize([new(1024, 1024), new(1536, 1024), new(1792, 1024)]));
+        Assert.Equal(new(1024, 1024), SpriteSourceSizes.Pick([new(1024, 1536), new(1024, 1024)]));
+        Assert.Equal(new(1024, 1536), SpriteSourceSizes.Pick([new(1024, 1536)]));
+        Assert.Equal(new(1792, 1024), SpriteSourceSizes.Pick([new(1024, 1024), new(1536, 1024), new(1792, 1024)]));
     }
 
     [Theory]

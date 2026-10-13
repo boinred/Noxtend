@@ -126,7 +126,7 @@ public sealed class PromptGridTests
         Assert.Equal("fallback", characterCell.Status); // 기본이 있어 카테고리는 폴백
     }
 
-    // 원본 보완은 Background 전용 슬롯이며 설명·설정만 변수로 받는다
+    // 원본 보완 슬롯: Background 전용, description·settings 변수
     [Fact]
     public async Task EnhanceSpriteSource_IsBackgroundOnlyWithDescriptionAndSettings()
     {

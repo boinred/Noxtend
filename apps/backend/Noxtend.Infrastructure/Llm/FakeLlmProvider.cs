@@ -95,6 +95,9 @@ public sealed class FakeLlmProvider : ILlmProvider
         return new LlmResult(json, InputTokens: 1200, OutputTokens: 340);
     }
 
+    // 보완 공정의 결정적 Fake 응답
+    internal const string EnhanceSourceJson = """{"prompt":"Fake 보완 프롬프트: 설정에 맞춘 상세한 2D 배경 장면"}""";
+
     private static string SpriteJson(LlmRequest request)
     {
         var prompt = request.System + "\n" + request.User;
@@ -116,6 +119,7 @@ public sealed class FakeLlmProvider : ILlmProvider
     private string Canned(LlmRequest request) => request.Context.Kind switch
     {
         LlmOperationKind.AnalyzeSprites => SpriteJson(request),
+        LlmOperationKind.EnhanceSpriteSource => EnhanceSourceJson,
         LlmOperationKind.Analyze => AnalyzeJson(),
         LlmOperationKind.Extract => JsonSerializer.Serialize(new { parts = _partNames }),
         LlmOperationKind.Decompose => DecomposeJson(),

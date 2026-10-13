@@ -80,6 +80,8 @@ public sealed class PipelineFixture
         RunSpriteGeneration = new RunSpriteGenerationTaskHandler(Jobs, Images, Blobs,
             new StubImageProviderFactory(Images_), Prompts, new SkiaImageTranscoder(), Execution,
             Clock, Options, GenerationOptions, RateLimitGate, NullLogger<RunSpriteGenerationTaskHandler>.Instance);
+        RunSpriteSourceEnhance = NewSpriteSourceEnhance(Llm);
+        RunSpriteSourceGeneration = NewSpriteSourceGeneration(Images_);
         Cancel = new CancelJobHandler(Jobs, Clock);
         Retry = new RetryTaskHandler(Jobs, MeshRuns, Orchestrator);
         Get = new GetJobHandler(Jobs, MeshRuns);
@@ -153,6 +155,16 @@ public sealed class PipelineFixture
     public StartSpriteJobHandler StartSprites { get; }
     public RunSpriteAnalysisTaskHandler RunSpriteAnalysis { get; }
     public RunSpriteGenerationTaskHandler RunSpriteGeneration { get; }
+    public RunSpriteSourceEnhanceTaskHandler RunSpriteSourceEnhance { get; }
+    public RunSpriteSourceGenerationTaskHandler RunSpriteSourceGeneration { get; }
+
+    // 공급자 대역만 바꿔 같은 배선으로 새 핸들러를 만든다
+    public RunSpriteSourceEnhanceTaskHandler NewSpriteSourceEnhance(ILlmProvider llm)
+        => new(new StubProviderFactory(llm), Prompts, Execution, Options, RateLimitGate);
+
+    public RunSpriteSourceGenerationTaskHandler NewSpriteSourceGeneration(IImageProvider image)
+        => new(Jobs, Blobs, new StubImageProviderFactory(image), Prompts, new SkiaImageTranscoder(), Execution,
+            Clock, Options, GenerationOptions, RateLimitGate, NullLogger<RunSpriteSourceGenerationTaskHandler>.Instance);
     public RunTaskHandler Run { get; }
 
     /// <summary>이미지 경로의 핸들러 (사이클 #7). 같은 <see cref="TaskExecution"/> 위에 선다.</summary>
@@ -428,6 +440,7 @@ public sealed class StubPromptCatalog : IPromptCatalog
     private readonly Dictionary<LlmOperationKind, PromptSnapshot> _active = new()
     {
         [LlmOperationKind.GenerateSpriteSource] = Snapshot(LlmOperationKind.GenerateSpriteSource, "2D 기준 장면", "{{prompt}}"),
+        [LlmOperationKind.EnhanceSpriteSource] = Snapshot(LlmOperationKind.EnhanceSpriteSource, "원본 보완 {{settings}}", "{{description}}"),
         [LlmOperationKind.GenerateSprite] = Snapshot(LlmOperationKind.GenerateSprite, "{{settings}}", "{{asset}}\n{{frame}}\n{{sourceCanvas}}\n{{outputCanvas}}"),
         [LlmOperationKind.AnalyzeSprites] = Snapshot(LlmOperationKind.AnalyzeSprites, "2D 분석", "{{settings}} {{sourceCanvas}}"),
         [LlmOperationKind.Analyze] = Snapshot(LlmOperationKind.Analyze, "장면을 분석하라", string.Empty),

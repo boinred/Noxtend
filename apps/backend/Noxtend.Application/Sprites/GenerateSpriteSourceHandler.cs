@@ -49,7 +49,7 @@ public sealed class GenerateSpriteSourceHandler(
             if (prompt is null) return Fail(ErrorCode.PromptNotActive, "2D 기준 이미지 활성 프롬프트가 없습니다");
             var provider = await providerFactory.CreateAsync(providerConfig.Id, modelId, token);
             token.ThrowIfCancellationRequested();
-            var size = PickSize(capability.Sizes);
+            var size = SpriteSourceSizes.Pick(capability.Sizes);
             var request = new ImageRequest(ImageCallContext.ForSourceGeneration(command.RequestId, prompt.VersionId, providerConfig.Id, modelId),
                 PromptTemplate.Render($"{prompt.System}\n\n{prompt.User}", new Dictionary<string, string> { ["prompt"] = description }),
                 [], $"{size.Width}x{size.Height}", ImageBackground.Opaque);
@@ -80,9 +80,6 @@ public sealed class GenerateSpriteSourceHandler(
             return Fail(ErrorCode.ProviderBadResponse, ex.Message);
         }
     }
-
-    internal static SpriteCanvas PickSize(IReadOnlyList<SpriteCanvas> sizes)
-        => sizes.OrderByDescending(size => size.Width >= size.Height).ThenByDescending(size => (long)size.Width * size.Height).First();
 
     private static Result<StoredImage> Fail(string code, string message) => Result<StoredImage>.Fail(code, message);
 }
