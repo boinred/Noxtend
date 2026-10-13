@@ -7,6 +7,7 @@ import type {
   SpriteAssetPlan,
   SpriteAsset,
   SpriteAccepted,
+  SpriteSourceDraft,
 } from '../../src/domain/sprites/types'
 
 export const SPRITE_IDS = {
@@ -20,8 +21,25 @@ const now = '2026-10-06T00:00:00Z'
 export interface SpriteFakeOptions {
   records?: { path: string; body: Record<string, unknown> }[]
   seed?:
-    'baseReview' | 'failed' | 'canceled' | 'packFailed' | 'completed' | 'analyzing' | 'frameReview'
-  generateErrorOnce?: boolean
+    | 'baseReview'
+    | 'failed'
+    | 'canceled'
+    | 'packFailed'
+    | 'completed'
+    | 'analyzing'
+    | 'frameReview'
+    | 'sourceDraft'
+  // sourceDraft seed 초기값
+  sourceCandidates?: number
+  sourceDescription?: string
+  sourcePrompt?: string | null
+  // 실행 중 원본 공정은 작업 GET이 이 횟수에 닿으면 끝남, 테스트 중 변경 가능
+  sourceTaskGets?: number
+  // 순서대로 소비, 해당 종류의 다음 원본 공정 실패
+  sourceFailures?: JobTask['kind'][]
+  // 다른 탭이 먼저 생성한 상황
+  sourceBusyOnce?: boolean
+  textModelsEmpty?: boolean
   providerErrorOnce?: boolean
   providersEmpty?: boolean
   detailErrorOnce?: boolean
@@ -190,16 +208,21 @@ export function spriteZip(job: Job, included: string[], exportId: string) {
 function ok(route: Route, data: unknown, status = 200) {
   return route.fulfill({ status, contentType: 'application/json', json: { data, error: null } })
 }
-function fail(route: Route, status: number, message: string) {
+function fail(route: Route, status: number, message: string, code?: string) {
   return route.fulfill({
     status,
     contentType: 'application/json',
     json: {
       data: null,
-      error: { code: status === 409 ? 'SPRITE_REVISION_CONFLICT' : 'FAKE_ERROR', message },
+      error: {
+        code: code ?? (status === 409 ? 'SPRITE_REVISION_CONFLICT' : 'FAKE_ERROR'),
+        message,
+      },
     },
   })
 }
+const isSourceTask = (task: JobTask) =>
+  task.kind === 'enhanceSpriteSource' || task.kind === 'generateSpriteSource'
 
 export async function installSpriteFakeApi(page: Page, options: SpriteFakeOptions) {
   let sequence = 1
@@ -208,8 +231,10 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
   let job: Job | null = null
   const receipts = new Map<string, { fingerprint: string; receipt: SpriteAccepted }>()
   const archives = new Map<string, Buffer>()
-  const generatedUploads = new Set<string>()
-  let generateFailure = options.generateErrorOnce ?? false
+  const storedImages = new Set<string>()
+  const sourceGets = new Map<string, number>()
+  const sourceInputs = new Map<string, string>()
+  let busyOnce = options.sourceBusyOnce ?? false
   let providerFailure = options.providerErrorOnce ?? false,
     detailFailure = options.detailErrorOnce ?? false,
     conflict = options.conflictOnce ?? false,
@@ -306,6 +331,86 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
       partHints: [],
       requiresReview: true,
     }
+  }
+  function draft(settings: SpriteSettings, description: string): Job {
+    const created = make(settings)
+    const sprite = created.sprite!
+    sprite.phase = 'sourceDraft'
+    sprite.sourceCanvas = { width: 1024, height: 1024 }
+    sprite.assets = []
+    sprite.source = { description, prompt: null, candidates: [] }
+    created.sourceImageId = null
+    created.status = 'pendingReview'
+    created.tasks = []
+    return created
+  }
+  function startSource(kind: JobTask['kind'], input: string) {
+    const started = task(kind, 'running')
+    job!.tasks.push(started)
+    sourceInputs.set(started.id, input)
+    job!.status = 'running'
+  }
+  function candidate(source: SpriteSourceDraft, prompt: string) {
+    source.candidates.push({ id: guid(9), prompt, width: 320, height: 180, createdAt: now })
+  }
+  // 작업 GET마다 실행 중 원본 공정 진행, 결과 반영은 revision 증가
+  function settleSource() {
+    const sprite = job?.sprite
+    if (!sprite?.source || sprite.phase !== 'sourceDraft') return
+    for (const t of job!.tasks.filter((t) => isSourceTask(t) && t.status === 'running')) {
+      const gets = (sourceGets.get(t.id) ?? 0) + 1
+      sourceGets.set(t.id, gets)
+      if (gets < (options.sourceTaskGets ?? 1)) continue
+      const failed = options.sourceFailures?.[0] === t.kind
+      if (failed) options.sourceFailures!.shift()
+      const input = sourceInputs.get(t.id)!
+      t.completedAt = now
+      t.status = failed ? 'failed' : 'succeeded'
+      t.failureReason = failed
+        ? `Fake ${t.kind === 'enhanceSpriteSource' ? '보완' : '원본 생성'} 실패`
+        : null
+      if (!failed && t.kind === 'enhanceSpriteSource')
+        sprite.source.prompt = `${input} · 보완 프롬프트`
+      if (!failed && t.kind === 'generateSpriteSource') candidate(sprite.source, input)
+      job!.status = 'pendingReview'
+      sprite.reviewRevision++
+    }
+  }
+  function sourceCommand(path: string, body: Record<string, unknown>) {
+    const sprite = job!.sprite!,
+      source = sprite.source
+    if (sprite.phase !== 'sourceDraft' || !source)
+      return { code: 'SPRITE_NOT_READY', message: '원본 준비 단계가 아닙니다' }
+    if (busyOnce) {
+      busyOnce = false
+      startSource('generateSpriteSource', source.prompt ?? '')
+      sprite.reviewRevision++
+    }
+    if (
+      job!.tasks.some((t) => isSourceTask(t) && (t.status === 'running' || t.status === 'pending'))
+    )
+      return { code: 'SPRITE_BUSY', message: '원본 준비 공정이 실행 중입니다' }
+    if (path.endsWith('/source/enhance')) {
+      source.description = String(body.description)
+      startSource('enhanceSpriteSource', source.description)
+    } else if (path.endsWith('/source/prompt')) source.prompt = String(body.prompt)
+    else if (path.endsWith('/source/generate')) {
+      if (source.candidates.length >= 8)
+        return { code: 'SPRITE_SOURCE_LIMIT', message: '원본 후보는 최대 8장입니다' }
+      source.prompt = String(body.prompt)
+      startSource('generateSpriteSource', source.prompt)
+    } else if (path.endsWith('/source/select')) {
+      if (!source.candidates.some((c) => c.id === body.candidateId))
+        return { code: 'SPRITE_NOT_READY', message: '후보가 없습니다' }
+      const analyzed = make(sprite.settings)
+      analyzed.sprite!.source = source
+      analyzed.sprite!.reviewRevision = sprite.reviewRevision
+      analyzed.sourceImageId = guid(3)
+      storedImages.add(analyzed.sourceImageId)
+      analyzed.tasks = [...job!.tasks, { ...analyzed.tasks[0]!, ordinal: job!.tasks.length }]
+      job = analyzed
+    }
+    return null
   }
   function bases() {
     const sprite = job!.sprite!
@@ -448,7 +553,17 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
         repeat: 'both',
       },
     )
-    if (options.seed === 'analyzing') {
+    if (options.seed === 'sourceDraft') {
+      job = draft(job.sprite!.settings, options.sourceDescription ?? '항구 마을')
+      const source = job.sprite!.source!
+      job.tasks.push(task('enhanceSpriteSource'))
+      source.prompt =
+        options.sourcePrompt === undefined ? '항구 마을 · 보완 프롬프트' : options.sourcePrompt
+      for (let i = 0; i < (options.sourceCandidates ?? 0); i++) {
+        job.tasks.push(task('generateSpriteSource'))
+        candidate(source, `${source.prompt ?? '직접 입력'} #${i + 1}`)
+      }
+    } else if (options.seed === 'analyzing') {
       job.sprite!.phase = 'analyzing'
       job.status = 'running'
       job.tasks[0]!.status = 'running'
@@ -523,7 +638,10 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
       )
     }
     if (path === `/api/providers/${SPRITE_IDS.provider}/models`)
-      return ok(route, [{ id: 'analysis', displayName: '분석 Fake' }])
+      return ok(
+        route,
+        options.textModelsEmpty ? [] : [{ id: 'analysis', displayName: '분석 Fake' }],
+      )
     if (path === `/api/providers/${SPRITE_IDS.provider}/image-models`) {
       if (options.imageModelsError) return fail(route, 503, '이미지 모델 조회 실패')
       return ok(route, [
@@ -539,25 +657,6 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
     }
     if (path === '/api/prices')
       return options.priceError ? fail(route, 503, '단가 조회 실패') : ok(route, [])
-    if (path === '/api/uploads/generate' && method === 'POST') {
-      options.records?.push({ path, body: request.postDataJSON() as Record<string, unknown> })
-      if (generateFailure) {
-        generateFailure = false
-        return fail(route, 502, '공급자 호출 실패')
-      }
-      const id = guid(8)
-      generatedUploads.add(id)
-      return ok(
-        route,
-        {
-          id,
-          originalName: 'sprite-prompt',
-          contentType: 'image/png',
-          sizeBytes: SPRITE_SOURCE_PNG.length,
-        },
-        201,
-      )
-    }
     if (path === '/api/uploads' && method === 'POST')
       return ok(
         route,
@@ -572,7 +671,7 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
     const uploadContent = /^\/api\/uploads\/([^/]+)\/content$/.exec(path)
     if (
       uploadContent &&
-      (uploadContent[1] === SPRITE_IDS.upload || generatedUploads.has(uploadContent[1]!))
+      (uploadContent[1] === SPRITE_IDS.upload || storedImages.has(uploadContent[1]!))
     )
       return route.fulfill({ status: 200, contentType: 'image/png', body: SPRITE_SOURCE_PNG })
     if (path === `/api/jobs/${SPRITE_IDS.job}`) {
@@ -580,8 +679,14 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
         detailFailure = false
         return fail(route, 503, '작업 연결 실패')
       }
+      settleSource()
       return job ? ok(route, job) : fail(route, 404, '작업을 찾을 수 없습니다')
     }
+    const sourceImage = /^\/api\/jobs\/[^/]+\/sprites\/source\/candidates\/([^/]+)$/.exec(path)
+    if (sourceImage)
+      return job?.sprite?.source?.candidates.some((c) => c.id === sourceImage[1])
+        ? route.fulfill({ status: 200, contentType: 'image/png', body: SPRITE_SOURCE_PNG })
+        : fail(route, 404, '후보가 없습니다')
     const image = /^\/api\/jobs\/[^/]+\/sprites\/images\/([^/]+)$/.exec(path)
     if (image) {
       const sprite = job?.sprite,
@@ -614,7 +719,14 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
     }
     if (path.includes(`/api/jobs/${SPRITE_IDS.job}/tasks/`) && job) {
       const failed = job.tasks.find((t) => path.includes(t.id))
-      if (failed) {
+      if (failed && isSourceTask(failed)) {
+        failed.status = 'running'
+        failed.failureReason = null
+        failed.completedAt = null
+        failed.attemptCount++
+        sourceGets.delete(failed.id)
+        job.status = 'running'
+      } else if (failed) {
         failed.status = 'succeeded'
         failed.failureReason = null
         failed.attemptCount++
@@ -633,6 +745,7 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
     }
     if (
       path === '/api/jobs/sprites' ||
+      path === '/api/jobs/sprites/drafts' ||
       (path.startsWith(`/api/jobs/${SPRITE_IDS.job}/sprites/`) && method !== 'GET')
     ) {
       const body = request.postDataJSON() as Record<string, unknown>
@@ -644,10 +757,14 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
         return existing.fingerprint === fingerprint
           ? ok(route, existing.receipt, 202)
           : fail(route, 409, '요청 본문 충돌')
-      if (path === '/api/jobs/sprites') {
+      if (path === '/api/jobs/sprites' || path === '/api/jobs/sprites/drafts') {
         if (job) return fail(route, 409, '이미 접수된 작업')
         const settings = body.settings as SpriteSettings
-        job = make(settings)
+        if (path === '/api/jobs/sprites') job = make(settings)
+        else {
+          job = draft(settings, String(body.description))
+          startSource('enhanceSpriteSource', String(body.description))
+        }
       } else {
         if (!job) return fail(route, 404, '작업이 없습니다')
         if (conflict) {
@@ -657,6 +774,10 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
         }
         if (body.expectedRevision !== job.sprite!.reviewRevision)
           return fail(route, 409, '낡은 revision')
+        if (path.includes('/sprites/source/')) {
+          const rejected = sourceCommand(path, body)
+          if (rejected) return fail(route, 409, rejected.message, rejected.code)
+        }
         if (path.endsWith('/plan/approve') && approvalFailure) {
           approvalFailure = false
           return fail(route, 503, '승인 응답 유실')
@@ -748,7 +869,7 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
           job.sprite!.phase = index === 0 ? 'baseReview' : 'frameReview'
           job.status = 'pendingReview'
         }
-        if (!path.endsWith('/exports')) {
+        if (!path.endsWith('/exports') && !path.includes('/sprites/source/')) {
           sprite.exports.forEach((e) => {
             if (affectedIds === null || e.includedAssetIds.some((id) => affectedIds?.includes(id)))
               e.isCurrent = false

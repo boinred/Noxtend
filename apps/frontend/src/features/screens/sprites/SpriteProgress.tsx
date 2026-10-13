@@ -1,7 +1,11 @@
 import type { ReactElement } from 'react'
-import { jobStatusLabel, type Job } from '@/domain/job/types'
+import { activeSourceTask, jobStatusLabel, type Job } from '@/domain/job/types'
 import { spriteProgressCounts } from '@/domain/sprites/rules'
-import type { SpritePhase, SpriteState } from '@/domain/sprites/types'
+import {
+  SPRITE_SOURCE_CANDIDATE_LIMIT,
+  type SpritePhase,
+  type SpriteState,
+} from '@/domain/sprites/types'
 import type { IconName } from '@/features/shell/Icon'
 import { spritePhaseLabel } from '../categoryLabels'
 import {
@@ -20,6 +24,17 @@ export function SpriteProgress({
   const total = sprite.assets.length
   const staticReview = counts.loops === 0 && sprite.phase === 'frameReview'
   const steps: { phase: SpritePhase; label: string; icon: IconName; done: boolean }[] = [
+    // 프롬프트 모드 출신 작업만 원본 준비 단계
+    ...(sprite.source
+      ? [
+          {
+            phase: 'sourceDraft' as const,
+            label: '원본 준비',
+            icon: 'sparkles' as const,
+            done: sprite.phase !== 'sourceDraft',
+          },
+        ]
+      : []),
     { phase: 'analyzing', label: '분석', icon: 'search', done: counts.analysis === 1 },
     { phase: 'planReview', label: '계획 검수', icon: 'prompt', done: false },
     {
@@ -67,12 +82,36 @@ export function SpriteProgress({
         ? 'baseReview'
         : sprite.phase
   const current = steps.findIndex((step) => step.phase === phase)
-  steps[1]!.done = current > 1
+  const plan = steps.find((step) => step.phase === 'planReview')!
+  plan.done = current > steps.indexOf(plan)
   const completed = steps.map(
     (step, index) =>
       step.done && (index < current || (index === current && sprite.phase === 'completed')),
   )
+  const sourceTask = sprite.phase === 'sourceDraft' ? activeSourceTask(job.tasks) : undefined
   const summaries: JobProgressSummary[] = [
+    ...(sprite.source
+      ? [
+          {
+            id: 'source',
+            label: '원본 후보',
+            value: `${sprite.source.candidates.length} / ${SPRITE_SOURCE_CANDIDATE_LIMIT}`,
+            hint: '원본 준비',
+            icon: 'sparkles' as const,
+          },
+        ]
+      : []),
+    ...(sourceTask
+      ? [
+          {
+            id: 'source-task',
+            label: '원본 공정',
+            value: sourceTask.kind === 'enhanceSpriteSource' ? '보완 중' : '원본 후보 생성 중',
+            hint: '실행·대기 중',
+            icon: 'clock' as const,
+          },
+        ]
+      : []),
     {
       id: 'analysis',
       label: '원본 분석 성공',

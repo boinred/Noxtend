@@ -470,13 +470,21 @@ export function jobPollDelayMs(
   attempt: number,
 ): number {
   const sourceTaskActive =
-    job.sprite?.phase === 'sourceDraft' &&
-    job.tasks.some(
-      (task) =>
-        (task.kind === 'enhanceSpriteSource' || task.kind === 'generateSpriteSource') &&
-        (task.status === 'pending' || task.status === 'running'),
-    )
+    job.sprite?.phase === 'sourceDraft' && activeSourceTask(job.tasks) !== undefined
   return sourceTaskActive ? 2_000 : nextPollDelayMs(attempt)
+}
+
+export function isSourceTask(task: Pick<JobTask, 'kind'>): boolean {
+  return task.kind === 'enhanceSpriteSource' || task.kind === 'generateSpriteSource'
+}
+
+// 원본 준비 공정은 작업당 하나만 실행·대기
+export function activeSourceTask<T extends Pick<JobTask, 'kind' | 'status'>>(
+  tasks: readonly T[],
+): T | undefined {
+  return tasks.find(
+    (task) => isSourceTask(task) && (task.status === 'pending' || task.status === 'running'),
+  )
 }
 
 // ─────────────────── 파츠 생성 (사이클 #7) ───────────────────

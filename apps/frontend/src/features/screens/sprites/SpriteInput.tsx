@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { useUpload } from '@/app/queries/useUpload'
 import { useProviders, useProviderModels, useProviderImageModels } from '@/app/queries/useProviders'
-import { useStartSpriteJob } from '@/app/queries/useSprites'
+import { useCreateSpriteDraft, useStartSpriteJob } from '@/app/queries/useSprites'
 import { apiErrorMessage, apiErrorStatus } from '@/app/queries/errors'
 import { readSpriteSource, spriteBackgroundJobPath } from '@/routes/paths'
 import type { SpriteView, SpriteOutputKind, SpriteRepeat } from '@/domain/sprites/types'
@@ -64,36 +64,58 @@ export function SpriteInput() {
     )
   const upload = useUpload()
   const start = useStartSpriteJob()
+  const draft = useCreateSpriteDraft()
   const [uploadError, setUploadError] = useState<string | null>(null)
-  // 프롬프트 모드의 원본 초안 흐름은 SpriteSourceDraftPanel 전환 전까지 제출 불가
-  const busy = upload.isPending || start.isPending
-  const hasSource = mode !== 'prompt' && (!!file || !!source)
+  const busy = upload.isPending || start.isPending || draft.isPending
+  const prompting = mode === 'prompt'
+  const description = prompt.trim()
+  const hasSource = prompting
+    ? description.length >= 1 && description.length <= 1000
+    : !!file || !!source
+  const blocked =
+    busy ||
+    providers.isError ||
+    !view ||
+    !kind ||
+    !hasSource ||
+    !supported ||
+    !textModel ||
+    !!textModels.errorMessage ||
+    !!imageModels.errorMessage
+  // 프롬프트 모드만 비활성 사유 표시
+  const reason =
+    !prompting || busy || !blocked
+      ? null
+      : !view || !kind
+        ? '시점과 결과 유형을 선택해 주세요'
+        : !hasSource
+          ? '장면 설명을 1~1000자로 입력해 주세요'
+          : providers.isError
+            ? '공급자를 다시 조회해 주세요'
+            : !textModel || textModels.errorMessage
+              ? '분석 모델을 선택해 주세요'
+              : '투명 배경을 지원하는 이미지 모델을 선택해 주세요'
+  const open = {
+    onSuccess: (receipt: { id: string }) => navigate(spriteBackgroundJobPath(receipt.id)),
+  }
   async function submit() {
-    if (
-      !view ||
-      !kind ||
-      !textProvider ||
-      !imageProvider ||
-      !textModel ||
-      !imageModel ||
-      !hasSource
-    )
+    if (blocked || !view || !kind || !textProvider || !imageProvider || !imageModel) return
+    const common = {
+      requestId: crypto.randomUUID(),
+      providerConfigId: textProvider.id,
+      model: textModel.id,
+      imageProviderConfigId: imageProvider.id,
+      imageModel: imageModel.id,
+      settings: { view, outputKind: kind, tileWidth, repeat },
+    }
+    if (prompting) {
+      draft.mutate({ ...common, description }, open)
       return
+    }
     setUploadError(null)
     try {
       const identity = file ? { uploadId: (await upload.mutateAsync(file)).id } : source!
-      start.mutate(
-        {
-          requestId: crypto.randomUUID(),
-          ...identity,
-          providerConfigId: textProvider.id,
-          model: textModel.id,
-          imageProviderConfigId: imageProvider.id,
-          imageModel: imageModel.id,
-          settings: { view, outputKind: kind, tileWidth, repeat },
-        },
-        { onSuccess: (receipt) => navigate(spriteBackgroundJobPath(receipt.id)) },
-      )
+      start.mutate({ ...common, ...identity }, open)
     } catch (error) {
       setUploadError(apiErrorMessage(error, '이미지 업로드에 실패했습니다. 다시 시도해 주세요'))
     }
@@ -288,48 +310,58 @@ export function SpriteInput() {
           {uploadError}
         </p>
       ) : null}
-      {start.error ? (
-        <div role="alert">
-          <p className={styles.error}>
-            {apiErrorStatus(start.error) === 409
-              ? '접수 충돌입니다. 입력을 확인하고 새 작업으로 다시 시작해 주세요. '
-              : ''}
-            {apiErrorMessage(start.error, '접수 응답을 받지 못했습니다')}
-          </p>
-          {(apiErrorStatus(start.error) === null ||
-            apiErrorStatus(start.error) === 0 ||
-            (apiErrorStatus(start.error) ?? 0) >= 500) &&
-          start.variables ? (
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() =>
-                start.mutate(start.variables!, {
-                  onSuccess: (receipt) => navigate(spriteBackgroundJobPath(receipt.id)),
-                })
-              }
-            >
-              같은 접수 요청 재전송
-            </Button>
-          ) : null}
-        </div>
+      {prompting ? (
+        <ReceiptError
+          error={draft.error}
+          busy={busy}
+          onResend={draft.variables ? () => draft.mutate(draft.variables!, open) : undefined}
+        />
+      ) : (
+        <ReceiptError
+          error={start.error}
+          busy={busy}
+          onResend={start.variables ? () => start.mutate(start.variables!, open) : undefined}
+        />
+      )}
+      {reason ? (
+        <p id="sprite-submit-reason" data-testid="sprite-submit-reason" className={styles.hint}>
+          {reason}
+        </p>
       ) : null}
       <Button
-        disabled={
-          busy ||
-          providers.isError ||
-          !view ||
-          !kind ||
-          !hasSource ||
-          !supported ||
-          !textModel ||
-          !!textModels.errorMessage ||
-          !!imageModels.errorMessage
-        }
+        disabled={blocked}
+        aria-describedby={reason ? 'sprite-submit-reason' : undefined}
         onClick={() => void submit()}
       >
-        {busy ? '접수 중…' : '2D 분석 시작'}
+        {prompting ? (busy ? '보완 중…' : '보완하기') : busy ? '접수 중…' : '2D 분석 시작'}
       </Button>
+    </div>
+  )
+}
+
+// 응답 유실·5xx만 같은 requestId 재전송, 409는 새 접수 필요
+function ReceiptError({
+  error,
+  busy,
+  onResend,
+}: {
+  error: unknown
+  busy: boolean
+  onResend?: () => void
+}) {
+  if (!error) return null
+  const status = apiErrorStatus(error)
+  return (
+    <div role="alert">
+      <p className={styles.error}>
+        {status === 409 ? '접수 충돌입니다. 입력을 확인하고 새 작업으로 다시 시작해 주세요. ' : ''}
+        {apiErrorMessage(error, '접수 응답을 받지 못했습니다')}
+      </p>
+      {(status === null || status === 0 || status >= 500) && onResend ? (
+        <Button variant="outline" disabled={busy} onClick={onResend}>
+          같은 접수 요청 재전송
+        </Button>
+      ) : null}
     </div>
   )
 }
