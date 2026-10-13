@@ -298,6 +298,30 @@ public sealed class SpriteSourceTaskTests
     }
 
     [Fact]
+    public async Task Generate_CandidateCapReachedDuringCallCleansUpSavedBlob()
+    {
+        var f = new PipelineFixture();
+        var (job, _) = await DraftJob(f);
+        for (var i = 0; i < SpriteSourceDraft.MaxCandidates - 1; i++)
+        {
+            var earlier = job.PlanSourceGeneration($"장면 {i}", Guid.NewGuid()).Value!;
+            Assert.Equal(RunTaskOutcome.Succeeded, await f.RunSpriteSourceGeneration.HandleAsync(earlier.Id, Ct));
+        }
+        var baseline = f.Blobs.Count;
+        var task = job.PlanSourceGeneration("마지막 장면", Guid.NewGuid()).Value!;
+        // 호출 중 다른 경로가 마지막 자리를 채운 경합 재현
+        var image = new CapturingImage(FakeImageProvider.Succeeding(), () => Assert.True(job.TryAddSourceCandidate(task.Id,
+            new(Guid.NewGuid(), "images/raced", "image/png", 64, 48, "마지막 장면", f.Clock.Now))));
+
+        Assert.Equal(RunTaskOutcome.Succeeded, await f.NewSpriteSourceGeneration(image).HandleAsync(task.Id, Ct));
+
+        var candidates = job.Sprites!.SourceDraft!.Candidates;
+        Assert.Equal(SpriteSourceDraft.MaxCandidates, candidates.Count);
+        Assert.Equal("images/raced", candidates[^1].BlobKey);
+        Assert.Equal(baseline, f.Blobs.Count);
+    }
+
+    [Fact]
     public async Task Generate_PublishedCandidateKeepsItsBlob()
     {
         var f = new PipelineFixture();

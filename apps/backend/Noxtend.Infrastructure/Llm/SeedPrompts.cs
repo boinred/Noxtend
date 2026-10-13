@@ -43,6 +43,8 @@ internal static class SeedPrompts
             sideView is a frontal, parallel-layer scene; topDown looks straight down; isometric uses a 2:1 diamond projection.
             layers means distinct depth layers that can be separated later; tiles means a repeatable tile composition
             laid out on clear cells that repeat along the settings repeat axes.
+            isometric with tiles: each repeating cell is a 2:1 diamond (width = 2 x height) and neighbouring cells
+            tile edge to edge; no perspective vanishing point and no street-level perspective scene.
             Draw one cohesive environment scene that fills the whole canvas with an opaque background.
             Follow the described art style, palette and mood; otherwise use clean painted game art.
             Do not add text, logos, UI, watermarks, borders, frames, checkerboards or split panels.
@@ -60,8 +62,11 @@ internal static class SeedPrompts
             isometric: a 2:1 diamond projection with consistent axes.
             layers: describe separable depth layers (far, middle, near) that fill the whole canvas.
             tiles: describe a repeatable tile composition, its cell layout and a seamless repeat along the settings repeat axes.
+            isometric with tiles: each repeating cell is a 2:1 diamond (width = 2 x height) and neighbouring cells
+            tile edge to edge; no perspective vanishing point and no street-level perspective scene.
             Keep the described art style, palette, mood and setting; add concrete composition, lighting and material detail.
-            Forbid text, logos, UI, watermarks, borders, frames and characters unless the description asks for them.
+            The generated prompt must state the view, projection and layer or tile conditions explicitly in its own words.
+            The generated prompt must forbid text, logos, UI, watermarks, borders, frames and characters unless the description asks for them.
             Return JSON with a single prompt string of at most 4000 characters.
             """, "Scene description: {{description}}\nSettings: {{settings}}",
             """

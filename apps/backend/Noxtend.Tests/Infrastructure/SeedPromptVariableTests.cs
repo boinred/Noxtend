@@ -17,6 +17,9 @@ namespace Noxtend.Tests.Infrastructure;
 /// </summary>
 public sealed class SeedPromptVariableTests
 {
+    private const string IsometricTiles =
+        "isometric with tiles: each repeating cell is a 2:1 diamond (width = 2 x height) and neighbouring cells";
+
     private static readonly Regex Placeholder = new(@"\{\{(\w+)\}\}", RegexOptions.Compiled);
 
     [Fact]
@@ -63,6 +66,7 @@ public sealed class SeedPromptVariableTests
         Assert.True(v1.IsSubsetOf(allowed));
         Assert.Equal(allowed.OrderBy(v => v), v2.OrderBy(v => v));
         Assert.Contains("authoritative", v2Seed.System);
+        Assert.Contains(IsometricTiles, v2Seed.System);
         Assert.True(v2Seed.Note.Length <= 500);
     }
 
@@ -74,6 +78,9 @@ public sealed class SeedPromptVariableTests
 
         Assert.Equal(PromptTemplate.AllowedVariables(LlmOperationKind.EnhanceSpriteSource).OrderBy(v => v), used.OrderBy(v => v));
         Assert.Contains("2:1 diamond", system);
+        Assert.Contains(IsometricTiles, system);
+        Assert.Contains("The generated prompt must state the view, projection and layer or tile conditions explicitly", system);
+        Assert.Contains("The generated prompt must forbid text, logos, UI", system);
         Assert.Contains("tile", system);
         Assert.True(note.Length <= 500);
         using var document = JsonDocument.Parse(schema);
