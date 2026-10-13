@@ -36,7 +36,8 @@
 
 - rollout·로그의 migration 결과, health, Frontend API 주소/CORS, 실제 이미지·환경을 확인한다. 필요한 최소 기능은 Fake로 확인하며 미실행 항목을 보고한다.
 - 기본 포트 포워딩은 스크립트 종료 시 사라진다. 사용자 터미널에서 `-d`/`--detach`로 백그라운드에 남기거나 `--forward` 또는 `kubectl -n noxtend port-forward svc/api 18080:8080`으로 유지한다. `-d`는 PID·로그 경로·종료 명령을 출력하며 API 파드 재시작 후 자동 재연결하지 않는다. 에이전트의 시간 제한 있는 백그라운드 실행에 맡기지 않는다.
-- 스크립트 회귀는 `python3 deploy/test_local_up.py`로 확인한다. 임시 디렉터리의 가짜 Docker·kubectl·curl을 사용하며 실제 배포·AI 호출 없이 detach 수명·SIGHUP·포트 충돌·실패 정리를 검증한다.
+- 기동 전 18080 listener 전체를 확인하고 현재 사용자·kubectl 실행파일·`noxtend`·`svc/api 18080:8080`이 확인된 포워딩만 TERM으로 종료한다. 명시 context는 현재 context와 일치해야 하며 context 생략은 기존 스크립트 명령 형태에 한해 허용한다. 다른 대상이나 미확인 listener가 있으면 아무 listener도 종료하지 않고 빌드·apply 전에 실패한다. TERM 후 포트 해제는 최대 5초 기다리며 자동 재연결은 지원하지 않는다.
+- 스크립트 회귀는 `python3 deploy/test_local_up.py`로 확인한다. 임시 디렉터리의 가짜 Docker·kubectl·curl·lsof·ps와 격리 PATH를 사용하며 실제 호스트 listener 조회·종료 없이 fixture 프로세스의 포워딩 교체·충돌 보호·TERM 지연/거부·도구 누락·detach 수명·SIGHUP·실패 정리를 검증한다.
 - 복구 전 기존 이미지·환경과 DB·Blob·Data Protection 키 호환성을 확인한다. 식별 가능한 이미지 태그/digest·적용 migration을 배포 이력에 기록한다.
 
 정적 검증 범위와 완료 보고는 [verification.md](verification.md)를 따른다.

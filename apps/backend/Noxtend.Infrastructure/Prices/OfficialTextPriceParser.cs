@@ -113,18 +113,45 @@ internal static class OfficialTextPriceParser
             foreach (var row in element.QuerySelectorAll("tbody tr"))
             {
                 var cells = row.Children.ToArray();
-                if (cells.Length != 6) continue;
+                if (cells.Length == 0) continue;
                 var link = cells[0].QuerySelector("a[href]")?.GetAttribute("href");
                 if (link is null || !link.StartsWith("/docs/en/models/", StringComparison.Ordinal) || !link.EndsWith("/overview", StringComparison.Ordinal)) continue;
                 var exactId = "claude-" + link["/docs/en/models/".Length..^"/overview".Length];
                 if (exactId != model) continue;
-                if (!TokenMoney(Text(cells[1]), out var input) || !TokenMoney(Text(cells[2]), out var output)) continue;
-                if (cells[0].GetAttribute("rowspan") is not (null or "1"))
+                if (cells.Length != 6)
                 {
-                    yield return new Parsed("text", Standard, null, Text(row), "컨텍스트 구간별 요금 확인 필요");
+                    yield return new Parsed("text", Standard, null, Text(row), "정확한 모델·Standard 요금·단위 확인 필요");
                     continue;
                 }
-                yield return new Parsed("text", Standard, new(input, output), "Model pricing; Base tokens; " + Text(row), null);
+                var evidence = "Model pricing; Base tokens; " + Text(row);
+                var span = cells[0].GetAttribute("rowspan") ?? "1";
+                if (span != "1")
+                {
+                    var next = row.NextElementSibling;
+                    var longCells = next?.Children.ToArray() ?? [];
+                    if (next is not null) evidence += "; " + Text(next);
+                    var valid = span == "2" && (cells[0].GetAttribute("colspan") ?? "1") == "1" && longCells.Length == 5 &&
+                        cells.Skip(1).Concat(longCells).All(c =>
+                            (c.GetAttribute("rowspan") ?? "1") == "1" && (c.GetAttribute("colspan") ?? "1") == "1");
+                    OfficialPriceTerms? terms = null;
+                    if (valid && ContextTokenMoney(cells[1], "up to", out var input, out var upper) &&
+                        ContextTokenMoney(longCells[0], "over", out var longInput, out var lower) && upper == lower &&
+                        upper < int.MaxValue && TokenMoney(Text(cells[2]), out var output) &&
+                        TokenMoney(Text(longCells[1]), out var longOutput))
+                    {
+                        // 상한 초과부터 장문 요금
+                        terms = new(input, output, upper + 1, longInput, longOutput);
+                    }
+                    yield return new Parsed("text", Standard, terms, evidence,
+                        terms is null ? span == "2" ? "정확한 모델·Standard 요금·단위 확인 필요" : "컨텍스트 구간별 요금 확인 필요" : null);
+                    continue;
+                }
+                if (!TokenMoney(Text(cells[1]), out var singleInput) || !TokenMoney(Text(cells[2]), out var singleOutput))
+                {
+                    yield return new Parsed("text", Standard, null, evidence, "정확한 모델·Standard 요금·단위 확인 필요");
+                    continue;
+                }
+                yield return new Parsed("text", Standard, new(singleInput, singleOutput), evidence, null);
             }
         }
     }
@@ -200,6 +227,24 @@ internal static class OfficialTextPriceParser
             mixedInput = audioRate != money;
         }
         return true;
+    }
+
+    private static bool ContextTokenMoney(IElement cell, string range, out decimal money, out int limit)
+    {
+        money = 0;
+        limit = 0;
+        // 가격과 조건 사이 DOM 경계 보존
+        var clone = (IElement)cell.Clone(true);
+        var conditions = clone.QuerySelectorAll("*").Where(element =>
+            Text(element).StartsWith("for prompts ", StringComparison.Ordinal) &&
+            !element.Children.Any()).ToArray();
+        if (conditions.Length != 1) return false;
+        var condition = Text(conditions[0]);
+        conditions[0].Remove();
+        if (!TokenMoney(Text(clone), out money)) return false;
+        var match = Regex.Match(condition, "^for prompts " + range + @" ([0-9]{1,3}(?:,[0-9]{3})*|[0-9]+) tokens$");
+        return match.Success && int.TryParse(match.Groups[1].Value.Replace(",", ""), NumberStyles.None,
+            CultureInfo.InvariantCulture, out limit) && limit > 0;
     }
 
     private static bool TokenMoney(string value, out decimal money)

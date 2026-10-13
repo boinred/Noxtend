@@ -14,6 +14,7 @@ description: Select Noxtend-specific implementation, UI skill routing, infrastru
 | Frontend 구현·UI·모션 스킬 선택·API 연동 | [references/frontend.md](references/frontend.md) |
 | 로컬 인프라·Azure·Kubernetes·루트 CI | [references/deployment.md](references/deployment.md) |
 | 테스트·스타일 설정·문서 검증·완료 보고 | [references/verification.md](references/verification.md) |
+| 설계·계획 문서 작성·구현 실행 방식 | [references/execution.md](references/execution.md) |
 
 변경하는 영역의 자료와 검증 자료만 읽는다. API 계약 변경은 Backend와 Frontend 양쪽 자료를 읽고, 실제 DB·배포 변경은 배포 자료도 확인한다.
 

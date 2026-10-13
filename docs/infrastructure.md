@@ -221,11 +221,12 @@ pnpm dev
 
 `deploy/local-up.sh`는 다음 작업을 자동화합니다.
 
-1. `noxtend-api:local` 이미지 빌드
-2. Docker Desktop Kubernetes의 containerd로 이미지 반입
-3. namespace·Secret·4개 워크로드 적용
-4. API Deployment 재시작과 새 파드 rollout 대기
-5. 임시 포트 포워딩을 통한 `/health` 확인(`-d`/`--detach`는 백그라운드 유지, `--forward`는 `Ctrl+C`까지 유지)
+1. 18080 listener 사전 검사 및 확인된 현재 사용자의 Noxtend 포워딩만 TERM 종료(명시 context는 현재 context와 일치, 생략은 기존 스크립트 명령 형태만 허용)
+2. `noxtend-api:local` 이미지 빌드
+3. Docker Desktop Kubernetes의 containerd로 이미지 반입
+4. namespace·Secret·4개 워크로드 적용
+5. API Deployment 재시작과 새 파드 rollout 대기
+6. 임시 포트 포워딩을 통한 `/health` 확인(`-d`/`--detach`는 백그라운드 유지, `--forward`는 `Ctrl+C`까지 유지)
 
 매니페스트만 변경했고 API 이미지를 다시 만들 필요가 없다면 다음 명령을 사용할 수
 있습니다.

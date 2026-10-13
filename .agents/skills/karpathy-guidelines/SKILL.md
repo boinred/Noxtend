@@ -22,12 +22,18 @@ Write the simplest code that provably works. Every rule below exists to keep cha
 - Fail loudly. Surface errors at the boundary where they occur; never swallow exceptions or add silent fallbacks that mask defects.
 - Remove dead code, unused flags, and commented-out blocks only when they are part of the requested change; preserve unrelated work.
 
+## Comments
+
+- 주석은 비자명한 결정·상태 전이 조건·동시성·재처리·호환성의 이유만 설명하고 코드 동작을 반복하지 않는다.
+- 일반 주석은 단답형의 짧은 명사구로 쓴다. 제품·도메인은 한국어(예: `// 검수 승인 전 생성 보류`), 빌드·CI·배포는 영어로 쓰고 서술형 종결어미·마침표·여러 문장을 피한다. C#·JS·TS는 `//`, 그 밖의 언어는 문법상 필요한 주석 구문을 쓴다.
+- XML 문서화·라이선스·자동 생성 주석·도구 지시문은 기존 형식을 유지한다. 기존 주석을 일괄 수정하지 않는다.
+
 ## Changing
 
 - Keep diffs small and independently verifiable. One behavior per change; unrelated cleanup goes in its own change.
 - Match the surrounding code: naming, idioms, comment density, and the repository's Korean/English comment rules.
 - Comments explain **why** — a decision, a trade-off, a trap — never restate what the code does.
-- Use `//` for ordinary C#/JavaScript/TypeScript comments and finish with a short noun phrase. Use syntax-required JSX/CSS/YAML/shell comments, XML documentation, and tool directives as specified by the root `AGENTS.md`; do not rewrite existing comments in bulk.
+- Use `//` for ordinary C#/JavaScript/TypeScript comments and finish with a short noun phrase. Use syntax-required JSX/CSS/YAML/shell comments, XML documentation, and tool directives as specified in `## Comments`; do not rewrite existing comments in bulk.
 - When touching existing code, leave it slightly simpler than found, but never bundle a rewrite into a feature change.
 
 ## Reviewing

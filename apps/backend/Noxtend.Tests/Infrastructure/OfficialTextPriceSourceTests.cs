@@ -140,6 +140,20 @@ public sealed class OfficialTextPriceSourceTests
     }
 
     [Theory]
+    [InlineData("unit-missing")]
+    [InlineData("missing-cell")]
+    public void Anthropic_unreadable_rows_keep_evidence_and_collection_error_reason(string mutation)
+    {
+        var html = StandardTable("anthropic", "1.75");
+        html = mutation == "unit-missing" ? html.Replace(" / MTok", "") : html.Replace("<td>$4</td>", "");
+        var candidate = Assert.Single(OfficialTextPriceParser.Parse("anthropic", System.Text.Encoding.UTF8.GetBytes(html),
+            "https://official.example/pricing", DateTimeOffset.UtcNow, ["claude-synthetic"]));
+        Assert.Null(candidate.Terms);
+        Assert.Equal("정확한 모델·Standard 요금·단위 확인 필요", candidate.BlockedReason);
+        Assert.Contains("$1.75", Assert.Single(candidate.Evidence).Conditions);
+    }
+
+    [Theory]
     [InlineData("openai", "gpt-5.3-codex")]
     [InlineData("anthropic", "claude-sonnet-4-6")]
     [InlineData("google", "gemini-2.5-flash")]
@@ -239,6 +253,74 @@ public sealed class OfficialTextPriceSourceTests
             Assert.NotNull(candidate.BlockedReason);
         }
     }
+
+    internal static string AnthropicTierTable => """
+        <h2>Model pricing</h2><table><thead><tr><th>Model</th><th colspan="2">Base tokens</th><th colspan="3">Prompt caching</th></tr>
+        <tr><th>Name</th><th>Input</th><th>Output</th><th>5m writes</th><th>1h writes</th><th>Hits and refreshes</th></tr></thead>
+        <tbody><tr><td rowspan="2"><a href="/docs/en/models/haiku-5-5/overview">Claude Haiku 5.5</a></td>
+        <td><div>$0.10<!-- --> <span>/ MTok</span><span>for prompts up to 100,000 tokens</span></div></td><td>$0.50 / MTok</td><td>$0.125 / MTok</td><td>$0.20 / MTok</td><td>$0.01 / MTok</td></tr>
+        <tr><td><div>$0.50<!-- --> <span>/ MTok</span><span>for prompts over 100,000 tokens</span></div></td><td>$2.50 / MTok</td><td>$0.625 / MTok</td><td>$1 / MTok</td><td>$0.05 / MTok</td></tr></tbody></table>
+        """;
+
+    [Fact]
+    public void Anthropic_two_contiguous_context_rows_keep_both_prices_and_inclusive_threshold()
+    {
+        var candidate = ParseAnthropicTier(AnthropicTierTable);
+        Assert.Null(candidate.BlockedReason);
+        Assert.Equal(new Noxtend.Tuning.Domain.Ports.OfficialPriceTerms(0.10m, 0.50m, 100001, 0.50m, 2.50m), candidate.Terms);
+        var evidence = Assert.Single(candidate.Evidence).Conditions;
+        Assert.Contains("up to 100,000", evidence);
+        Assert.Contains("over 100,000", evidence);
+        Assert.Contains("$2.50", evidence);
+    }
+
+    [Fact]
+    public void Anthropic_context_limit_is_read_from_source_and_identical_duplicates_agree()
+    {
+        var html = AnthropicTierTable.Replace("100,000", "42");
+        var candidate = ParseAnthropicTier(html + html);
+        Assert.Null(candidate.BlockedReason);
+        Assert.Equal(43, candidate.Terms!.LongContextFrom);
+        Assert.Null(ParseAnthropicTier(AnthropicTierTable + AnthropicTierTable.Replace("$2.50", "$9.50")).Terms);
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("missing-cell")]
+    [InlineData("missing-span")]
+    [InlineData("mismatch")]
+    [InlineData("overflow")]
+    [InlineData("unit")]
+    [InlineData("span")]
+    [InlineData("other-model")]
+    [InlineData("batch")]
+    public void Anthropic_ambiguous_context_rows_are_blocked_even_beside_valid_duplicate(string mutation)
+    {
+        var html = mutation switch
+        {
+            "missing" => AnthropicTierTable[..AnthropicTierTable.IndexOf("<tr><td><div>$0.50")] + "</tbody></table>",
+            "missing-cell" => AnthropicTierTable.Replace("<td>$0.01 / MTok</td>", ""),
+            "missing-span" => AnthropicTierTable.Replace(" rowspan=\"2\"", ""),
+            "mismatch" => AnthropicTierTable.Replace("over 100,000", "over 200,000"),
+            "overflow" => AnthropicTierTable.Replace("100,000", "2,147,483,647"),
+            "unit" => AnthropicTierTable.Replace("$2.50 / MTok", "$2.50 / tokens"),
+            "span" => AnthropicTierTable.Replace("rowspan=\"2\"", "rowspan=\"3\""),
+            "other-model" => AnthropicTierTable.Replace("<tr><td><div>$0.50", "<tr><td><a href=\"/docs/en/models/other/overview\">Other</a></td><td><div>$0.50"),
+            _ => AnthropicTierTable.Replace("for prompts over", "Batch for prompts over"),
+        };
+        Assert.Equal(mutation == "span" ? "컨텍스트 구간별 요금 확인 필요" : "정확한 모델·Standard 요금·단위 확인 필요",
+            ParseAnthropicTier(html).BlockedReason);
+        foreach (var source in new[] { html, AnthropicTierTable + html, html + AnthropicTierTable })
+        {
+            var candidate = ParseAnthropicTier(source);
+            Assert.Null(candidate.Terms);
+            Assert.NotNull(candidate.BlockedReason);
+        }
+    }
+
+    private static Noxtend.Tuning.Domain.Ports.OfficialPriceCandidate ParseAnthropicTier(string html)
+        => Assert.Single(OfficialTextPriceParser.Parse("anthropic", System.Text.Encoding.UTF8.GetBytes(html),
+            "https://official.example/pricing", DateTimeOffset.UtcNow, ["claude-haiku-5-5"]));
 
     private static IReadOnlyList<Noxtend.Tuning.Domain.Ports.OfficialPriceCandidate> Parse(
         string provider, string model, string? mutation = null)

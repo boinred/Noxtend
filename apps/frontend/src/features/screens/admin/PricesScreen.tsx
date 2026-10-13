@@ -9,6 +9,7 @@
  * 공급자 인상은 새 행, 오타는 수정 — 이 구분이 흐려지면 지난달 지출이 조용히 바뀐다.
  */
 import { useState } from 'react'
+import { Tooltip } from 'radix-ui'
 import { PageContainer } from '@/features/screens/PageContainer'
 import { Button } from '@/components/ui/button'
 import { AdminTabs } from './AdminTabs'
@@ -123,69 +124,112 @@ export function PricesScreen() {
         </p>
       ) : (
         <div className={styles.panel}>
-          <table className={styles.table} data-testid="price-table">
-            <thead>
-              <tr>
-                <th>모델</th>
-                <th>시행일</th>
-                <th>입력 $/1M</th>
-                <th>출력 $/1M</th>
-                <th>장당 $</th>
-                <th>장문 구간</th>
-                <th>메모</th>
-                <th aria-label="동작" />
-              </tr>
-            </thead>
-            <tbody>
-              {groups.flatMap((group) =>
-                group.rows.map((price, index) => (
-                  <tr key={price.id} data-testid="price-row" data-model={price.model}>
-                    {/* 모델명은 묶음의 첫 행에만 — 같은 값을 반복하면 묶음 경계가 안 보인다 */}
-                    <td>
-                      {index === 0 ? <span className={styles.version}>{price.model}</span> : null}
-                    </td>
-                    <td>
-                      {formatDate(price.effectiveFrom)}
-                      {price.id === group.current?.id ? (
-                        <span className={styles.activeBadge} data-testid="price-current">
-                          적용 중
-                        </span>
-                      ) : isScheduled(price) ? (
-                        <span className={styles.scheduledBadge} data-testid="price-scheduled">
-                          예정
-                        </span>
-                      ) : null}
-                    </td>
-                    <td className={styles.amount}>{formatUsd(price.inputPerMillion)}</td>
-                    <td className={styles.amount}>{formatUsd(price.outputPerMillion)}</td>
-                    {/* 이미지 모델만 값을 갖는다 — 토큰 단가와 한눈에 구분돼야 한다 (D-8) */}
-                    <td className={styles.amount} data-testid="price-per-image">
-                      {price.perImage === null ? '—' : formatUsd(price.perImage)}
-                    </td>
-                    <td className={styles.note}>{describeLongTier(price)}</td>
-                    <td className={styles.note}>{price.note}</td>
-                    <td>
-                      <div className={styles.actionRow}>
-                        <Button onClick={() => setEditing(price)} data-testid="price-edit">
-                          수정
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          onClick={() => void confirmRemove(price)}
-                          data-testid="price-delete"
-                        >
-                          삭제
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                )),
-              )}
-            </tbody>
-          </table>
+          <Tooltip.Provider delayDuration={300}>
+            <table className={styles.table} data-testid="price-table">
+              <thead>
+                <tr>
+                  <th>모델</th>
+                  <th>시행일</th>
+                  <th>입력 $/1M</th>
+                  <th>출력 $/1M</th>
+                  <th>장당 $</th>
+                  <th>장문 구간</th>
+                  <th aria-label="동작" />
+                </tr>
+              </thead>
+              <tbody>
+                {groups.flatMap((group) =>
+                  group.rows.map((price) => (
+                    <tr key={price.id} data-testid="price-row" data-model={price.model}>
+                      <td>
+                        <PriceModelNote price={price} />
+                      </td>
+                      <td className="whitespace-nowrap">
+                        {formatDate(price.effectiveFrom)}
+                        {price.id === group.current?.id ? (
+                          <span
+                            className={`${styles.activeBadge} inline-flex whitespace-nowrap`}
+                            data-testid="price-current"
+                          >
+                            적용 중
+                          </span>
+                        ) : isScheduled(price) ? (
+                          <span
+                            className={`${styles.scheduledBadge} inline-flex whitespace-nowrap`}
+                            data-testid="price-scheduled"
+                          >
+                            예정
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className={styles.amount}>{formatUsd(price.inputPerMillion)}</td>
+                      <td className={styles.amount}>{formatUsd(price.outputPerMillion)}</td>
+                      {/* 이미지 모델만 값을 갖는다 — 토큰 단가와 한눈에 구분돼야 한다 (D-8) */}
+                      <td className={styles.amount} data-testid="price-per-image">
+                        {price.perImage === null ? '—' : formatUsd(price.perImage)}
+                      </td>
+                      <td className={styles.note}>{describeLongTier(price)}</td>
+                      <td>
+                        <div className={styles.actionRow}>
+                          <Button onClick={() => setEditing(price)} data-testid="price-edit">
+                            수정
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            onClick={() => void confirmRemove(price)}
+                            data-testid="price-delete"
+                          >
+                            삭제
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  )),
+                )}
+              </tbody>
+            </table>
+          </Tooltip.Provider>
         </div>
       )}
     </PageContainer>
+  )
+}
+
+function PriceModelNote({ price }: { price: ModelPrice }) {
+  const [open, setOpen] = useState(false)
+
+  if (!price.note.trim()) {
+    return <span className={`${styles.version} whitespace-nowrap`}>{price.model}</span>
+  }
+
+  return (
+    <Tooltip.Root open={open} onOpenChange={setOpen}>
+      <Tooltip.Trigger asChild>
+        <Button
+          variant="ghost"
+          className={`${styles.version} h-auto rounded-sm p-0 text-sm hover:bg-transparent active:scale-100`}
+          aria-label={`${price.model} 메모`}
+          onClick={(event) => {
+            // 터치 입력의 메모 열기
+            event.preventDefault()
+            setOpen(true)
+          }}
+        >
+          {price.model}
+        </Button>
+      </Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Content
+          side="top"
+          sideOffset={8}
+          collisionPadding={12}
+          className="z-50 max-h-[var(--radix-tooltip-content-available-height)] max-w-[min(24rem,calc(100vw-24px))] overflow-y-auto rounded-lg border border-border bg-popover px-3 py-2 text-sm leading-relaxed break-words whitespace-pre-wrap text-popover-foreground shadow-md"
+          data-testid="price-note-tooltip"
+        >
+          {price.note}
+        </Tooltip.Content>
+      </Tooltip.Portal>
+    </Tooltip.Root>
   )
 }
 
@@ -431,7 +475,7 @@ function describeLongTier(price: ModelPrice): string {
   if (price.longContextFrom === null) return '—'
 
   const from = price.longContextFrom.toLocaleString('ko-KR')
-  return `${from} 초과 → ${formatUsd(price.longInputPerMillion ?? 0)} / ${formatUsd(price.longOutputPerMillion ?? 0)}`
+  return `${from} 이상 → ${formatUsd(price.longInputPerMillion ?? 0)} / ${formatUsd(price.longOutputPerMillion ?? 0)}`
 }
 
 function formatDate(iso: string): string {

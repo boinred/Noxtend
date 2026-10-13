@@ -920,10 +920,17 @@ test('pending prompt generation blocks start and generation across tabs', async 
     await route.fallback()
   })
   await page.getByTestId('sprite-prompt-generate').click()
-  await expect(page.getByTestId('sprite-prompt-generate')).toBeDisabled()
-  await expect(page.getByRole('status')).toContainText(
-    '생성 중에 페이지를 떠나면 결과를 다시 볼 수 없습니다',
-  )
+  await expect(page.getByTestId('sprite-prompt-generate')).toHaveCount(0)
+  await expect(page.getByRole('status')).toHaveText('기준 이미지 생성 중')
+  expect(
+    await page.getByRole('status').evaluate((node) => node.closest('[aria-busy="true"]') !== null),
+  ).toBe(false)
+  const progress = page.getByRole('progressbar', { name: '기준 이미지 생성 중' })
+  await expect(progress).toBeVisible()
+  await expect(progress).not.toHaveAttribute('aria-valuenow')
+  await expect(
+    page.getByText('이 화면을 유지해 주세요. 페이지를 떠나면 생성 결과를 다시 볼 수 없습니다.'),
+  ).toBeVisible()
   await expect(page.getByRole('button', { name: '접수 중…', exact: true })).toBeDisabled()
   await page.getByTestId('mode-tab-image').click()
   await page
@@ -931,9 +938,83 @@ test('pending prompt generation blocks start and generation across tabs', async 
     .setInputFiles({ name: 'source.png', mimeType: 'image/png', buffer: SPRITE_SOURCE_PNG })
   await expect(page.getByRole('button', { name: '접수 중…', exact: true })).toBeDisabled()
   await page.getByTestId('mode-tab-prompt').click()
-  await expect(page.getByTestId('sprite-prompt-generate')).toBeDisabled()
+  await expect(progress).toBeVisible()
+  await expect(page.getByTestId('sprite-prompt-generate')).toHaveCount(0)
   release()
   await expect(page.getByTestId('sprite-prompt-result')).toHaveCount(2)
+  await expect(progress).toHaveCount(0)
+  await expect(page.getByTestId('sprite-prompt-generate')).toBeEnabled()
+})
+
+for (const width of [1440, 390])
+  for (const theme of ['dark', 'light'])
+    test(`prompt generation pending stays bounded at ${width}px ${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await installFakeApi(page, { sprites: {} })
+      await promptInput(page)
+      const toggle = page.getByTestId('theme-toggle')
+      if ((await toggle.getAttribute('data-theme-state')) !== theme) await toggle.click()
+      let release!: () => void
+      const pending = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      await page.route('**/api/uploads/generate', async (route) => {
+        await pending
+        await route.fallback()
+      })
+      await page.getByTestId('sprite-prompt-generate').click()
+      const progress = page.getByRole('progressbar', { name: '기준 이미지 생성 중' })
+      await expect(progress).toBeVisible()
+      const segment = progress.locator('div')
+      const transform = await segment.evaluate((node) => getComputedStyle(node).transform)
+      await expect
+        .poll(() => segment.evaluate((node) => getComputedStyle(node).transform))
+        .not.toBe(transform)
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+        .toBe(true)
+      await progress.scrollIntoViewIfNeeded()
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await expect
+        .poll(() => segment.evaluate((node) => getComputedStyle(node).animationName))
+        .toBe('none')
+      const dimensions = await progress.evaluate((node) => ({
+        track: node.clientWidth,
+        segment: node.firstElementChild!.getBoundingClientRect().width,
+      }))
+      expect(dimensions.segment).toBeGreaterThan(0)
+      expect(dimensions.segment).toBeLessThan(dimensions.track)
+      release()
+      await expect(page.getByTestId('sprite-prompt-result')).toHaveCount(1)
+      await expect(progress).toHaveCount(0)
+    })
+
+test('prompt generation pending hides old failure and restores retry after failure', async ({
+  page,
+}) => {
+  const records: NonNullable<SpriteFakeOptions['records']> = []
+  await installFakeApi(page, { sprites: { records, generateErrorOnce: true } })
+  await promptInput(page)
+  await page.getByTestId('sprite-prompt-generate').click()
+  await expect(page.getByRole('alert')).toContainText('공급자 호출 실패')
+  await expect(page.getByRole('progressbar')).toHaveCount(0)
+  let release!: () => void
+  const pending = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await page.route('**/api/uploads/generate', async (route) => {
+    await pending
+    await route.fallback()
+  })
+  await page.getByTestId('sprite-prompt-generate').click()
+  await expect(page.getByRole('progressbar', { name: '기준 이미지 생성 중' })).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  release()
+  await expect(page.getByTestId('sprite-prompt-result')).toHaveCount(1)
+  await expect(page.getByRole('progressbar')).toHaveCount(0)
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect(page.getByTestId('sprite-prompt-generate')).toBeEnabled()
+  expect(records).toHaveLength(2)
 })
 
 for (const options of [{}, { unsupportedModel: true }, { imageModelsError: true }])

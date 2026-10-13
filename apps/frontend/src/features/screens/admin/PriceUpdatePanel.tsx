@@ -199,7 +199,16 @@ export function PriceUpdatePanel() {
               className="space-y-2 rounded-lg border border-border p-3"
             >
               {preview.providers.map((p) => (
-                <p key={p.providerConfigId}>
+                <p
+                  key={p.providerConfigId}
+                  className={
+                    p.status === 'failed' || p.modelListStatus === 'failed'
+                      ? 'text-destructive'
+                      : p.status === 'partial' || p.modelListStatus === 'partial'
+                        ? 'text-[var(--accent-amber)]'
+                        : undefined
+                  }
+                >
                   {providerKindLabel(p.provider)} ·{' '}
                   {providers.providers.find((config) => config.id === p.providerConfigId)
                     ?.displayName ?? p.providerConfigId}{' '}
@@ -410,7 +419,7 @@ function describeTerms(terms: PriceTerms | null) {
     terms.perImage === null ? null : `결과당 $${terms.perImage}`,
     terms.longContextFrom === null
       ? null
-      : `${terms.longContextFrom.toLocaleString()} tokens 초과 입력 $${terms.longInputPerMillion} / 출력 $${terms.longOutputPerMillion} per 1M`,
+      : `${terms.longContextFrom.toLocaleString()} tokens 이상 입력 $${terms.longInputPerMillion} / 출력 $${terms.longOutputPerMillion} per 1M`,
   ]
   return values.filter(Boolean).join(' · ') || 'USD 단가 미확인'
 }

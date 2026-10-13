@@ -29,7 +29,7 @@ AI 에이전트가 작업에 필요한 코드와 테스트를 찾는 첫 안내�
 | Frontend 화면·쿼리·API 연동 | [frontend.md](frontend.md) |
 | HTTP 계약 변경 | backend.md와 frontend.md 양쪽 |
 | 로컬 실행·인프라·배포 | [인프라 구성도](../infrastructure.md), [로컬 기동 절차](../../deploy/k8s/README.md), [배포 지침](../../deploy/AGENTS.md) |
-| 설계·계획 문서·실행 방식·검사 훅 | [설계 승인 후 실행 방식](../../AGENTS.md#설계-승인-후-실행-방식), [검증 자료](../../.agents/skills/noxtend-workflow/references/verification.md#설계계획-문서-훅) |
+| 설계·계획 문서·실행 방식·검사 훅 | [설계 승인 후 실행 방식](../../.agents/skills/noxtend-workflow/references/execution.md#설계-승인-후-실행-방식), [검증 자료](../../.agents/skills/noxtend-workflow/references/verification.md#설계계획-문서-훅) |
 
 ## 공통 진입점과 경계
 
