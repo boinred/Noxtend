@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Anthropic;
 using Anthropic.Core;
 using Anthropic.Models.Messages;
@@ -91,8 +90,7 @@ public sealed class AnthropicProvider : ILlmProvider
         {
             Format = new JsonOutputFormat
             {
-                Schema = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
-                    request.JsonSchema)!,
+                Schema = AnthropicJsonSchema.ForStructuredOutput(request.JsonSchema),
             },
         },
 
