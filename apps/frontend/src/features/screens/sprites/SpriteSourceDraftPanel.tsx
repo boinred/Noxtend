@@ -54,7 +54,9 @@ export function SpriteSourceDraftPanel({
   const locked = disabled || canceled || pending || activeSourceTask(tasks) !== undefined
   const prompt = draft.prompt.trim()
   const full = source.candidates.length >= SPRITE_SOURCE_CANDIDATE_LIMIT
-  const selected = source.candidates.some((candidate) => candidate.id === selectedId)
+  const selectedIndex = source.candidates.findIndex((candidate) => candidate.id === selectedId)
+  const selected = selectedIndex >= 0
+  const count = source.candidates.length
   // 화면에 보이는 서버 상태 기준 revision
   function context() {
     setError(null)
@@ -162,33 +164,56 @@ export function SpriteSourceDraftPanel({
             <p className={styles.hint}>프롬프트를 직접 입력해 생성할 수 있습니다</p>
           ) : null}
         </div>
-        {source.candidates.length > 0 ? (
-          <div data-testid="sprite-source-candidates" className={styles.results}>
-            {source.candidates.map((candidate, index) => (
-              <div key={candidate.id} className="flex min-w-0 flex-col gap-1.5">
-                <button
-                  type="button"
-                  data-testid="sprite-source-candidate"
-                  className={styles.result}
-                  aria-pressed={candidate.id === selectedId}
-                  aria-label={`원본 후보 ${index + 1} 선택`}
-                  disabled={locked}
-                  onClick={() => setSelectedId(candidate.id === selectedId ? null : candidate.id)}
-                >
-                  <img
-                    src={spriteSourceCandidateUrl(jobId, candidate.id)}
-                    alt=""
-                    className={styles.image}
-                  />
-                </button>
-                <details className="min-w-0 text-xs text-muted-foreground">
-                  <summary className="cursor-pointer">사용한 프롬프트</summary>
-                  <p className="mt-1 leading-relaxed whitespace-pre-wrap wrap-anywhere">
-                    {candidate.prompt}
+        {count > 0 ? (
+          <div className="flex min-w-0 flex-col gap-3">
+            {selected && count > 1 ? (
+              <figure
+                data-testid="sprite-source-selected"
+                className="m-0 flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-[var(--sunken-bg)] p-2"
+              >
+                <img
+                  src={spriteSourceCandidateUrl(jobId, source.candidates[selectedIndex]!.id)}
+                  alt={`선택한 원본 후보 ${selectedIndex + 1}`}
+                  className={`${styles.candidateImage} rounded-md`}
+                />
+                <figcaption className="flex min-w-0 flex-col gap-1 px-1 pb-1">
+                  <span className="text-xs text-muted-foreground">사용한 프롬프트</span>
+                  <p className="min-w-0 text-sm leading-relaxed whitespace-pre-wrap wrap-anywhere text-foreground">
+                    {source.candidates[selectedIndex]!.prompt}
                   </p>
-                </details>
-              </div>
-            ))}
+                </figcaption>
+              </figure>
+            ) : null}
+            <div
+              data-testid="sprite-source-candidates"
+              className={styles.results[count === 1 ? 1 : count === 2 ? 2 : 'many']}
+            >
+              {source.candidates.map((candidate, index) => (
+                <div key={candidate.id} className="flex min-w-0 flex-col gap-1.5">
+                  <button
+                    type="button"
+                    data-testid="sprite-source-candidate"
+                    className={styles.result}
+                    aria-pressed={candidate.id === selectedId}
+                    aria-label={`원본 후보 ${index + 1} 선택`}
+                    disabled={locked}
+                    onClick={() => setSelectedId(candidate.id === selectedId ? null : candidate.id)}
+                  >
+                    <img
+                      src={spriteSourceCandidateUrl(jobId, candidate.id)}
+                      alt=""
+                      className={styles.candidateImage}
+                    />
+                  </button>
+                  <details open={count === 1} className="min-w-0 text-xs text-muted-foreground">
+                    <summary className="cursor-pointer">사용한 프롬프트</summary>
+                    <p className="mt-1 leading-relaxed whitespace-pre-wrap wrap-anywhere">
+                      {candidate.prompt}
+                    </p>
+                  </details>
+                </div>
+              ))}
+            </div>
           </div>
         ) : (
           <p className={styles.hint}>아직 원본 후보가 없습니다</p>

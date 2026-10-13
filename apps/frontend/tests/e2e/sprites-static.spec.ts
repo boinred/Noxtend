@@ -1044,10 +1044,20 @@ for (const [width, height, columns] of [
       ).toBe(true)
     }
     await bounded()
+    const big = ui.panel.getByTestId('sprite-source-selected')
+    await expect(big).toHaveCount(0)
+    await ui.candidates.nth(1).click()
+    await expect(big).toBeVisible()
+    await expect(big.getByRole('img', { name: '선택한 원본 후보 2' })).toBeVisible()
+    await expect(big.getByText('사용한 프롬프트', { exact: true })).toBeVisible()
+    await expect(big).toContainText('#2')
+    await bounded()
     await page.screenshot({
       path: test.info().outputPath(`source-draft-${width}.png`),
       fullPage: true,
     })
+    await ui.candidates.nth(1).click()
+    await expect(big).toHaveCount(0)
 
     await ui.generate.click()
     await expect(ui.status.getByLabel('원본 공정', { exact: true })).toHaveText('원본 후보 생성 중')
@@ -1062,6 +1072,34 @@ for (const [width, height, columns] of [
     await expect(ui.generate).toBeEnabled()
     await expect(ui.prompt).toBeEnabled()
   })
+
+for (const [count, columns] of [
+  [1, 1],
+  [2, 2],
+] as const)
+  for (const width of [1440, 390])
+    test(`source draft with ${count} candidate(s) uses ${columns} column(s) at ${width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await installFakeApi(page, { sprites: { seed: 'sourceDraft', sourceCandidates: count } })
+      await page.goto(jobPath)
+      const ui = sourceDraft(page)
+      await expect(ui.candidates).toHaveCount(count)
+      expect(
+        await ui.panel
+          .getByTestId('sprite-source-candidates')
+          .evaluate((node) => getComputedStyle(node).gridTemplateColumns.split(' ').length),
+      ).toBe(columns)
+      const prompts = ui.panel.getByTestId('sprite-source-candidates').getByText('#1')
+      if (count === 1) {
+        await expect(prompts).toBeVisible()
+        await ui.candidates.first().click()
+        await expect(ui.panel.getByTestId('sprite-source-selected')).toHaveCount(0)
+      } else {
+        await expect(prompts).toBeHidden()
+      }
+    })
 
 for (const options of [
   {},
