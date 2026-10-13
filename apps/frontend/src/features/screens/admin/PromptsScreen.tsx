@@ -33,6 +33,7 @@ const STAGES: PromptKind[] = [
   'similarityEvaluate',
   'analyzeSprites',
   'generateSprite',
+  'enhanceSpriteSource',
   'generateSpriteSource',
 ]
 

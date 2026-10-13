@@ -8,7 +8,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { useGenerateSpriteSource, useUpload, type UploadResult } from '@/app/queries/useUpload'
+import { useUpload } from '@/app/queries/useUpload'
 import { useProviders, useProviderModels, useProviderImageModels } from '@/app/queries/useProviders'
 import { useStartSpriteJob } from '@/app/queries/useSprites'
 import { apiErrorMessage, apiErrorStatus } from '@/app/queries/errors'
@@ -29,9 +29,6 @@ export function SpriteInput() {
   const hasSourceQuery = params.has('sourceJobId') || params.has('sourceGeneratedImageId')
   const [mode, setMode] = useState<StudioMode>(hasSourceQuery ? 'image' : 'prompt')
   const [prompt, setPrompt] = useState('')
-  const [generated, setGenerated] = useState<UploadResult[]>([])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [generateError, setGenerateError] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [view, setView] = useState<SpriteView | ''>('')
   const [kind, setKind] = useState<SpriteOutputKind | ''>('')
@@ -67,42 +64,10 @@ export function SpriteInput() {
     )
   const upload = useUpload()
   const start = useStartSpriteJob()
-  const generate = useGenerateSpriteSource()
   const [uploadError, setUploadError] = useState<string | null>(null)
-  const promptLength = prompt.trim().length
-  const busy = upload.isPending || start.isPending || generate.isPending
-  const hasSource = mode === 'prompt' ? selectedId !== null : !!file || !!source
-  const canGenerate =
-    promptLength >= 1 &&
-    promptLength <= 1000 &&
-    !!imageProvider &&
-    !!imageModel &&
-    supported &&
-    !providers.isError &&
-    !imageModels.errorMessage &&
-    !busy
-  function generateSource() {
-    if (!canGenerate || !imageProvider || !imageModel) return
-    generate.mutate(
-      {
-        requestId: crypto.randomUUID(),
-        prompt: prompt.trim(),
-        imageProviderConfigId: imageProvider.id,
-        imageModel: imageModel.id,
-      },
-      {
-        onSuccess: (result) => {
-          setGenerated((results) => [...results, result])
-          setSelectedId(result.id)
-          setGenerateError(null)
-        },
-        onError: (error) =>
-          setGenerateError(
-            apiErrorMessage(error, '기준 이미지 생성에 실패했습니다. 다시 시도해 주세요'),
-          ),
-      },
-    )
-  }
+  // 프롬프트 모드의 원본 초안 흐름은 SpriteSourceDraftPanel 전환 전까지 제출 불가
+  const busy = upload.isPending || start.isPending
+  const hasSource = mode !== 'prompt' && (!!file || !!source)
   async function submit() {
     if (
       !view ||
@@ -116,12 +81,7 @@ export function SpriteInput() {
       return
     setUploadError(null)
     try {
-      const identity =
-        mode === 'prompt'
-          ? { uploadId: selectedId! }
-          : file
-            ? { uploadId: (await upload.mutateAsync(file)).id }
-            : source!
+      const identity = file ? { uploadId: (await upload.mutateAsync(file)).id } : source!
       start.mutate(
         {
           requestId: crypto.randomUUID(),
@@ -143,17 +103,7 @@ export function SpriteInput() {
       <section className={styles.panel} aria-label="원본 입력">
         <ModeTabs mode={mode} onChange={setMode} />
         {mode === 'prompt' ? (
-          <SpritePromptPanel
-            prompt={prompt}
-            onPromptChange={setPrompt}
-            results={generated}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            canGenerate={canGenerate}
-            generating={generate.isPending}
-            error={generateError}
-            onGenerate={generateSource}
-          />
+          <SpritePromptPanel prompt={prompt} onPromptChange={setPrompt} />
         ) : (
           <>
             {source ? (

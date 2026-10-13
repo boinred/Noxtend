@@ -1,4 +1,4 @@
-import type { ProductionMode, SpriteState, SpriteSummary } from '../sprites/types'
+import type { ProductionMode, SpritePhase, SpriteState, SpriteSummary } from '../sprites/types'
 
 /**
  * Design Ref: §3.4 — 작업 도메인 타입. 순수 TS 이며 외부 라이브러리를 쓰지 않는다.
@@ -312,7 +312,8 @@ export interface Job {
   sprite?: SpriteState | null
   id: string
   category: AssetCategory
-  sourceImageId: string
+  /** 원본 확정 전 2D 작업(`sourceDraft`)만 `null` — 3D 작업은 항상 값이 있다. */
+  sourceImageId: string | null
   status: JobStatus
   /** 사이클 #5: `consistencyPrompt`(자유 문장)를 대체한다. */
   scene: SceneSpec | null
@@ -337,7 +338,7 @@ export interface JobSummary {
   id: string
   category: AssetCategory
   status: JobStatus
-  sourceImageId: string
+  sourceImageId: string | null
   partCount: number
   createdAt: string
 }
@@ -453,6 +454,29 @@ export function nextPollDelayMs(attempt: number): number {
   if (attempt <= 0) return 2_000
   if (attempt === 1) return 5_000
   return 15_000
+}
+
+/**
+ * 작업 상세 폴링 간격.
+ *
+ * 원본 준비(`sourceDraft`)에서 보완·후보 생성 공정이 도는 동안은 사용자가 결과를 기다리며
+ * 화면을 보고 있으므로 백오프하지 않고 2초로 고정한다. 그 밖에는 `nextPollDelayMs` 를 따른다.
+ */
+export function jobPollDelayMs(
+  job: {
+    sprite?: { phase: SpritePhase } | null
+    tasks: readonly Pick<JobTask, 'kind' | 'status'>[]
+  },
+  attempt: number,
+): number {
+  const sourceTaskActive =
+    job.sprite?.phase === 'sourceDraft' &&
+    job.tasks.some(
+      (task) =>
+        (task.kind === 'enhanceSpriteSource' || task.kind === 'generateSpriteSource') &&
+        (task.status === 'pending' || task.status === 'running'),
+    )
+  return sourceTaskActive ? 2_000 : nextPollDelayMs(attempt)
 }
 
 // ─────────────────── 파츠 생성 (사이클 #7) ───────────────────

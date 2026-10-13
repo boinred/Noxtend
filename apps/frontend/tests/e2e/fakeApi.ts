@@ -463,7 +463,8 @@ export async function installFakeApi(page: Page, options: FakeApiOptions = {}) {
   const ALLOWED_VARIABLES: Record<string, string[]> = {
     analyze: [],
     analyzeSprites: ['settings', 'sourceCanvas'],
-    generateSpriteSource: ['prompt'],
+    generateSpriteSource: ['prompt', 'settings'],
+    enhanceSpriteSource: ['description', 'settings'],
     generateSprite: ['settings', 'asset', 'frame', 'sourceCanvas', 'outputCanvas'],
     // gender·partHints 는 캐릭터 고유 변수다 (character-studio §D-03). 종류는 추출, 개수는 분해로 흐른다
     extract: ['scene', 'gender', 'partHints'],
@@ -541,6 +542,20 @@ export async function installFakeApi(page: Page, options: FakeApiOptions = {}) {
     isActive: true,
     allowedVariables: ALLOWED_VARIABLES.generateSpriteSource!,
     createdAt: new Date(Date.UTC(2026, 9, 8)).toISOString(),
+  })
+
+  prompts.push({
+    id: 'prompt-seed-sprite-source-enhance',
+    kind: 'enhanceSpriteSource',
+    category: 'background',
+    version: 1,
+    system: '장면 설명을 2D 배경 원본 생성 프롬프트로 보완하라',
+    user: 'Description: {{description}}\nSettings: {{settings}}',
+    jsonSchema: '{}',
+    note: '초기 버전',
+    isActive: true,
+    allowedVariables: ALLOWED_VARIABLES.enhanceSpriteSource!,
+    createdAt: new Date(Date.UTC(2026, 9, 13)).toISOString(),
   })
 
   // 유사도 평가 슬롯 — 실제 시드처럼 Background 전용 활성이다 (background-similarity-tuning §15.1)
@@ -1623,6 +1638,7 @@ export async function installFakeApi(page: Page, options: FakeApiOptions = {}) {
         'similarityEvaluate',
         'analyzeSprites',
         'generateSprite',
+        'enhanceSpriteSource',
         'generateSpriteSource',
       ].map((kind) => ({
         kind,

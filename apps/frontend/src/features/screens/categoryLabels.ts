@@ -75,6 +75,7 @@ export function jobCategoryLabel(job: Pick<JobSummary, 'category' | 'productionM
 }
 
 export function jobSummaryCount(job: JobSummary): string {
+  if (productionModeOf(job) === 'twoD' && job.sprite?.phase === 'sourceDraft') return '원본 준비 중'
   return productionModeOf(job) === 'twoD' && job.sprite
     ? `에셋 ${job.sprite.assetCount}개 · 승인 ${job.sprite.approvedAssetCount}개 · 누적 이미지 ${job.sprite.imageCount}개`
     : `파츠 ${job.partCount}개`

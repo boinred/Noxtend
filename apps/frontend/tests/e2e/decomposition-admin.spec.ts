@@ -72,9 +72,9 @@ test.describe('프롬프트 관리 (§4.2 #16~19)', () => {
     await installFakeApi(page)
     await page.goto('/admin/prompts')
 
-    // 기본 슬롯 5개와 배경 전용 분석·생성·기준 생성·평가 슬롯
+    // 기본 슬롯 5개와 배경 전용 분석·생성·원본 보완·기준 생성·평가 슬롯
     const rows = page.getByTestId('prompt-row')
-    await expect(rows).toHaveCount(9)
+    await expect(rows).toHaveCount(10)
     expect(
       await rows.evaluateAll((elements) =>
         elements.map((element) => element.getAttribute('data-kind')).sort(),
@@ -83,6 +83,7 @@ test.describe('프롬프트 관리 (§4.2 #16~19)', () => {
       'analyze',
       'analyzeSprites',
       'decompose',
+      'enhanceSpriteSource',
       'extract',
       'generate',
       'generateSprite',
@@ -90,7 +91,7 @@ test.describe('프롬프트 관리 (§4.2 #16~19)', () => {
       'rewriteDescriptions',
       'similarityEvaluate',
     ])
-    await expect(page.getByTestId('prompt-cell-dedicated')).toHaveCount(9)
+    await expect(page.getByTestId('prompt-cell-dedicated')).toHaveCount(10)
 
     // 편집 화면이 쓸 수 있는 변수를 보여준다 — 격자가 아니라 여기서
     await page.goto('/admin/prompts/decompose')

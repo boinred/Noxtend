@@ -16,7 +16,7 @@ import {
   startJob,
 } from '@/infra/api/jobApi'
 import { ApiError } from '@/infra/api/client'
-import { isTerminal, nextPollDelayMs } from '@/domain/job/types'
+import { isTerminal, jobPollDelayMs } from '@/domain/job/types'
 import { queryKeys } from './keys'
 import type { Job, ViewDirection } from '@/domain/job/types'
 import type { BackPlan, LeftRightPlan, StartJobInput } from '@/infra/api/jobApi'
@@ -53,7 +53,7 @@ export function useJob(jobId: string | undefined): UseJobResult {
       )
       if (isTerminal(job.status) && !hasActiveTasks) return false
 
-      return nextPollDelayMs(query.state.dataUpdateCount - 1)
+      return jobPollDelayMs(job, query.state.dataUpdateCount - 1)
     },
     // 404 를 재시도하면 없는 작업을 세 번 더 묻는다
     retry: false,

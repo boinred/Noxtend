@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom'
 import { useJob } from '@/app/queries/useJob'
-import { sourceImageUrl } from '@/app/queries/media'
 import { jobProgress, jobStatusLabel, taskKindLabel } from '@/domain/job/types'
 import { Button } from '@/components/ui/button'
 import { apiErrorMessage } from '@/app/queries/errors'
@@ -8,6 +7,8 @@ import { jobCategoryLabel, spritePhaseLabel } from '../categoryLabels'
 import { Icon } from '@/features/shell/Icon'
 import { jobPath } from '@/routes/paths'
 import { activeJobStyles as styles } from './homeStyles'
+import { JobThumbnail } from './JobThumbnail'
+import { SPRITE_SOURCE_CANDIDATE_LIMIT } from '@/domain/sprites/types'
 import type { JobSummary } from '@/domain/job/types'
 
 export interface ActiveJobSpotlightProps {
@@ -23,6 +24,10 @@ export function activeJobProgressText(
 ): string {
   if (total === 0 || currentLabel === null) return '진행 정보를 불러오는 중'
   return `${current}/${total} · ${currentLabel} · ${percentage}% 완료`
+}
+
+export function sourceDraftProgressText(candidateCount: number): string {
+  return `원본 준비 중 · 후보 ${candidateCount}/${SPRITE_SOURCE_CANDIDATE_LIMIT}`
 }
 
 export function ActiveJobSpotlight({ summary }: ActiveJobSpotlightProps) {
@@ -60,7 +65,7 @@ export function ActiveJobSpotlight({ summary }: ActiveJobSpotlightProps) {
         className={styles.spotlight}
         data-testid="job-item"
       >
-        <img className={styles.thumbnail} src={sourceImageUrl(summary.sourceImageId)} alt="" />
+        <JobThumbnail sourceImageId={summary.sourceImageId} className={styles.thumbnail} />
 
         <span className={styles.body}>
           <span className={styles.eyebrow}>실행 중인 작업</span>
@@ -81,11 +86,13 @@ export function ActiveJobSpotlight({ summary }: ActiveJobSpotlightProps) {
           ) : null}
           <span className={styles.progressMeta}>
             {twoD
-              ? sprite
-                ? `${spritePhaseLabel(sprite.phase)} · ${jobStatusLabel(job!.status)} · 현재 프레임 이미지 ${frames.filter((frame) => frame.currentImageId !== null).length}/${frames.length} · 실행 ${currentTasks.filter((task) => task.status === 'running').length} · 대기 ${currentTasks.filter((task) => task.status === 'pending').length}`
-                : summary.sprite
-                  ? `${spritePhaseLabel(summary.sprite.phase)} · ${jobStatusLabel(summary.status)}`
-                  : '진행 정보를 불러오는 중'
+              ? (sprite?.phase ?? summary.sprite?.phase) === 'sourceDraft'
+                ? sourceDraftProgressText(sprite?.source?.candidates.length ?? 0)
+                : sprite
+                  ? `${spritePhaseLabel(sprite.phase)} · ${jobStatusLabel(job!.status)} · 현재 프레임 이미지 ${frames.filter((frame) => frame.currentImageId !== null).length}/${frames.length} · 실행 ${currentTasks.filter((task) => task.status === 'running').length} · 대기 ${currentTasks.filter((task) => task.status === 'pending').length}`
+                  : summary.sprite
+                    ? `${spritePhaseLabel(summary.sprite.phase)} · ${jobStatusLabel(summary.status)}`
+                    : '진행 정보를 불러오는 중'
               : error
                 ? '진행 정보를 확인할 수 없습니다'
                 : progressText}

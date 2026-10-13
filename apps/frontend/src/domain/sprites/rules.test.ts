@@ -73,6 +73,31 @@ function spriteFixture() {
         excludedAssetIds: [],
       },
     ],
+    source: null as unknown,
+  }
+}
+
+const draftSource = {
+  description: '노을 진 숲',
+  prompt: null,
+  candidates: [
+    {
+      id: 'candidate',
+      prompt: '노을 진 숲, 측면 시점',
+      width: 1024,
+      height: 1024,
+      createdAt: '2026-10-13T00:00:00Z',
+    },
+  ],
+}
+function draftFixture() {
+  return {
+    ...spriteFixture(),
+    phase: 'sourceDraft',
+    assets: [],
+    images: [],
+    exports: [],
+    source: draftSource,
   }
 }
 
@@ -132,6 +157,7 @@ describe('sprite wire boundary', () => {
     'assets',
     'images',
     'exports',
+    'source',
   ])('requires TwoD %s', (key) => {
     const sprite: Record<string, unknown> = spriteFixture()
     delete sprite[key]
@@ -154,6 +180,70 @@ describe('sprite wire boundary', () => {
       ).toThrow()
     const sprite = spriteFixture()
     sprite.assets[0]!.approval!.snapshot.layout = 'future'
+    expect(() => readSpriteJob({ productionMode: 'twoD', sprite })).toThrow()
+  })
+
+  it('reads a sourceDraft job with a null sourceImageId and its source draft', () => {
+    const sprite = draftFixture()
+    const job = readSpriteJob({ productionMode: 'twoD', sourceImageId: null, sprite })
+    expect(job.sourceImageId).toBeNull()
+    expect(job.sprite?.phase).toBe('sourceDraft')
+    expect(job.sprite?.source).toEqual(draftSource)
+    const prompted = { ...sprite, source: { ...draftSource, prompt: '저장된 프롬프트' } }
+    expect(
+      readSpriteJob({ productionMode: 'twoD', sourceImageId: null, sprite: prompted }).sprite
+        ?.source?.prompt,
+    ).toBe('저장된 프롬프트')
+    expect(
+      readSpriteJob({
+        productionMode: 'twoD',
+        sourceImageId: null,
+        sprite: { ...sprite, source: { ...draftSource, candidates: [] } },
+      }).sprite?.source?.candidates,
+    ).toEqual([])
+  })
+
+  it('reads a sourceDraft summary with a null sourceImageId', () => {
+    const raw = {
+      productionMode: 'twoD',
+      sourceImageId: null,
+      sprite: { ...summary, phase: 'sourceDraft', assetCount: 0, imageCount: 0 },
+    }
+    expect(readSpriteSummary(raw)).toMatchObject({ sourceImageId: null })
+  })
+
+  it.each([
+    'idle',
+    'sourceDraft',
+    'analyzing',
+    'planReview',
+    'baseGeneration',
+    'baseReview',
+    'frameGeneration',
+    'frameReview',
+    'exportReady',
+    'packaging',
+    'completed',
+  ])('accepts every SpritePhase on wire: %s', (phase) => {
+    const read = () =>
+      readSpriteJob({ productionMode: 'twoD', sprite: { ...spriteFixture(), phase } })
+    if (phase === 'idle') expect(read).toThrow()
+    else expect(read).not.toThrow()
+  })
+
+  it.each([
+    { description: 1 },
+    { prompt: 1 },
+    { prompt: undefined },
+    { candidates: null },
+    { candidates: [{}] },
+    { candidates: [{ ...draftSource.candidates[0], id: '' }] },
+    { candidates: [{ ...draftSource.candidates[0], prompt: null }] },
+    { candidates: [{ ...draftSource.candidates[0], width: 0 }] },
+    { candidates: [{ ...draftSource.candidates[0], height: 1.5 }] },
+    { candidates: [{ ...draftSource.candidates[0], createdAt: undefined }] },
+  ])('rejects a malformed source draft: %j', (change) => {
+    const sprite = { ...draftFixture(), source: { ...draftSource, ...change } }
     expect(() => readSpriteJob({ productionMode: 'twoD', sprite })).toThrow()
   })
 

@@ -256,6 +256,7 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
       assets: [],
       images: [],
       exports: [],
+      source: null,
     }
     sprite.assets = [0, 1].map((order) => {
       const id = guid(6)

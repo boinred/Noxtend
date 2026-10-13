@@ -5,7 +5,6 @@
  */
 import { Link } from 'react-router-dom'
 import { Icon } from '@/features/shell/Icon'
-import { sourceImageUrl } from '@/app/queries/media'
 import { jobStatusLabel } from '@/domain/job/types'
 import { jobCategoryLabel, jobSummaryCount } from '../categoryLabels'
 import { Button } from '@/components/ui/button'
@@ -13,6 +12,7 @@ import { apiErrorMessage } from '@/app/queries/errors'
 import { jobPath } from '@/routes/paths'
 import { sectionCount, sectionCountLabel } from './sectionCount'
 import { workStatusStyles as styles } from './homeStyles'
+import { JobThumbnail } from './JobThumbnail'
 import type { IconName } from '@/features/shell/Icon'
 import type { ReactNode } from 'react'
 import type { JobSummary } from '@/domain/job/types'
@@ -96,11 +96,10 @@ export function WorkStatusSection({
                     className={styles.jobLink}
                     data-testid="job-item"
                   >
-                    <img
+                    <JobThumbnail
+                      sourceImageId={job.sourceImageId}
                       className={styles.jobThumb}
-                      src={sourceImageUrl(job.sourceImageId)}
-                      alt=""
-                      loading="lazy"
+                      lazy
                     />
                     <span className={styles.jobBody}>
                       <span className={styles.jobName}>{jobCategoryLabel(job)} 작업</span>

@@ -37,6 +37,7 @@ function sprite(overrides: Partial<SpriteState> = {}): SpriteState {
     })),
     images: [],
     exports: [],
+    source: null,
     ...overrides,
   }
 }

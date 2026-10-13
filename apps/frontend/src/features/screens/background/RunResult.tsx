@@ -85,15 +85,17 @@ export function RunResult({
       {job.scene ? <ScenePanel scene={job.scene} /> : null}
 
       {/* 좌표를 원본 위에 겹쳐야 사람이 맞는지 판단할 수 있다 (§2.3-7) */}
-      <PartsOverlay
-        sourceImageId={job.sourceImageId}
-        parts={job.parts.map((part) => ({
-          ...part,
-          label: `${part.depthOrder}. ${part.name}`,
-        }))}
-        scene={job.scene}
-        action={{ label: '이동', onClick: jumpToPart }}
-      />
+      {job.sourceImageId !== null ? (
+        <PartsOverlay
+          sourceImageId={job.sourceImageId}
+          parts={job.parts.map((part) => ({
+            ...part,
+            label: `${part.depthOrder}. ${part.name}`,
+          }))}
+          scene={job.scene}
+          action={{ label: '이동', onClick: jumpToPart }}
+        />
+      ) : null}
 
       <PartGallery
         job={job}

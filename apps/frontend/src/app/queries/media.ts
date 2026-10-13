@@ -20,4 +20,4 @@ export {
   meshPreviewUrl,
 } from '@/infra/api/jobApi'
 
-export { spriteImageUrl, spriteExportUrl } from '@/infra/api/spriteApi'
+export { spriteImageUrl, spriteExportUrl, spriteSourceCandidateUrl } from '@/infra/api/spriteApi'

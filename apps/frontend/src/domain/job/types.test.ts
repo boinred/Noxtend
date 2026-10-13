@@ -2,8 +2,9 @@
  * Design Ref: §8.3 L1-F #3·#4 — 종료 판정과 폴링 백오프.
  */
 import { describe, expect, it } from 'vitest'
-import { isActive, isTerminal, modelBadges, nextPollDelayMs } from './types'
-import type { JobModels, JobStatus } from './types'
+import { isActive, isTerminal, jobPollDelayMs, modelBadges, nextPollDelayMs } from './types'
+import type { JobModels, JobStatus, TaskKind } from './types'
+import type { SpritePhase } from '../sprites/types'
 
 describe('isTerminal', () => {
   // #3 — 종료 상태 판정
@@ -15,6 +16,33 @@ describe('isTerminal', () => {
   it.each<JobStatus>(['pending', 'running'])('진행 중으로 판정한다: %s', (status) => {
     expect(isTerminal(status)).toBe(false)
     expect(isActive(status)).toBe(true)
+  })
+})
+
+describe('jobPollDelayMs', () => {
+  const job = (phase: SpritePhase | null, ...tasks: [TaskKind, JobStatus][]) => ({
+    sprite: phase ? { phase } : null,
+    tasks: tasks.map(([kind, status]) => ({ kind, status })),
+  })
+
+  it.each<TaskKind>(['enhanceSpriteSource', 'generateSpriteSource'])(
+    '원본 준비 공정 %s 이 진행 중이면 시도 횟수와 무관하게 2초 고정이다',
+    (kind) => {
+      for (const status of ['pending', 'running'] as const)
+        for (const attempt of [0, 1, 2, 50])
+          expect(jobPollDelayMs(job('sourceDraft', [kind, status]), attempt)).toBe(2_000)
+    },
+  )
+
+  it('원본 공정이 끝났거나 다른 공정이면 기존 백오프를 따른다', () => {
+    expect(jobPollDelayMs(job('sourceDraft', ['enhanceSpriteSource', 'succeeded']), 5)).toBe(15_000)
+    expect(jobPollDelayMs(job('sourceDraft', ['analyzeSprites', 'running']), 5)).toBe(15_000)
+    expect(jobPollDelayMs(job('sourceDraft'), 1)).toBe(5_000)
+  })
+
+  it('sourceDraft 가 아닌 단계나 3D 작업은 원본 공정이 남아 있어도 기존 백오프를 따른다', () => {
+    expect(jobPollDelayMs(job('analyzing', ['generateSpriteSource', 'running']), 4)).toBe(15_000)
+    expect(jobPollDelayMs(job(null, ['generateSpriteSource', 'running']), 4)).toBe(15_000)
   })
 })
 
