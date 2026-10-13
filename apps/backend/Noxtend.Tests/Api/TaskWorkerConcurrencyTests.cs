@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -41,9 +42,10 @@ public sealed class TaskWorkerConcurrencyTests
         await worker.StartAsync(CancellationToken.None);
         try
         {
-            // 워커가 큐에서 하나를 꺼내 실패시키고 Ack 할 때까지 기다린다(폴링, 최대 2초)
+            // 시작 로그와 경합 처리 로그의 구분
             var deadline = DateTime.UtcNow.AddSeconds(2);
-            while (logger.Entries.Count == 0 && DateTime.UtcNow < deadline)
+            while (!logger.Entries.Any(e => e.Message.Contains("settled by another worker"))
+                && DateTime.UtcNow < deadline)
             {
                 await Task.Delay(10);
             }
@@ -67,7 +69,7 @@ public sealed class TaskWorkerConcurrencyTests
     /// <summary>레벨·메시지만 기록하는 최소 로거 — 순서·개수를 검증할 수 있으면 충분하다.</summary>
     private sealed class CapturingLogger<T> : ILogger<T>
     {
-        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+        public ConcurrentQueue<(LogLevel Level, string Message)> Entries { get; } = new();
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -77,7 +79,7 @@ public sealed class TaskWorkerConcurrencyTests
             LogLevel logLevel, EventId eventId, TState state, Exception? exception,
             Func<TState, Exception?, string> formatter)
         {
-            Entries.Add((logLevel, formatter(state, exception)));
+            Entries.Enqueue((logLevel, formatter(state, exception)));
         }
     }
 }
