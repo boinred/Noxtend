@@ -16,6 +16,8 @@
 - 어댑터: `apps/backend/Noxtend.Infrastructure/Llm/OpenAiProvider.cs`, `AnthropicProvider.cs`, `GoogleProvider.cs`
 - 설정·장식: `apps/backend/Noxtend.Infrastructure/InfrastructureServiceCollectionExtensions.cs`의 `AddLlm`
 
+`AnthropicProvider`는 전송 직전에 `AnthropicJsonSchema.ForStructuredOutput`으로 스키마 사본을 정리한다. Anthropic 구조화 출력이 400으로 거절하는 `minimum`·`maximum`·`exclusiveMinimum`·`exclusiveMaximum`·`multipleOf`·`minLength`·`maxLength`·`maxItems`와 0·1이 아닌 `minItems`를 재귀적으로 지운다. `properties`·`$defs`·`definitions` 아래 키는 이름이므로 지우지 않고 하위 스키마만 정리한다. 저장된 프롬프트 스키마, OpenAI·Google 어댑터, 호출 내역은 바뀌지 않는다. 지운 제약은 모델 출력에서 강제되지 않으므로 각 공정 파서·도메인 규칙이 검증해야 한다(2D 분석은 `SpritePlanParser`·`SpriteRules`).
+
 ### 2D 배경 분석
 
 `AnalyzeSprites`는 TaskKind=7, LlmOperationKind=5의 독립 분석 operation이며 Background 전용 프롬프트다. `RunSpriteAnalysisTaskHandler`는 settings·sourceCanvas를 camelCase JSON 데이터로 렌더하고 접수 시 실제 codec 형식과 일치 확인된 업로드 또는 기존 결과의 독립 복사 이미지를 첨부한다. 업로드 MIME 불일치는 접수 단계에서 거부하며 분석 공급자에 잘못된 MIME을 보내지 않는다. `PromptTemplate.Render`는 원래 템플릿만 한 번 치환하여 삽입한 notes의 `{{...}}`를 재확장하거나 미치환 변수로 거부하지 않는다. 원래 템플릿의 누락 변수는 계속 실패한다.
@@ -108,6 +110,7 @@
 
 ## 확인 기준과 미확인
 
+- Anthropic 스키마 정리 확인: 2026-10-13. `AnthropicJsonSchemaTests`가 2D 분석 시드 스키마와 이름 보존·중첩 정리 사례를 검증하고, 제거 대상 제약을 쓰는 시드 스키마별 파서·도메인 검증 위치를 대조했다. 실제 Anthropic 호출은 하지 않았으므로 실 API 수락 여부는 미확인이다.
 - Anthropic 두 구간 수집·저장·비용 경계 및 UI 경계 문구 확인: 2026-10-13. 이번 확인 범위는 parser의 연속 두 행 검증, SQL Testcontainers 저장→재조회→`ModelPriceBook.Estimate`의 100000/100001 경계, 단가 화면의 `이상` 표기다. 나머지 영역의 확인 기준은 아래 기록을 유지한다.
 
 - 모델·단가 수집 확인: 2026-10-09, revision `7862b8b`. 수집→parser→비교→SQL 적용→DTO·metadata migration 본문을 대조했고 parser/comparer 순수 회귀를 실행했다. 신설 SQL6건이 수집됐고 전체 비유료 Backend1780/1780(건너뜀0)에 포함되어 통과했다. 상세 근거는 [실행 결과](../evals/model-price-update/results.md#최종-통합-검증)에 있다. 공식 fixture 검증은 실 공급자 최신 가격/실 청구 정확성의 근거가 아니다.
