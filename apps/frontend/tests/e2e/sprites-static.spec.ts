@@ -1190,8 +1190,10 @@ test('running source generation survives reload with progress, candidates and lo
   await expect(ui.generate).toBeDisabled()
   await expect(ui.prompt).toBeDisabled()
   await expect(ui.candidates.first()).toBeDisabled()
+  await expect(ui.status.getByTestId('progress-buffer')).toBeVisible()
   sprites.sourceTaskGets = 1
   await expect(ui.candidates).toHaveCount(2)
+  await expect(ui.status.getByTestId('progress-buffer')).toHaveCount(0)
   await expect(ui.generate).toBeEnabled()
 })
 
