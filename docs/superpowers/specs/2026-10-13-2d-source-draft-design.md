@@ -29,7 +29,7 @@
 
 - 3D 배경 프롬프트 모드
 - 기준 준비 중 설정(시점·형식·타일 크기·반복) 변경. 바꾸려면 새 작업을 만든다
-- 후보 이미지 개별 삭제·정리, 생성 비용의 별도 집계 화면
+- 후보 이미지 개별 삭제(작업 삭제 시 일괄 정리만 포함), 생성 비용의 별도 집계 화면
 - 이미지 모드(업로드)와 기존 작업 결과에서 시작하는 흐름의 변경
 - 재시도 예약 지연 작업의 `ObjectDisposedException`(기존 버그, 별도 작업)
 
@@ -64,9 +64,11 @@
 
 - `SourceDraft`에서만 `SourceImageId`가 null일 수 있다. 다른 단계와 3D 작업은 기존처럼 필수이며, 원본을 읽는 handler는 null을 만나면 공정 실패가 아니라 도메인 위반으로 거부한다.
 - 작업 상태: 기준 준비 공정 실행 중이면 `Running`, 사용자 입력 대기면 `PendingReview`.
-- 2D 상태 JSON에 `Source { Description, Prompt, PromptRevision, Candidates[{ImageId, Prompt, CreatedAt}], SelectedImageId }`를 추가한다. 기존 행은 `Source` 없음으로 읽는다.
+- 기준 준비 정보 `SpriteSourceDraft { Description, Prompt, Candidates[{ImageId, Prompt, CreatedAt}] }`는 새 nullable 컬럼 `Jobs.SpriteSourceDraftJson`에 기존 envelope(schemaVersion 1)로 저장한다. 기존 2D 레코드에 필드를 추가하지 않으므로 기존 행은 null로 읽는다. 동시 수정 판정은 기존 `ReviewRevision`을 쓴다.
+- 원본이 없어도 2D 상태의 캔버스가 유효하도록, 작업 생성 시 원본 캔버스를 이미지 모델의 생성 크기(`PickSize`)로 잠정 고정하고 생성·출력 캔버스를 계산한다. 원본 확정 시 실제 크기가 다르면 다시 계산한다.
+- 기준 준비 단계의 공정 실패는 작업을 실패로 끝내지 않는다. 작업은 `PendingReview`로 남고 공정 재시도·다시 보완·다시 생성이 가능하다.
 - 보완 결과는 현재 공정일 때만 `Prompt`를 덮어쓴다. 사용자가 그 사이 프롬프트를 저장했으면 늦은 보완 결과를 버린다(`IsCurrentTask`·revision 확인).
-- 생성 결과는 작업 소유 이미지로 저장하고 후보로 추가한다. 후보 원본 확정은 `StartSpriteJobHandler`의 검증(12 MiB, 16,777,216픽셀, 실제 MIME, EXIF 방향, 생성 캔버스·Transform 고정)을 공유 함수로 재사용한다.
+- 생성 결과는 `StoredImage`(업로드와 같은 저장소)로 저장하고 후보로 추가한다. 화면은 기존 `GET /api/uploads/{id}/content`로 표시한다. 작업 삭제 시 다른 작업의 원본이 아닌 후보 이미지를 함께 지운다. 후보 원본 확정은 `StartSpriteJobHandler`의 검증(12 MiB, 16,777,216픽셀, 실제 MIME, EXIF 방향, 생성 캔버스·Transform 고정)을 공유 함수로 재사용한다.
 
 ## API
 
@@ -82,7 +84,7 @@
 
 - 검증: 설명 trim 후 1~1000자, 프롬프트 trim 후 1~4000자, 텍스트·이미지 모델 capability는 기존 2D 시작 검증과 같다.
 - 기존 오류 코드를 재사용한다. 기준 준비 공정이 실행·대기 중인 enhance·prompt·generate·select는 `SPRITE_BUSY`, `SourceDraft`가 아닌 작업의 기준 준비 명령은 `SPRITE_NOT_READY`다. 후보 8장에서 generate만 새 코드 `SPRITE_SOURCE_LIMIT`을 추가한다. HTTP 상태는 기존 코드의 매핑을 따르고 새 코드는 409다.
-- `GET /api/jobs/{id}` 응답의 `sourceImageId`는 nullable이 되고 `sprites.source`가 추가된다. 후보 이미지는 기존 `GET /api/jobs/{id}/sprites/images/{imageId}`로 내려준다.
+- `GET /api/jobs/{id}` 응답의 `sourceImageId`는 nullable이 되고 `sprites.source`가 추가된다. 후보 이미지는 기존 `GET /api/uploads/{id}/content`로 내려준다.
 - 취소는 기존 `POST /api/jobs/{id}/cancel`, 공정 재시도는 기존 `POST /api/jobs/{jobId}/tasks/{taskId}/retry`에 두 공정을 추가한다.
 - 제거: `POST /api/uploads/generate`, `GenerateSpriteSourceRequest`, Frontend `generateSpriteSource`·`useGenerateSpriteSource`.
 
@@ -96,14 +98,15 @@
 ## 데이터와 migration
 
 - `Jobs.SourceImageId` nullable. 기존 행·FK·삭제 경로는 유지하며 null 원본은 삭제 대상 Blob이 없다.
-- 2D 상태 JSON `Source` 추가(schemaVersion 호환 읽기), 새 `TaskKind` 2개는 기존 숫자 뒤에 추가한다.
+- `Jobs.SpriteSourceDraftJson` nullable 컬럼 추가, 새 `TaskKind` `EnhanceSpriteSource = 10`·`GenerateSpriteSource = 11`. `LlmOperation.FromTask`에 두 공정을 매핑한다.
 - `TaskWorkerRegistration`·`ReclaimPlan`에 두 공정을 등록한다. 리스는 보완=일반 텍스트, 생성=이미지 생성 옵션을 따른다.
 - `LlmCalls`: 새 호출은 `JobId`·`TaskId`로 기록한다. 기존 `SourceGenerationId` 기록은 과거 데이터로 보존하고 새로 쓰지 않는다.
 
 ## 화면
 
-- `/sprites` 프롬프트 모드: 시점·형식·타일·반복 → 텍스트·이미지 모델 → 장면 설명 → [보완하기]. 성공하면 `/sprites/{jobId}`로 이동한다. 이미지 모드는 그대로다.
-- `/sprites/{jobId}`의 `SourceDraft`: 설명과 [다시 보완], 보완 프롬프트 편집·[저장], [기준 이미지 생성], 기존 `JobProgressPanel`, 후보 선택 그리드, [이 이미지로 분석]. 공정 중에는 편집·생성·선택을 비활성화하고 저장되지 않은 편집은 덮어쓰지 않는다.
+- `/2d/background` 프롬프트 모드: 시점·형식·타일·반복 → 텍스트·이미지 모델 → 장면 설명 → [보완하기]. 성공하면 `/2d/background/{jobId}`로 이동한다. 이미지 모드는 그대로다.
+- `/2d/background/{jobId}`의 `SourceDraft`: 설명과 [다시 보완], 보완 프롬프트 편집·[저장], [기준 이미지 생성], 기존 `JobProgressPanel`, 후보 선택 그리드, [이 이미지로 분석]. 공정 중에는 편집·생성·선택을 비활성화하고 저장되지 않은 편집은 덮어쓰지 않는다.
+- 2D 진행 표시(`SpriteProgress`)에 기준 준비 단계를 추가한다. Frontend 지침에 따라 외관 변경은 구현 전에 목업 승인을 받는다.
 - "이 화면을 유지해 주세요" 안내를 제거한다. 홈 "진행 중" 목록은 기준 준비 작업을 2D 배경으로 표시한다.
 
 ## 오류 처리
