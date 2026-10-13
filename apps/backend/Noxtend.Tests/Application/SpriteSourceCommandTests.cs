@@ -153,6 +153,31 @@ public sealed class SpriteSourceCommandTests
         Assert.Equal(SpritePhase.SourceDraft, job.Sprites.Phase);
     }
 
+    [Theory]
+    [InlineData("disabled", ErrorCode.JobImageProviderDisabled)]
+    [InlineData("noTransparency", ErrorCode.JobImageModelUnavailable)]
+    [InlineData("sizeGone", ErrorCode.JobImageModelUnavailable)]
+    [InlineData("modelGone", ErrorCode.JobImageModelUnavailable)]
+    public async Task Generate_RechecksImageProviderAndModelAtAcceptance(string change, string error)
+    {
+        var f = new PipelineFixture();
+        var job = await Draft(f);
+        var imageProvider = (await f.Providers.GetAsync(job.ImageProviderConfigId!.Value, Ct))!;
+        switch (change)
+        {
+            case "disabled": imageProvider.Update(imageProvider.DisplayName, imageProvider.Kind, null, null, isEnabled: false, f.Clock.Now); break;
+            case "noTransparency": f.Catalog.ImageModels[0] = new(StubModelCatalog.DefaultImageModel, "sprite", new(false, Sizes)); break;
+            case "sizeGone": f.Catalog.ImageModels[0] = new(StubModelCatalog.DefaultImageModel, "sprite", new(true, [new(1024, 1024)])); break;
+            case "modelGone": f.Catalog.ImageModels.Clear(); break;
+        }
+        var (revision, tasks) = (job.Sprites!.ReviewRevision, job.Tasks.Count);
+
+        Assert.Equal(error, (await f.SpriteSource.GenerateAsync(SpriteCommandTests.Context(job), "장면", Ct)).ErrorCode);
+
+        Assert.Equal((revision, tasks), (job.Sprites.ReviewRevision, job.Tasks.Count));
+        Assert.DoesNotContain(job.Tasks, t => t.Kind == TaskKind.GenerateSpriteSource);
+    }
+
     [Fact]
     public async Task Generate_SavesBodyPromptAndPlansWithThatSnapshot()
     {

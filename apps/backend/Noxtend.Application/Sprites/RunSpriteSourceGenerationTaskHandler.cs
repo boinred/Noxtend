@@ -83,7 +83,8 @@ public sealed class RunSpriteSourceGenerationTaskHandler(
         // 장수·형식 위반은 유료 재호출을 막기 위해 재시도 없이 실패
         if (result.ImageCount != 1) throw new ProviderBadResponseException("이미지 한 장이 필요합니다");
         using var raw = new MemoryStream(result.Bytes, writable: false);
-        var inspected = await transcoder.InspectSpriteAsync(raw, Math.Min(options.MaxImageBytes, 32L * 1024 * 1024), 16_777_216, ct);
+        // 선택 단계와 같은 상한으로 선택 불가 후보 차단
+        var inspected = await transcoder.InspectSpriteAsync(raw, SpriteSourceInspector.MaxBytes, 16_777_216, ct);
         raw.Position = 0;
         var key = await blobs.SaveAsync(raw, inspected.ContentType, ct);
         saved(key);

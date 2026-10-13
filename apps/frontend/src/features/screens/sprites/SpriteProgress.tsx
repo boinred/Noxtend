@@ -88,7 +88,8 @@ export function SpriteProgress({
     (step, index) =>
       step.done && (index < current || (index === current && sprite.phase === 'completed')),
   )
-  const sourceTask = sprite.phase === 'sourceDraft' ? activeSourceTask(job.tasks) : undefined
+  const sourceDraft = sprite.phase === 'sourceDraft'
+  const sourceTask = sourceDraft ? activeSourceTask(job.tasks) : undefined
   const summaries: JobProgressSummary[] = [
     ...(sprite.source
       ? [
@@ -112,13 +113,17 @@ export function SpriteProgress({
           },
         ]
       : []),
-    {
-      id: 'analysis',
-      label: '원본 분석 성공',
-      value: `${counts.analysis} / 1`,
-      hint: '원본 이미지',
-      icon: 'search' as const,
-    },
+    ...(sourceDraft
+      ? []
+      : [
+          {
+            id: 'analysis',
+            label: '원본 분석 성공',
+            value: `${counts.analysis} / 1`,
+            hint: '원본 이미지',
+            icon: 'search' as const,
+          },
+        ]),
     ...(counts.loops > 0
       ? [
           {
@@ -130,13 +135,17 @@ export function SpriteProgress({
           },
         ]
       : []),
-    {
-      id: 'backgrounds',
-      label: '배경 생성 성공',
-      value: total > 0 ? `${counts.backgrounds} / ${total}` : '대상 확인 중',
-      hint: total > 0 ? '현재 기준 이미지' : '분석 후 대상 확정',
-      icon: 'image' as const,
-    },
+    ...(sourceDraft
+      ? []
+      : [
+          {
+            id: 'backgrounds',
+            label: '배경 생성 성공',
+            value: total > 0 ? `${counts.backgrounds} / ${total}` : '대상 확인 중',
+            hint: total > 0 ? '현재 기준 이미지' : '분석 후 대상 확정',
+            icon: 'image' as const,
+          },
+        ]),
   ]
 
   const progressSteps: JobProgressStep[] = steps.map((step, index) => {

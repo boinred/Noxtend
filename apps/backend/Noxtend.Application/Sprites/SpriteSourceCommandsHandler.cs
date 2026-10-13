@@ -138,6 +138,16 @@ public sealed class SpriteSourceCommandsHandler(
             if (provider is null || !provider.IsEnabled)
                 return Fail(ErrorCode.JobProviderDisabled, "텍스트 공급자를 사용할 수 없습니다");
         }
+        // 생성 접수 시점의 이미지 공급자·모델·잠정 생성 크기 재검증
+        if (kind == SpriteRequestKind.GenerateSource && job.Sprites.Phase == SpritePhase.SourceDraft)
+        {
+            var imageProvider = job.ImageProviderConfigId is { } id ? await providers.GetAsync(id, ct) : null;
+            if (imageProvider is null || !imageProvider.IsEnabled)
+                return Fail(ErrorCode.JobImageProviderDisabled, "이미지 공급자를 사용할 수 없습니다");
+            var sizes = await SizesAsync(imageProvider.Id, job.ImageModel!, ct);
+            if (sizes is null || !sizes.Any(s => s.Width == job.Sprites.SourceCanvas.Width && s.Height == job.Sprites.SourceCanvas.Height))
+                return Fail(ErrorCode.JobImageModelUnavailable, "투명 지원과 생성 크기가 확인된 이미지 모델이 필요합니다");
+        }
         var saveAttempted = false;
         SpriteReceipt receipt;
         try

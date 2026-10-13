@@ -158,7 +158,7 @@ export function SpriteSourceDraftPanel({
               저장
             </Button>
           </div>
-          {source.prompt === null && activeSourceTask(tasks) === undefined ? (
+          {source.prompt === null && !canceled && activeSourceTask(tasks) === undefined ? (
             <p className={styles.hint}>프롬프트를 직접 입력해 생성할 수 있습니다</p>
           ) : null}
         </div>

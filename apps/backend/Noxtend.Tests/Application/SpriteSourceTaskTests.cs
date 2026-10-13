@@ -1,4 +1,5 @@
 using Noxtend.Application.Pipeline;
+using Noxtend.Application.Sprites;
 using Noxtend.Domain.Job;
 using Noxtend.Domain.Llm;
 using Noxtend.Domain.Ports;
@@ -258,6 +259,25 @@ public sealed class SpriteSourceTaskTests
         var task = job.PlanSourceGeneration("장면", Guid.NewGuid()).Value!;
 
         await f.RunSpriteSourceGeneration.HandleAsync(task.Id, Ct);
+
+        Assert.Equal(TaskStatus.Failed, task.Status);
+        Assert.Single(image.Requests);
+        Assert.Empty(job.Sprites!.SourceDraft!.Candidates);
+        Assert.Equal(baseline, f.Blobs.Count);
+    }
+
+    [Fact]
+    public async Task Generate_OverSelectionByteCapFailsWithoutPaidRetryOrBlob()
+    {
+        // 선택 단계 상한(12 MiB)을 넘는 유효 PNG는 후보로 만들지 않음
+        var oversized = SpriteGenerationTests.Png(64, 48).Concat(new byte[(int)SpriteSourceInspector.MaxBytes]).ToArray();
+        var image = new CapturingImage(FakeImageProvider.Returning(oversized));
+        var f = new PipelineFixture(imageProvider: image);
+        var (job, _) = await DraftJob(f);
+        var baseline = f.Blobs.Count;
+        var task = job.PlanSourceGeneration("장면", Guid.NewGuid()).Value!;
+
+        Assert.Equal(RunTaskOutcome.Failed, await f.RunSpriteSourceGeneration.HandleAsync(task.Id, Ct));
 
         Assert.Equal(TaskStatus.Failed, task.Status);
         Assert.Single(image.Requests);

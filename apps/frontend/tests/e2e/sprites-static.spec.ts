@@ -826,6 +826,9 @@ test('prompt draft enhances, generates the edited prompt, restores after reload 
   await expect(ui.steps.getByRole('listitem')).toHaveCount(6)
   await expect(ui.steps.locator('[aria-current="step"]')).toContainText('원본 준비')
   await expect(ui.status.getByLabel('원본 후보', { exact: true })).toHaveText('0 / 8')
+  // 원본 준비 단계에는 분석·배경 요약 없음
+  for (const label of ['원본 분석 성공', '배경 생성 성공'])
+    await expect(ui.status.getByLabel(label, { exact: true })).toHaveCount(0)
   await expect(ui.generate).toHaveAttribute('data-variant', 'default')
   await expect(ui.analyze).toHaveAttribute('data-variant', 'outline')
   await expect(ui.analyze).toBeDisabled()
@@ -870,6 +873,8 @@ test('prompt draft enhances, generates the edited prompt, restores after reload 
   await expect(page.getByRole('heading', { name: '제작 계획 검수' })).toBeVisible()
   await expect(ui.panel).toHaveCount(0)
   await expect(ui.steps.getByRole('listitem')).toHaveCount(6)
+  // 선택 뒤에는 기존 작업 요약 유지
+  await expect(ui.status.getByLabel('원본 분석 성공', { exact: true })).toBeVisible()
   await expect(ui.steps.getByRole('listitem').first()).toHaveAttribute('data-state', 'succeeded')
   expect(records.find((record) => record.path === '/api/jobs/sprites/drafts')!.body).toEqual({
     requestId: expect.stringMatching(uuid),
@@ -1239,4 +1244,16 @@ test('eight candidates disable generation and cancel leaves candidates read-only
   for (const control of [ui.candidates.first(), ui.prompt, ui.reenhance, ui.generate])
     await expect(control).toBeDisabled()
   expect(records.filter((record) => record.path.includes('/sprites/source/'))).toHaveLength(0)
+})
+
+test('canceled draft without a prompt hides the manual input hint', async ({ page }) => {
+  await installFakeApi(page, { sprites: { seed: 'sourceDraft', sourcePrompt: null } })
+  await page.goto(jobPath)
+  const ui = sourceDraft(page)
+  await expect(ui.panel.getByText('프롬프트를 직접 입력해 생성할 수 있습니다')).toBeVisible()
+  page.once('dialog', (dialog) => void dialog.accept())
+  await ui.status.getByRole('button', { name: '작업 취소', exact: true }).click()
+  await expect(ui.panel.getByRole('link', { name: '새 2D 작업', exact: true })).toBeVisible()
+  await expect(ui.prompt).toBeDisabled()
+  await expect(ui.panel.getByText('프롬프트를 직접 입력해 생성할 수 있습니다')).toHaveCount(0)
 })
