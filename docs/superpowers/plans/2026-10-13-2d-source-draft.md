@@ -1,6 +1,6 @@
 # 2D 배경 원본 준비 단계 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 2D 배경 프롬프트 모드를 "AI 보완 → 확인·수정 → 원본 후보 생성 → 선택" 흐름으로 바꾸고, 이를 2D 작업의 첫 단계(`SourceDraft`, 화면 "원본 준비")로 SQL에 저장해 새로고침 후에도 복원한다. 2D 분석의 정규화 좌표 안내와 검증 중 발견한 분석 재시도 단계 결함도 고친다.
 
@@ -56,10 +56,10 @@ dotnet ef migrations add <Name> --project apps/backend/Noxtend.Infrastructure --
 
 **Interfaces:** Produces `SeedPrompts.AnalyzeSpritesV2() : (string System, string User, string Schema, string Note)`.
 
-- [ ] **Step 1: 실패 테스트** — 활성 행이 V2와 같음, 버전 `MAX+1`(운영자 v9 → 10), 다른 슬롯 불변, Down 복원. V2 변수(`settings`, `sourceCanvas`)가 허용 변수 안.
-- [ ] **Step 2: 구현** — V2 System에 "`sourceBounds` x·y·w·h는 원본 너비·높이 대비 0~1 비율이며 픽셀이 아니다. 예: 오른쪽 아래 1/4은 `{x:0.5,y:0.5,w:0.5,h:0.5}`", V2 스키마 좌표 필드에 같은 뜻의 `description`. 나머지는 V1과 동일.
-- [ ] **Step 3: 검증** — 새 테스트·`SeedPromptVariableTests`·`SpritePersistenceTests` 통과, `pnpm docs:check`.
-- [ ] **Step 4: Commit** — `fix(prompts): clarify normalized sprite analysis bounds`
+- [x] **Step 1: 실패 테스트** — 활성 행이 V2와 같음, 버전 `MAX+1`(운영자 v9 → 10), 다른 슬롯 불변, Down 복원. V2 변수(`settings`, `sourceCanvas`)가 허용 변수 안.
+- [x] **Step 2: 구현** — V2 System에 "`sourceBounds` x·y·w·h는 원본 너비·높이 대비 0~1 비율이며 픽셀이 아니다. 예: 오른쪽 아래 1/4은 `{x:0.5,y:0.5,w:0.5,h:0.5}`", V2 스키마 좌표 필드에 같은 뜻의 `description`. 나머지는 V1과 동일.
+- [x] **Step 3: 검증** — 새 테스트·`SeedPromptVariableTests`·`SpritePersistenceTests` 통과, `pnpm docs:check`.
+- [x] **Step 4: Commit** — `fix(prompts): clarify normalized sprite analysis bounds`
 
 ## Task 2: 원본 준비 도메인·영속성
 
@@ -97,13 +97,13 @@ Result<PipelineTask> SelectSource(Guid storedImageId, SpriteCanvas actualSource,
     // SourceImageId 설정, ReplaceCanvases, Phase=Analyzing, AnalyzeSprites(텍스트 공급자·모델은 Draft 값), 작업 Running
 ```
 
-- [ ] **Step 1: 실패 테스트(도메인)** — 생성 직후 Phase·`Running`·null 원본; 길이 경계(0·1001, 0·4001); 활성 공정 중 `SaveSourcePrompt`·`PlanSourceGeneration`·`PlanSourceEnhance`·`SelectSource`가 `SPRITE_BUSY`; 후보 8장 후 `SPRITE_SOURCE_LIMIT`; `SourceDraft`가 아닌 작업에 원본 준비 명령 `SPRITE_NOT_READY`; `SourceDraft`에서 `ReplaceSpritePlan`·`ApproveSpritePlan`·`ApproveSpriteBases`·`RegenerateSpriteFrame`·`ApproveSpriteAsset`·`CaptureSpriteExport`가 `SPRITE_NOT_READY`; 상태 전이 네 경로(성공 → `PendingReview`, current 아닌 결과 폐기, 최종 실패, 회수 한도 초과) 모두 Failed 아님; `RetryOutputTask`가 두 공정을 Pending으로 되돌리되 다른 미종료 원본 준비 공정이 있으면 거부; 이전 공정은 새 공정 계획 후 current 아님; `SelectSource`가 다른 실제 크기로 캔버스 재계산·`Analyzing`·`AnalyzeSprites`; `SourceDraft` 밖 null 원본 생성 불가; 각 결과 반영이 `ReviewRevision` 증가.
-- [ ] **Step 2: 실패 테스트(기존 결함)** — `SpriteAnalysisTests`에 `MaxAttempts=3`, 첫 분석 일시 실패 후 재시도 대기 중 Phase가 `Analyzing`이고 다음 실행에서 분석이 적재됨.
-- [ ] **Step 3: 구현(도메인)** — Interfaces. `UpdateSpriteState`는 `SourceDraft`·`Analyzing`에서 Phase를 재계산하지 않는다. `ReconcileSpriteTasks`는 `SourceDraft`에서 `UpdateSpriteState()`만 호출한다. 후보 목록은 불변 교체(EF `ValueComparer` 없음).
-- [ ] **Step 4: 실패 테스트(영속성)** — 원본 준비 작업 저장·재조회(Draft·후보·null 원본·`SourceInputJson`), 기존 2D 행(새 열 null) 읽기, 종료된 원본 준비 작업 삭제 시 후보 Blob 키 포함·원본 없음 처리, 원본 확정 후 삭제 시 원본 `StoredImage`와 후보 Blob 정리.
-- [ ] **Step 5: 구현(영속성·응답·parity)** — Files 전체. Frontend는 enum·라벨·`PHASES`만 바꾼다.
-- [ ] **Step 6: 검증** — 위 테스트, `PipelineJobTests`·`SpriteCommandTests`·`SpriteGenerationTests`·`ReclaimPlanTests`·`PromptGridTests` 통과, `dotnet build` 오류 0, `pnpm test && pnpm typecheck`. `TaskWorkerRegistrationTests`의 `TaskKind`·`Stages` 일치 단정만 Task 3까지 실패하며 명령·출력을 보고서에 남긴다.
-- [ ] **Step 7: Commit** — `feat(sprites): add source draft phase domain`
+- [x] **Step 1: 실패 테스트(도메인)** — 생성 직후 Phase·`Running`·null 원본; 길이 경계(0·1001, 0·4001); 활성 공정 중 `SaveSourcePrompt`·`PlanSourceGeneration`·`PlanSourceEnhance`·`SelectSource`가 `SPRITE_BUSY`; 후보 8장 후 `SPRITE_SOURCE_LIMIT`; `SourceDraft`가 아닌 작업에 원본 준비 명령 `SPRITE_NOT_READY`; `SourceDraft`에서 `ReplaceSpritePlan`·`ApproveSpritePlan`·`ApproveSpriteBases`·`RegenerateSpriteFrame`·`ApproveSpriteAsset`·`CaptureSpriteExport`가 `SPRITE_NOT_READY`; 상태 전이 네 경로(성공 → `PendingReview`, current 아닌 결과 폐기, 최종 실패, 회수 한도 초과) 모두 Failed 아님; `RetryOutputTask`가 두 공정을 Pending으로 되돌리되 다른 미종료 원본 준비 공정이 있으면 거부; 이전 공정은 새 공정 계획 후 current 아님; `SelectSource`가 다른 실제 크기로 캔버스 재계산·`Analyzing`·`AnalyzeSprites`; `SourceDraft` 밖 null 원본 생성 불가; 각 결과 반영이 `ReviewRevision` 증가.
+- [x] **Step 2: 실패 테스트(기존 결함)** — `SpriteAnalysisTests`에 `MaxAttempts=3`, 첫 분석 일시 실패 후 재시도 대기 중 Phase가 `Analyzing`이고 다음 실행에서 분석이 적재됨.
+- [x] **Step 3: 구현(도메인)** — Interfaces. `UpdateSpriteState`는 `SourceDraft`·`Analyzing`에서 Phase를 재계산하지 않는다. `ReconcileSpriteTasks`는 `SourceDraft`에서 `UpdateSpriteState()`만 호출한다. 후보 목록은 불변 교체(EF `ValueComparer` 없음).
+- [x] **Step 4: 실패 테스트(영속성)** — 원본 준비 작업 저장·재조회(Draft·후보·null 원본·`SourceInputJson`), 기존 2D 행(새 열 null) 읽기, 종료된 원본 준비 작업 삭제 시 후보 Blob 키 포함·원본 없음 처리, 원본 확정 후 삭제 시 원본 `StoredImage`와 후보 Blob 정리.
+- [x] **Step 5: 구현(영속성·응답·parity)** — Files 전체. Frontend는 enum·라벨·`PHASES`만 바꾼다.
+- [x] **Step 6: 검증** — 위 테스트, `PipelineJobTests`·`SpriteCommandTests`·`SpriteGenerationTests`·`ReclaimPlanTests`·`PromptGridTests` 통과, `dotnet build` 오류 0, `pnpm test && pnpm typecheck`. `TaskWorkerRegistrationTests`의 `TaskKind`·`Stages` 일치 단정만 Task 3까지 실패하며 명령·출력을 보고서에 남긴다.
+- [x] **Step 7: Commit** — `feat(sprites): add source draft phase domain`
 
 ## Task 3: 보완·생성 공정과 프롬프트
 
@@ -119,15 +119,15 @@ Result<PipelineTask> SelectSource(Guid storedImageId, SpriteCanvas actualSource,
 
 **Interfaces:** Consumes Task 2 `TryApplySourcePrompt`, `TryAddSourceCandidate`, `PipelineTask.SourceInput`, `SpriteSourceDraft.TextProviderConfigId/TextModel`. 생성 크기는 `SpriteSourceSizes.Pick(IReadOnlyList<SpriteCanvas>)`.
 
-- [ ] **Step 1: 실패 테스트** — 보완: `{"prompt":"..."}` 반영, JSON 위반·빈 값·4000자 초과는 재시도 분류, current 아님 → 반영 없이 Succeeded, `LlmCalls`에 JobId·TaskId·`EnhanceSpriteSource`, 렌더링에 설정·설명. 생성: 이미지 1장 → Blob 저장·후보 추가(검사한 MIME·크기 기록), 2장·비이미지는 재시도 없는 Fail, current 아님·상한 도달 시 저장 Blob 정리, 렌더링된 프롬프트에 snapshot과 설정. 시드·등록·워커 수·리스.
-- [ ] **Step 2: 구현** — 보완은 `RunSpriteAnalysisTaskHandler`, 생성은 `RunSpriteGenerationTaskHandler`의 구조(정책, `Classify`, rate-limit gate, finally의 Blob 정리)를 따른다. 본문은 Blob 저장까지, 작업 반영은 commit 클로저. 보완 프롬프트·생성 V2 문구는 Spec "프롬프트" 절.
-- [ ] **Step 3: 검증** — 위 테스트와 `TaskWorkerRegistrationTests` 전체 통과, `dotnet build` 오류 0.
-- [ ] **Step 4: Commit** — `feat(sprites): run source enhance and generation tasks`
+- [x] **Step 1: 실패 테스트** — 보완: `{"prompt":"..."}` 반영, JSON 위반·빈 값·4000자 초과는 재시도 분류, current 아님 → 반영 없이 Succeeded, `LlmCalls`에 JobId·TaskId·`EnhanceSpriteSource`, 렌더링에 설정·설명. 생성: 이미지 1장 → Blob 저장·후보 추가(검사한 MIME·크기 기록), 2장·비이미지는 재시도 없는 Fail, current 아님·상한 도달 시 저장 Blob 정리, 렌더링된 프롬프트에 snapshot과 설정. 시드·등록·워커 수·리스.
+- [x] **Step 2: 구현** — 보완은 `RunSpriteAnalysisTaskHandler`, 생성은 `RunSpriteGenerationTaskHandler`의 구조(정책, `Classify`, rate-limit gate, finally의 Blob 정리)를 따른다. 본문은 Blob 저장까지, 작업 반영은 commit 클로저. 보완 프롬프트·생성 V2 문구는 Spec "프롬프트" 절.
+- [x] **Step 3: 검증** — 위 테스트와 `TaskWorkerRegistrationTests` 전체 통과, `dotnet build` 오류 0.
+- [x] **Step 4: Commit** — `feat(sprites): run source enhance and generation tasks`
 
 ## Checkpoint 4: 목업 승인 (사용자)
 
-- [ ] 1440px·390px 목업을 사용자에게 보이고 승인받는다: 2D 진행 표시(프롬프트 모드 출신 작업의 "원본 준비" 단계, 이미지 모드 작업은 미표시), 원본 준비 패널(설정 요약·프롬프트 편집·후보 그리드·주 행동 버튼 규칙), 홈 "진행 중" 목록·spotlight의 "원본 준비 중"과 썸네일 자리 표시.
-- [ ] 승인 내용을 이 문서 실행 기록에 남긴다. 목업이 API 응답 필드를 추가로 요구하면 Task 5 Interfaces를 갱신한 뒤 진행한다.
+- [x] 1440px·390px 목업을 사용자에게 보이고 승인받는다: 2D 진행 표시(프롬프트 모드 출신 작업의 "원본 준비" 단계, 이미지 모드 작업은 미표시), 원본 준비 패널(설정 요약·프롬프트 편집·후보 그리드·주 행동 버튼 규칙), 홈 "진행 중" 목록·spotlight의 "원본 준비 중"과 썸네일 자리 표시.
+- [x] 승인 내용을 이 문서 실행 기록에 남긴다. 목업이 API 응답 필드를 추가로 요구하면 Task 5 Interfaces를 갱신한 뒤 진행한다.
 
 ## Task 5: 원본 준비 명령·API
 
@@ -150,11 +150,11 @@ Result<PipelineTask> SelectSource(Guid storedImageId, SpriteCanvas actualSource,
 - `GET /api/jobs/{id}/sprites/source/candidates/{candidateId}` → 후보 이미지(작업 소유 확인, 없으면 404)
 - `SpriteResponse.source: { description, prompt, candidates: [{ id, prompt, width, height, createdAt }] } | null`
 
-- [ ] **Step 1: 실패 테스트** — 다섯 명령의 정상 receipt·같은 requestId 재요청 같은 receipt·다른 본문 `SPRITE_REQUEST_CONFLICT`·낡은 revision `SPRITE_REVISION_CONFLICT`·`SPRITE_BUSY`·`SPRITE_NOT_READY`·`SPRITE_SOURCE_LIMIT`·취소 `JOB_ALREADY_TERMINAL`·텍스트 공급자 비활성. generate가 본문 프롬프트를 저장하고 그 snapshot으로 공정 계획. select: 목록에 없는 후보 404 계열, 크기·MIME 실패 400 후 단계·후보 유지, 실제 크기 차이 시 재계산, 독립 Blob 복사. SQL에서 동시 generate 2건 중 1건만 접수. API: 알 수 없는 필드 거부, `sourceImageId: null`·`source` 직렬화, 다른 작업의 후보 id로 이미지 조회 404, `POST /api/uploads/generate` 없음.
-- [ ] **Step 2: 구현** — 명령은 `SpriteCommandsHandler.ApplyAsync` 순서(fingerprint → receipt → 작업 → revision → mutate → receipt 저장 → SaveChanges → 충돌 시 `ReloadAsync` → `orchestrator.StartAsync`). 초안 생성은 `StartSpriteJobHandler`처럼 job·task·receipt를 한 SaveChanges에 저장한다.
-- [ ] **Step 3: 제거** — 동기 생성 API와 관련 코드·테스트. `LlmOperationKind.GenerateSpriteSource`, `ForSourceGeneration`, `LlmCall.SourceGenerationId`, 기존 seed migration은 유지.
-- [ ] **Step 4: 검증** — Backend 전체 회귀(유료 smoke 제외).
-- [ ] **Step 5: Commit** — `feat(sprites): add source draft commands and api`
+- [x] **Step 1: 실패 테스트** — 다섯 명령의 정상 receipt·같은 requestId 재요청 같은 receipt·다른 본문 `SPRITE_REQUEST_CONFLICT`·낡은 revision `SPRITE_REVISION_CONFLICT`·`SPRITE_BUSY`·`SPRITE_NOT_READY`·`SPRITE_SOURCE_LIMIT`·취소 `JOB_ALREADY_TERMINAL`·텍스트 공급자 비활성. generate가 본문 프롬프트를 저장하고 그 snapshot으로 공정 계획. select: 목록에 없는 후보 404 계열, 크기·MIME 실패 400 후 단계·후보 유지, 실제 크기 차이 시 재계산, 독립 Blob 복사. SQL에서 동시 generate 2건 중 1건만 접수. API: 알 수 없는 필드 거부, `sourceImageId: null`·`source` 직렬화, 다른 작업의 후보 id로 이미지 조회 404, `POST /api/uploads/generate` 없음.
+- [x] **Step 2: 구현** — 명령은 `SpriteCommandsHandler.ApplyAsync` 순서(fingerprint → receipt → 작업 → revision → mutate → receipt 저장 → SaveChanges → 충돌 시 `ReloadAsync` → `orchestrator.StartAsync`). 초안 생성은 `StartSpriteJobHandler`처럼 job·task·receipt를 한 SaveChanges에 저장한다.
+- [x] **Step 3: 제거** — 동기 생성 API와 관련 코드·테스트. `LlmOperationKind.GenerateSpriteSource`, `ForSourceGeneration`, `LlmCall.SourceGenerationId`, 기존 seed migration은 유지.
+- [x] **Step 4: 검증** — Backend 전체 회귀(유료 smoke 제외).
+- [x] **Step 5: Commit** — `feat(sprites): add source draft commands and api`
 
 ## Task 6: Frontend 데이터 계층
 
@@ -169,10 +169,10 @@ Result<PipelineTask> SelectSource(Guid storedImageId, SpriteCanvas actualSource,
 
 **Interfaces:** Consumes Task 5 HTTP. Produces `createSpriteDraft(input: CreateSpriteDraftInput, signal?) : Promise<SpriteAccepted>`, 나머지는 `SpriteMutationContext` + 본문 필드, `SpriteState.source: SpriteSourceDraft | null`, hook `useCreateSpriteDraft`·`useEnhanceSpriteSource`·`useSaveSpriteSourcePrompt`·`useGenerateSpriteSourceCandidate`·`useSelectSpriteSource`.
 
-- [ ] **Step 1: 실패 테스트** — client 본문·경로·메서드·signal, hook 무효화·409·`retry:false`, 파서(누락·잘못된 후보 거부, `source` null, `sourceImageId` null, `sourceDraft` summary), polling 간격.
-- [ ] **Step 2: 구현·제거** — Files.
-- [ ] **Step 3: 검증** — `pnpm test && pnpm lint && pnpm typecheck`, `pnpm test:e2e -- decomposition-admin`.
-- [ ] **Step 4: Commit** — `feat(frontend): add sprite source draft client`
+- [x] **Step 1: 실패 테스트** — client 본문·경로·메서드·signal, hook 무효화·409·`retry:false`, 파서(누락·잘못된 후보 거부, `source` null, `sourceImageId` null, `sourceDraft` summary), polling 간격.
+- [x] **Step 2: 구현·제거** — Files.
+- [x] **Step 3: 검증** — `pnpm test && pnpm lint && pnpm typecheck`, `pnpm test:e2e -- decomposition-admin`.
+- [x] **Step 4: Commit** — `feat(frontend): add sprite source draft client`
 
 ## Task 7: Frontend 화면·e2e
 
@@ -198,19 +198,56 @@ Result<PipelineTask> SelectSource(Guid storedImageId, SpriteCanvas actualSource,
 | 캐시된 catalog 실패(1039) | 유지 |
 | 패널 이미지·긴 텍스트(1080) | 교체: 후보 그리드·긴 설명·긴 프롬프트 넘침 없음 |
 
-- [ ] **Step 1: 실패 e2e** — 위 표와 추가 항목: 프롬프트 수정 후 바로 생성 시 요청 본문이 화면 프롬프트, 다시 보완 확인 취소 시 요청 0회, 생성 공정 실행 중 `page.reload()` 후 진행 표시·후보·비활성 유지, 첫 보완 실패 후 직접 입력해 생성, 후보 8장 후 생성 비활성, 홈 목록·spotlight "원본 준비 중".
-- [ ] **Step 2: 구현** — `JobProgressPanel`·`ModelSelect`·`ProviderSelect`·`spriteStyles` 재사용, 목업대로.
-- [ ] **Step 3: 검증** — Frontend 전체 회귀 `pnpm test && pnpm lint && pnpm typecheck && pnpm build && pnpm test:e2e`, 초기 JS 예산 통과.
-- [ ] **Step 4: Commit** — `feat(frontend): add sprite source draft flow`
+- [x] **Step 1: 실패 e2e** — 위 표와 추가 항목: 프롬프트 수정 후 바로 생성 시 요청 본문이 화면 프롬프트, 다시 보완 확인 취소 시 요청 0회, 생성 공정 실행 중 `page.reload()` 후 진행 표시·후보·비활성 유지, 첫 보완 실패 후 직접 입력해 생성, 후보 8장 후 생성 비활성, 홈 목록·spotlight "원본 준비 중".
+- [x] **Step 2: 구현** — `JobProgressPanel`·`ModelSelect`·`ProviderSelect`·`spriteStyles` 재사용, 목업대로.
+- [x] **Step 3: 검증** — Frontend 전체 회귀 `pnpm test && pnpm lint && pnpm typecheck && pnpm build && pnpm test:e2e`, 초기 JS 예산 통과.
+- [x] **Step 4: Commit** — `feat(frontend): add sprite source draft flow`
 
 ## Task 8: 마무리 검증·문서
 
 **Files:** `docs/xHuman/CODEMAP.md` 영역 표에 "2D 원본 준비" 작업 행(backend·frontend 지도 링크), 바뀐 각 지도의 확인 기준 날짜·revision, 이 문서 실행 기록.
 
-- [ ] **Step 1** — 마지막 Backend·Frontend 소스 변경 이후 각 스택 전체 회귀 결과를 실행 기록에 남긴다. 건너뜀·미수집은 통과로 세지 않는다.
-- [ ] **Step 2** — `pnpm docs:check`, 바뀐 지도 링크·경로 확인.
-- [ ] **Step 3: Commit** — `docs: record 2d source draft implementation`
+- [x] **Step 1** — 마지막 Backend·Frontend 소스 변경 이후 각 스택 전체 회귀 결과를 실행 기록에 남긴다. 건너뜀·미수집은 통과로 세지 않는다.
+- [x] **Step 2** — `pnpm docs:check`, 바뀐 지도 링크·경로 확인.
+- [x] **Step 3: Commit** — `docs: record 2d source draft implementation`
 
 ## 실행 기록
 
 - 2026-10-13 설계 검증: 독립 리뷰 2회(Backend 실현 가능성, Frontend·계약)에서 막히는 문제 6건(커밋 단위 빌드 실패, 후보 저장과 공정 `DbContext` 충돌, 기존 명령의 단계 우회, 상태 전이 미정, 규칙 모순, 미저장 편집 생성)과 빈틈을 찾아 이 계획과 설계에 반영했다. 사용자 결정: 입력 배치 유지 + 활성 조건, 용어 "원본 준비", 생성 요청에 프롬프트 포함, 방치 작업은 홈 표시만.
+
+### 2026-10-13 구현 실행 기록
+
+- 실행 방식: Subagent-driven. worktree `Noxtend-worktrees/2d-source-draft`, 브랜치 `claude/2d-source-draft`, 기준 `a2cacbc`. 작업마다 새 구현 에이전트와 별도 리뷰 에이전트를 배정했고 마지막에 전체 변경 독립 리뷰를 수행했다.
+- Task 1 `c0c4aba`: 2D 분석 프롬프트 V2(정규화 좌표 안내) + migration. 집중 테스트 69 통과. 리뷰 clean.
+- Task 2 `6140ea1`: 원본 준비 도메인·영속성·null 원본 가드. Backend 1839 통과 + 허용 red 1건(`TaskWorkerRegistrationTests`, Task 3에서 해소), Frontend test·typecheck·lint 통과. 리뷰 clean.
+- Task 3 `4398da9`, 수정 `f54d893`: 보완·생성 공정과 프롬프트 V2·Enhance 시드. Backend 1873/1874 후 카운트 기대치 수정(해당 클래스 5/5). 리뷰 지적(후보 상한 Blob 정리 테스트 누락, isometric+tiles 문구 약함)을 수정해 clean.
+- Checkpoint 4: 사용자가 목업을 자동 승인했다. 컨트롤러가 설계 문서의 화면 절에서 텍스트 UI 기준을 기록해 Task 6·7의 기준으로 썼다.
+  - 진행 표시: 프롬프트 모드 출신 작업(`sprite.source !== null`)만 맨 앞에 "원본 준비" 단계, 위치는 Phase로 찾음, 요약 `후보 n/8`.
+  - 패널 순서: 설정 요약 → 장면 설명(읽기 전용 + [다시 보완]) → 보완 프롬프트(`n/4000`, [저장]) → 후보 그리드(`aria-pressed`) → 주 버튼 하나([원본 후보 생성] 또는 [이 원본으로 분석]). 후보 8장이면 생성 비활성, 공정 중 전체 잠금, 오류는 하단 `role="alert"` 한 곳.
+  - 취소: 확인 문구 후 후보 읽기 전용, "새 2D 작업" 링크. 홈: "원본 준비 중" + 이미지 아이콘 자리 표시, spotlight `후보 n/8`.
+  - 입력 화면: 배치 유지, 프롬프트 모드 주 버튼 [보완하기](시점·형식·두 모델 선택 + 설명 1~1000자일 때만 활성).
+- Task 5 `a1312ef`: 원본 준비 명령·API(`SpriteSourceCommandsHandler`, 후보 이미지 GET, `SpriteResponse.Source`), 동기 생성 경로 삭제. Backend 1867/1867, 건너뜀 0. 리뷰 clean.
+- Task 6 `dd4e52e`: Frontend 데이터 계층(파서·API·hook·null 원본 소비자·관리자 프롬프트 행). unit 492, lint·typecheck 통과, admin e2e 19/19. 프롬프트 모드 e2e 16건은 Task 7까지 의도적으로 실패. 리뷰 clean.
+- Task 7 `2ab5efe`: 입력 화면·`SpriteSourceDraftPanel`·진행·공정 행·홈, Fake e2e 교체. unit 492, build 초기 JS 114.31/122.55 kB, 전체 e2e 358/0/0(포트 4187 임시 설정). 리뷰 clean.
+- 최종 리뷰(`a2cacbc..2ab5efe`): Ready to merge: Yes. 수정 웨이브 `0385d0e`로 4건 반영: M1 sourceDraft 진행 요약 숨김, M2 생성 접수 시 이미지 공급자·모델·크기 재검증, M3 후보 크기 상한을 선택 상한과 일치, T7-1 취소 초안의 직접 입력 안내 숨김. 재리뷰에서 4건 모두 ADDRESSED, 새 문제 없음. 집중 테스트 112 통과, sprites-static e2e 52 통과.
+- 최종 전체 회귀(HEAD `0385d0e`, Docker 사용, 유료 smoke 제외):
+  - Backend: `dotnet build apps/backend/Noxtend.slnx` 오류 0 후 `dotnet test apps/backend/Noxtend.slnx --no-build --filter 'FullyQualifiedName!~TripoSmokeTests&FullyQualifiedName!~SimilaritySmokeTests'` 통과 1872, 실패 0, 건너뜀 0, 전체 1872(11분 44초).
+  - Frontend: `pnpm test` 58 파일 492/492, `pnpm lint` 통과, `pnpm typecheck` 통과, `pnpm build` 통과(`initial JS 114.31 kB / budget 122.55 kB`, 여유 8.24 kB).
+  - E2E: 4173이 다른 프로세스에 점유되어 임시 config(포트 4197, 새 build, `reuseExistingServer: false`, 실행 후 삭제·미커밋)로 `playwright test` 359 통과, 실패 0, 건너뜀 0, flaky 0(6.9분).
+  - `pnpm docs:check`, `git diff --check` 통과.
+- 결정 사항(`Ruling:`, 틀렸을 때의 비용):
+  - Checkpoint 4 목업 자동 승인: 사용자가 화면을 본 뒤 UI 재작업.
+  - 설명·프롬프트 길이 위반은 `SPRITE_SETTINGS_INVALID`(400): 나중에 새 오류 코드로 교체.
+  - 같은 프롬프트 저장은 revision 증가 없이 `Ok(false)`: 클라이언트가 동일 저장에서 revision 변화를 기대하면 어긋남.
+  - `TryAddSourceCandidate`는 후보 프롬프트가 공정 입력 프롬프트와 같을 때만 허용: 후보 거부.
+  - 현재 아닌 원본 공정 결과는 `TaskExecution`의 Skipped/Canceled로 종료(Succeeded 아님): 기능 영향 없음.
+  - Task 3~5 사이 옛 동기 `GenerateSpriteSourceHandler`가 V2 활성 시 `{{settings}}`로 실패: 중간 상태 한정, Task 5에서 삭제해 병합 후 영향 없음.
+  - 원본 명령은 화면에 보이는 서버 revision을 보내 화면 프롬프트로 항상 저장·생성: 다른 탭이 저장한 프롬프트를 조용히 덮어쓸 수 있음.
+- 후속 후보(deferred minor):
+  - Backend 도메인: `TryAddSourceCandidate` 검증이 직렬화보다 약함(SafePath·길이), `TryApplySourcePrompt` 임대 확인 없음, `ApproveSpritePlan` 가드 중복, `RetryTaskHandler`의 생성 재시도가 이미지 공급자를 재확인하지 않음(실행 시 즉시 실패).
+  - Backend 명령: select가 BUSY일 때도 먼저 검사·복사, 모호한 예외 커밋 확인이 거칠어 Blob 누수 위험, 알 수 없는 후보 선택이 `JOB_UPLOAD_NOT_FOUND`(400), 텍스트 모델 카탈로그 미재확인.
+  - Backend 테스트: BUSY 정리 대상 Blob 구분, rowversion 충돌 select 정리, `RetryOutputTask` revision 증가, 마이그레이션 전 행 보존·Down 성공 경로, 이전 행 비활성 단정, `IsometricTiles` 상수 단정이 첫 줄만 확인, LlmCalls 행 단정 없음.
+  - 프롬프트·문서: V2 텍스트에 `x+w<=1,y+h<=1` 명시, 주석 문체(문장형·em dash·하이픈), `providers-and-prompts` 문단 분리·"자른다"/"곳" 표현.
+  - Frontend UI: 3D 원본 없음 안내에 이동 링크 없음, spotlight가 상세 로딩 전 0/8, untrimmed 프롬프트가 dirty로 남음, `invalidate` 미대기로 잠금 해제·409 경합, 설명 편집기 닫을 때 포커스 유실, 헤더 라벨이 sourceDraft에서 "검수 대기"(PendingReview 설계상).
+  - Frontend 테스트: 재보완 취소 시 로컬 편집 유지, 리비전 폴링 중 미저장 편집, 다음 명령 시 alert 해제, select 400 표시, `textModelsEmpty` 사유 문구, 홈 비-spotlight 행, fake `sourceBusyOnce` 순서가 Backend와 다름.
+- 미확인: 실제 AI 모델(텍스트 보완·이미지 생성·Anthropic 스키마 수락)로 확인하지 않았다. 모든 검증은 Fake 공급자 기준이다. 로컬 배포(Kubernetes 기동)와 실제 SQL Server에 대한 migration 적용도 하지 않았다.

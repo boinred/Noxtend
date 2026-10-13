@@ -112,6 +112,7 @@
 
 ## 확인 기준과 미확인
 
+- 2D 원본 준비 프롬프트 확인: 2026-10-13, 기준 `0385d0e`. `EnhanceSpriteSource`·`GenerateSpriteSource`·`AnalyzeSprites` V2 시드·변수·migration을 코드·테스트와 대조했고 Backend 전체 회귀(1872 통과, 건너뜀 0)에 포함됐다. 실제 모델 출력 품질은 확인하지 않았다(Fake만 사용).
 - Anthropic 스키마 정리 확인: 2026-10-13. `AnthropicJsonSchemaTests`가 2D 분석 시드 스키마와 이름 보존·중첩 정리 사례를 검증하고, 제거 대상 제약을 쓰는 시드 스키마별 파서·도메인 검증 위치를 대조했다. 실제 Anthropic 호출은 하지 않았으므로 실 API 수락 여부는 미확인이다.
 - Anthropic 두 구간 수집·저장·비용 경계 및 UI 경계 문구 확인: 2026-10-13. 이번 확인 범위는 parser의 연속 두 행 검증, SQL Testcontainers 저장→재조회→`ModelPriceBook.Estimate`의 100000/100001 경계, 단가 화면의 `이상` 표기다. 나머지 영역의 확인 기준은 아래 기록을 유지한다.
 

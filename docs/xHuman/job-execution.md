@@ -67,6 +67,7 @@ TaskKind별 handler는 `TaskWorkerRegistration`의 표가 정본이다. 텍스�
 
 ## 확인 기준과 미확인
 
+- 2D 원본 준비 공정 확인: 2026-10-13, 기준 `0385d0e`. `EnhanceSpriteSource`·`GenerateSpriteSource` 단계 등록과 `ReclaimPlan`을 코드와 대조했고 Backend 전체 회귀(1872 통과, 건너뜀 0)에 포함됐다. 실제 SQL Server migration 적용과 로컬 배포는 확인하지 않았다.
 - 마지막 확인: 2026-10-08, revision `d2cad8d`. 위 경로·심볼은 코드에서 존재와 호출 관계를 확인했다. 이 확인에서는 테스트를 실행하지 않았다.
 - 재확인: 2026-10-09. Migration 절은 `dotnet ef migrations has-pending-model-changes`로 확인했다(Infrastructure를 startup project로 쓰면 성공, Api는 EF Design 미참조로 실패). `Api/ReclaimPlanTests.cs`는 Backend 전체 회귀(`dd73930`, 1,631 통과)와 주석 정리 후 집중 테스트(`a51167a`, 2 통과)로 다시 확인했다.
 - 미확인: Redis 장애·Pod 재시작 중 실제 복구 시간, 실제 SQL Server에 대한 migration 적용 결과, Tripo·Meshy 실 API 응답 형식 변화. 이들은 Fake·Testcontainers 테스트 범위 밖이며 실환경 확인이 필요하다.

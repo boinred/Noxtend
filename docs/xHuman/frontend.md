@@ -107,6 +107,7 @@ React 19·Vite·React Router·TanStack Query·Tailwind·shadcn/ui(Radix) 구성�
 
 ## 확인 기준과 미확인
 
+- 2D 원본 준비 최종 확인: 2026-10-13, 기준 `0385d0e`. 원본 준비 패널·진행 단계·공정 행·홈 표시를 코드와 대조했다. `pnpm test` 492/492(58 파일), lint·typecheck·build 통과(초기 JS 114.31 kB / 예산 122.55 kB), 포트 4197 새 build·`reuseExistingServer=false` Fake E2E 359/359(건너뜀 0) 통과. 실제 Backend 연결·실 AI는 확인하지 않았다.
 - 2D 원본 준비 확인: 2026-10-13, 기준 `dd4e52e` + 이 변경. 위 입력·원본 준비 패널·진행 단계·공정 행·홈 표시를 코드와 대조했다. unit 492/492, lint/typecheck/build(초기 JS 114.31 kB/122.55 kB), 전용 포트 4187 새 build·`reuseExistingServer=false`의 Fake E2E 358/358 통과. 실제 Backend·실 AI 연결은 미확인이다.
 - 모델·단가 수집 확인: 2026-10-09, revision `7862b8b`. 위 화면·hook·reader·필터 호출을 확인하고 native Select 가드와 단가 domain/API reader 순수 테스트를 실행했다. 통합 unit451/451·Fake E2E345/345·lint/typecheck/build 통과와 390px dark/1440px light 관찰은 [실행 결과](../evals/model-price-update/results.md#최종-통합-검증)에 기록했다. 실 공급자 end-to-end 확인으로 확대하지 않는다.
 - 마지막 확인: 2026-10-08, revision `d2cad8d`. 코드 지도 도입 때 문서의 코드 경로와 상대 링크 존재를 자동 대조했다. 서술된 규칙 전체를 코드와 다시 대조하지는 않았다.

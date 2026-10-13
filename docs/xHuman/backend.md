@@ -131,6 +131,7 @@ LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계�
 
 ## 확인 기준과 미확인
 
+- 2D 원본 준비 확인: 2026-10-13, 기준 `0385d0e`. 초안 생성·보완·프롬프트 저장·후보 생성·원본 선택 명령, `GET sprites/source/candidates/{candidateId}`, `SpriteResponse.Source`, 원본 준비 단계의 상태 전이를 코드·테스트와 대조했다. Docker 사용 전체 회귀 `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName!~TripoSmokeTests&FullyQualifiedName!~SimilaritySmokeTests'` 통과 1872, 실패 0, 건너뜀 0(11분 44초). 실제 AI 모델 호출과 로컬 배포 환경 확인은 하지 않았다.
 - 모델·단가 수집 확인: 2026-10-09, revision `7862b8b`. `PricesController`의 `POST /api/prices/update-previews`, `POST /api/prices/update-previews/{id:guid}/apply` 및 `PriceUpdateContracts.cs`, handler·parser·store를 확인했다. preview·apply는 기존 `ApiResults` 봉투와 `PriceUpdateInvalid` 400, 만료·단가 변경·request 충돌 409, preview 없음 404를 사용한다. 신설 SQL6건을 포함한 Backend1780/1780(건너뜀0) 통과는 [실행 결과](../evals/model-price-update/results.md#최종-통합-검증)에 기록했다.
 - 마지막 확인: 2026-10-08, revision `d2cad8d`. 코드 지도 도입 때 문서의 코드 경로와 상대 링크 존재를 자동 대조했다. 서술된 규칙 전체를 코드와 다시 대조하지는 않았다.
 - 미확인: configured `Program.cs` 호스트를 관통하는 동작, 실제 SQL Server의 migration 적용, 유료 공급자 품질. Fake·격리 SQL 테스트 범위 밖이며 실환경 확인이 필요하다.
