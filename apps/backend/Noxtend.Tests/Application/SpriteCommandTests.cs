@@ -189,10 +189,12 @@ public sealed class SpriteCommandTests
     }
 
     [Theory]
-    [InlineData(0)]
-    [InlineData(1)]
-    [InlineData(2)]
-    public async Task GridChangedDuringPack_PreservesHistoryOnlyWithLeaseOwnership(int interruption)
+    [InlineData(0, 1200)]
+    [InlineData(1, 1200)]
+    [InlineData(2, 1200)]
+    [InlineData(3, 0)]
+    [InlineData(3, 1200)]
+    public async Task GridChangedDuringPack_PreservesHistoryOnlyWithLeaseOwnership(int interruption, int delayMs)
     {
         var f = new PipelineFixture(options: new JobOptions { LeaseSeconds = 120, LeaseRenewSeconds = 1 });
         var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "fake",
@@ -216,22 +218,34 @@ public sealed class SpriteCommandTests
         var result = await f.SpriteCommands.ExportAsync(Context(job), [plan.Id], default);
         var pack = job.Tasks.Single(t => t.Id == result.Value!.TaskIds.Single());
         var before = f.Blobs.Count;
-        var blobs = new MutatingBlob(f.Blobs, () =>
+        Guid? newerExportId = null;
+        var blobs = new MutatingBlob(f.Blobs, async () =>
         {
             job.ReplaceSpritePlan([plan], new(.5), [], job.Sprites.ReviewRevision);
+            if (interruption == 3)
+            {
+                var newer = await f.SpriteCommands.ExportAsync(Context(job), [plan.Id], default);
+                Assert.True(newer.IsSuccess);
+                Assert.Equal(RunTaskOutcome.Succeeded,
+                    await f.RunSpritePack.HandleAsync(newer.Value!.TaskIds.Single(), default));
+                newerExportId = job.Sprites.CompletedExportId;
+                Assert.Equal(JobStatus.Succeeded, job.Status);
+                Assert.NotNull(newerExportId);
+            }
             if (interruption == 1) job.Cancel(f.Clock.Now);
             if (interruption == 2) { pack.ReleaseForRetry(); pack.Claim(f.Clock.Now, f.Options.Lease); }
-        }, 1200);
+        }, delayMs);
         var handler = new RunSpritePackTaskHandler(f.Jobs, blobs, new SpritePackageWriter(new SkiaImageTranscoder()),
             f.Execution, f.Clock, f.Options, NullLogger<RunSpritePackTaskHandler>.Instance);
         var outcome = await handler.HandleAsync(pack.Id, default);
-        if (interruption == 0)
+        if (interruption is 0 or 3)
         {
             Assert.True(outcome == RunTaskOutcome.Succeeded, $"{outcome}: {pack.FailureReason}, blob reached: {blobs.Content is not null}");
-            Assert.False(Assert.Single(job.Sprites.Exports).IsCurrent);
-            Assert.Equal(JobStatus.PendingReview, job.Status);
-            Assert.Null(job.Sprites.CompletedExportId);
-            Assert.Equal(before + 1, f.Blobs.Count);
+            Assert.False(job.Sprites.Exports.Single(e => e.Id == pack.SpriteExportInput!.ExportId).IsCurrent);
+            Assert.Equal(interruption == 3 ? JobStatus.Succeeded : JobStatus.PendingReview, job.Status);
+            Assert.Equal(newerExportId, job.Sprites.CompletedExportId);
+            if (newerExportId is { } id) Assert.True(job.Sprites.Exports.Single(e => e.Id == id).IsCurrent);
+            Assert.Equal(before + (interruption == 3 ? 2 : 1), f.Blobs.Count);
         }
         else
         {
@@ -254,6 +268,7 @@ public sealed class SpriteCommandTests
         {
             if (cancel) job.Cancel(f.Clock.Now);
             else Assert.True(job.ReplaceSpritePlan([job.Sprites.Assets[0].Plan with { Fps = 10 }], job.Sprites.ReviewRevision).IsSuccess);
+            return Task.CompletedTask;
         });
         var handler = new RunSpritePackTaskHandler(f.Jobs, blobs, new SpritePackageWriter(new SkiaImageTranscoder()),
             f.Execution, f.Clock, f.Options, NullLogger<RunSpritePackTaskHandler>.Instance);
@@ -579,14 +594,14 @@ public sealed class SpriteCommandTests
         public Task<Stream> OpenReadAsync(string key, CancellationToken ct) => inner.OpenReadAsync(key, ct);
         public Task DeleteAsync(string key, CancellationToken ct) => inner.DeleteAsync(key, ct);
     }
-    private sealed class MutatingBlob(IBlobStorage inner, Action mutation, int delayMs = 0) : IBlobStorage
+    private sealed class MutatingBlob(IBlobStorage inner, Func<Task> mutation, int delayMs = 0) : IBlobStorage
     {
         public Stream? Content { get; private set; }
         public async Task<string> SaveAsync(Stream content, string contentType, CancellationToken ct)
         {
             Content = content;
             var key = await inner.SaveAsync(content, contentType, ct);
-            mutation();
+            await mutation();
             if (delayMs > 0) await Task.Delay(delayMs);
             return key;
         }

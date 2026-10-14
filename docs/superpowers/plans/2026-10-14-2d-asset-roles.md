@@ -408,3 +408,26 @@ Task 8 E2E의 실행 당시 임시 설정은 기존 Playwright config를 import�
 - 기존 SSH.NET `NU1903`, Skia `DrawBitmap` obsolete·xUnit warning과 Vite 큰 chunk warning은 이번 범위에서 변경하지 않았다. 초기 JS budget은 통과했다.
 
 Task 9 문서 검증: `pnpm docs:check`와 `git diff --check` 통과. 문서 검사는 기존 두 계획의 500행 초과 경고만 냈다. `DESIGN.md`·`PRODUCT.md`·기존 배경 설계의 후속 링크·코드 지도·이 실행 기록만 경로 지정 stage하여 `docs: record 2d asset roles implementation`으로 커밋한다. 애플리케이션 소스 변경·전체 회귀 재실행·push·merge·배포는 없다.
+
+### 2026-10-15 최종 리뷰 보완
+
+최초 전체 리뷰에서 P2 1건과 P3 3건을 확인했다. 새 격자 B의 export가 먼저 완료하면 `TaskExecution`의 종료 작업 가드가 격자 A의 실행 중 ZIP을 버리는 문제가 있었고, Layers 잘못된 역할 검사는 grid 선검사에, 유한 grid API 검사는 빈 assets·Layers 입력에 가려졌다. Object 미리보기는 명시적인 자기 캔버스 단정이 부족했다. 아래는 수정·검증 기록이며 수정 후 독립 재리뷰 완료를 뜻하지 않는다.
+
+- 공통 lease 갱신·최종 반영에서 소유권이 유지되는 실행 중 v2 grid-only pack에 한해 성공·부분 성공 종료를 허용한다. 실패·취소 종료, 다른 공정, 최초 claim 현재성, attempt·rowversion·lease, 승인·대상 목록 검사는 유지한다. 새 export의 작업 상태와 `CompletedExportId`를 유지한다.
+- 실제 `ExportAsync`·`RunSpritePackTaskHandler`로 B를 완료한 뒤 A를 마무리하는 즉시 반영(0ms)과 lease 갱신(1200ms) 회귀를 추가했다. A는 과거·B는 현재이며 두 Blob을 유지한다. 기존 취소·attempt 변경·승인 metadata 변경 거부 사례도 유지한다.
+- 역할 검사는 Layers grid를 null로 하고 정확한 역할 오류를 단정한다. API 검사는 유효 Tiles assets로 0·음수·1 초과의 격자 오류·revision 불변을 단정하며, `1e400`은 fingerprint 전 비유한 입력 방어 메시지를 별도로 단정한다.
+- Object를 직접 선택하고 단일 이미지 수와 SVG `viewBox=0 0 64 36`, 이미지 width/height 64/36을 단정했다. Frontend 애플리케이션 코드는 바꾸지 않았다.
+
+검증 기준은 `0fa653e` 위의 최종 보완 diff다. 아래 로그는 `.superpowers/sdd/2026-10-14-2d-asset-roles/`에 있으며 ignored 로그는 커밋하지 않는다.
+
+| 명령 | 결과 | 로그 |
+| --- | --- | --- |
+| `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName~GridChangedDuringPack\|FullyQualifiedName~Validate_RejectsRolesOutsideOutputKind\|FullyQualifiedName~JsonBinding_InvalidGrid'` | RED 11 통과·3 실패. B 완료 후 A의 두 경로가 Skipped. 나머지 1건은 비유한 grid의 기존 일반 오류 메시지에 대한 테스트 기대 수정 | `final-fix-red.log` |
+| `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName~SpriteCommandTests\|FullyQualifiedName~SpriteRulesTests\|FullyQualifiedName~SpriteApiTests\|FullyQualifiedName~RunTaskHandlerTests\|FullyQualifiedName~Concurrent'` | GREEN 동작 관련 포함 210 통과·SQL 초기화 2 실패·0 건너뜀. `StateOnlyConcurrentEdits_UseJobsRowVersion`, `ConcurrentReconstructCreate_ViolatesUniqueIndex_TranslatesToConcurrencyConflictException`의 migration 단계 SqlException timeout | `final-fix-green.log` |
+| `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName~StateOnlyConcurrentEdits_UseJobsRowVersion\|FullyQualifiedName~ConcurrentReconstructCreate_ViolatesUniqueIndex_TranslatesToConcurrencyConflictException\|FullyQualifiedName~GridChangedDuringPack\|FullyQualifiedName~RunTaskHandlerTests'` | 실패 2건 재실행과 공유 실행 경계 26 통과·0 실패·0 건너뜀, 45초 | `final-fix-retry.log` |
+| `dotnet build apps/backend/Noxtend.slnx` | 성공, 오류 0·기존 NU1903 경고 4 | `final-fix-build.log` |
+| `pnpm --filter @nextend/frontend test:e2e tests/e2e/sprites-roles.spec.ts --config playwright.finalfix.config.ts` | 3 통과, 13.8초. 기존 config 기반 fresh build·전용 4195·`reuseExistingServer:false`, testDir/project/assertion 유지. 임시 config는 실행 후 제거 | `final-fix-e2e.log` |
+| `pnpm lint` / `pnpm typecheck` | 모두 통과 | `final-fix-lint.log`·`final-fix-typecheck.log` |
+| `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName!~TripoSmokeTests&FullyQualifiedName!~SimilaritySmokeTests'` | 실행 중. 아직 전체 회귀 통과로 계산하지 않음 | `final-fix-full.log` |
+
+첫 GREEN 로그의 xUnit 실패 시각은 55초·69초이지만 최종 경과는 46분19초다. 장시간 지연 원인·호스트 잠자기는 확인되지 않았으며 환경 원인으로 단정하지 않는다. 동일 소스의 실패 2건 재실행은 통과했다. 검사 중 애플리케이션·테스트 소스 변경은 없었다. Frontend 전체 526 단위·368 E2E는 앞선 동일 애플리케이션 검증 기록을 유지하고 이번에는 역할 E2E만 다시 실행했다. 실제 AI·유료 smoke·push·merge·배포와 수정 후 독립 재리뷰는 이번 실행자가 수행하지 않았다.

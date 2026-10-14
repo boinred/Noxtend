@@ -322,12 +322,19 @@ public sealed class SpriteApiTests
     public async Task JsonBinding_InvalidGridIs400BeforeFingerprint(string width)
     {
         var f = new PipelineFixture();
-        var job = await SpriteCommandTests.Plan(f);
-        var json = $$$"""{"requestId":"{{{Guid.NewGuid()}}}","expectedRevision":{{{job.Sprites!.ReviewRevision}}},"assets":[],"grid":{"cellWidth":{{{width}}}}}""";
+        var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "fake",
+            new(SpriteView.SideView, SpriteOutputKind.Tiles), new(800, 600), new(1024, 1024), f.Clock.Now).Value!;
+        await f.Jobs.AddAsync(job, default);
+        var json = $$$"""{"requestId":"{{{Guid.NewGuid()}}}","expectedRevision":{{{job.Sprites!.ReviewRevision}}},"assets":[{"id":"{{{Guid.NewGuid()}}}","name":"tile","order":0,"sourceBounds":{"x":0,"y":0,"w":1,"h":1},"requiresTransparency":false,"role":"tile"}],"grid":{"cellWidth":{{{width}}}}}""";
         var binding = await Bind<SpritePlanRequest>(json);
         Assert.False(binding.HasError);
         var revision = job.Sprites.ReviewRevision;
-        Status(await Sprites(f).UpdatePlanAsync(job.Id, (SpritePlanRequest)binding.Model!, default), 400);
+        var result = await Sprites(f).UpdatePlanAsync(job.Id, (SpritePlanRequest)binding.Model!, default);
+        Status(result, 400);
+        Assert.Equal(ErrorCode.SpritePlanInvalid, DataError(result));
+        var error = JsonSerializer.SerializeToElement(Assert.IsType<ObjectResult>(result).Value, ServerJson()).GetProperty("error");
+        if (width == "1e400") Assert.Equal("2D 요청 입력이 유효하지 않습니다", error.GetProperty("message").GetString());
+        else Assert.Contains("격자", error.GetProperty("message").GetString());
         Assert.Equal(revision, job.Sprites.ReviewRevision);
     }
 

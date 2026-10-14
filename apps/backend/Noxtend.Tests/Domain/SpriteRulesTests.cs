@@ -239,8 +239,12 @@ public sealed class SpriteRulesTests
     [InlineData(SpriteOutputKind.Tiles, SpriteAssetRole.Layer)]
     [InlineData(SpriteOutputKind.Tiles, (SpriteAssetRole)99)]
     public void Validate_RejectsRolesOutsideOutputKind(SpriteOutputKind kind, SpriteAssetRole role)
-        => Assert.False(SpriteRules.Validate(Layers with { OutputKind = kind }, Source,
-            [Plan() with { Role = role }], new(1)).IsSuccess);
+    {
+        var result = SpriteRules.Validate(Layers with { OutputKind = kind }, Source,
+            [Plan() with { Role = role }], kind == SpriteOutputKind.Layers ? null : new(1));
+        Assert.False(result.IsSuccess);
+        Assert.Equal("결과 유형에 허용되지 않는 에셋 역할입니다", result.ErrorMessage);
+    }
 
     [Fact]
     public void Validate_EnforcesBackdropOrderAndRoleTransparency()
