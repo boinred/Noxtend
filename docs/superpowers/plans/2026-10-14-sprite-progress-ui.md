@@ -39,33 +39,37 @@ pnpm test && pnpm lint && pnpm typecheck && pnpm build && pnpm test:e2e
 
 **Files:** `apps/frontend/src/features/screens/JobProgressPanel.tsx`, `apps/frontend/tests/e2e/sprites-static.spec.ts`, `docs/xHuman/frontend.md`
 
-- [ ] `status`가 `running` 또는 `pending`이면 `role="progressbar"` 안에 완료 막대 뒤로 buffer를 그린다. 폭은 `max(완료율, currentPosition / steps.length)`. 스타일은 `src/features/screens/background/backgroundStyles.ts`의 `progressBuffer`(줄무늬 `stripe-drift`, `motion-reduce` 정지)를 재사용하고 `data-testid="progress-buffer"`를 붙인다. 그 외 상태에서는 buffer를 렌더하지 않는다.
-- [ ] 같은 조건에서 현재 단계 카드(`aria-current="step"`)에 `aria-hidden` 활동 점을 추가한다. `data-status-activity` 속성과 `animate-pulse motion-reduce:animate-none`을 쓴다. 점이 없어도 기존 `statusText`·헤더 상태 텍스트로 상태가 전달돼야 한다.
-- [ ] 공용 컴포넌트이므로 3D 배경·캐릭터 stepper에도 같이 적용된다(DESIGN.md "현재 실행 단계는 buffer로 구분"과 일치). 작업 종류 분기를 넣지 않는다.
-- [ ] e2e: 원본 공정 실행 중에는 `progress-buffer`가 보이고, 공정이 끝나 `pendingReview`가 되면 사라짐을 기존 원본 준비 테스트에 단언으로 추가한다.
-- [ ] `docs/xHuman/frontend.md`의 `JobProgressPanel` 설명에 buffer·활동 점 조건을 한 줄로 추가한다.
+- [x] `status`가 `running` 또는 `pending`이면 `role="progressbar"` 안에 완료 막대 뒤로 buffer를 그린다. 폭은 `max(완료율, currentPosition / steps.length)`. 스타일은 `src/features/screens/background/backgroundStyles.ts`의 `progressBuffer`(줄무늬 `stripe-drift`, `motion-reduce` 정지)를 재사용하고 `data-testid="progress-buffer"`를 붙인다. 그 외 상태에서는 buffer를 렌더하지 않는다.
+- [x] 같은 조건에서 현재 단계 카드(`aria-current="step"`)에 `aria-hidden` 활동 점을 추가한다. `data-status-activity` 속성과 `animate-pulse motion-reduce:animate-none`을 쓴다. 점이 없어도 기존 `statusText`·헤더 상태 텍스트로 상태가 전달돼야 한다.
+- [x] 공용 컴포넌트이므로 3D 배경·캐릭터 stepper에도 같이 적용된다(DESIGN.md "현재 실행 단계는 buffer로 구분"과 일치). 작업 종류 분기를 넣지 않는다.
+- [x] e2e: 원본 공정 실행 중에는 `progress-buffer`가 보이고, 공정이 끝나 `pendingReview`가 되면 사라짐을 기존 원본 준비 테스트에 단언으로 추가한다.
+- [x] `docs/xHuman/frontend.md`의 `JobProgressPanel` 설명에 buffer·활동 점 조건을 한 줄로 추가한다.
 
 ## Task 2: 원본 후보 크기와 선택 후보 큰 보기
 
 **Files:** `apps/frontend/src/features/screens/sprites/SpriteSourceDraftPanel.tsx`, `apps/frontend/src/features/screens/sprites/spriteStyles.ts`, `apps/frontend/tests/e2e/sprites-static.spec.ts`, `DESIGN.md`, `docs/xHuman/frontend.md`
 
-- [ ] 후보 격자 열 수: 1장 1열, 2장 2열, 3장 이상 3열. 720px 이하에서는 1장 1열, 2장 이상 2열. Tailwind는 정적 클래스 이름이어야 하므로 열 수별 클래스를 명시적으로 고른다.
-- [ ] 후보 이미지는 고정 높이(`h-48`) 대신 칸 폭을 채우고 원본 비율을 유지한다(`h-auto w-full object-contain`, 세로로 긴 이미지 대비 `max-h-[70vh]`). `SpriteFrameReview.tsx`가 쓰는 `styles.image`는 바꾸지 않고 후보 전용 스타일을 추가한다.
-- [ ] 후보가 1장이면 "사용한 프롬프트"를 처음부터 펼친다(`details open`).
-- [ ] 후보가 2장 이상이고 하나를 선택하면 격자 위에 선택 후보 큰 보기(`data-testid="sprite-source-selected"`)를 둔다. 패널 전체 폭 이미지(대체 텍스트 `선택한 원본 후보 n`) 아래에 "사용한 프롬프트" 라벨과 프롬프트 전문을 펼쳐 보여준다(`whitespace-pre-wrap wrap-anywhere`, 본문 `text-sm leading-relaxed text-foreground`). 격자의 해당 후보는 기존 `aria-pressed` 링으로 선택을 표시한다. 선택을 해제하면 큰 보기가 사라진다.
-- [ ] e2e: 기존 열 수 단언(1440px 3열·390px 2열, 후보 3장)을 유지하고, 후보 1장일 때 1열·프롬프트 펼침, 후보 선택 시 큰 보기와 프롬프트 표시·해제 시 사라짐을 추가한다. 긴 프롬프트에서 가로 넘침이 없는지 기존 `bounded` 검사를 큰 보기 상태에서도 실행한다.
-- [ ] `DESIGN.md` 버튼과 입력의 원본 준비 문단과 `docs/xHuman/frontend.md`의 `SpriteSourceDraftPanel` 설명을 새 배치로 갱신한다.
+- [x] 후보 격자 열 수: 1장 1열, 2장 2열, 3장 이상 3열. 720px 이하에서는 1장 1열, 2장 이상 2열. Tailwind는 정적 클래스 이름이어야 하므로 열 수별 클래스를 명시적으로 고른다.
+- [x] 후보 이미지는 고정 높이(`h-48`) 대신 칸 폭을 채우고 원본 비율을 유지한다(`h-auto w-full object-contain`, 세로로 긴 이미지 대비 `max-h-[70vh]`). `SpriteFrameReview.tsx`가 쓰는 `styles.image`는 바꾸지 않고 후보 전용 스타일을 추가한다.
+- [x] 후보가 1장이면 "사용한 프롬프트"를 처음부터 펼친다(`details open`).
+- [x] 후보가 2장 이상이고 하나를 선택하면 격자 위에 선택 후보 큰 보기(`data-testid="sprite-source-selected"`)를 둔다. 패널 전체 폭 이미지(대체 텍스트 `선택한 원본 후보 n`) 아래에 "사용한 프롬프트" 라벨과 프롬프트 전문을 펼쳐 보여준다(`whitespace-pre-wrap wrap-anywhere`, 본문 `text-sm leading-relaxed text-foreground`). 격자의 해당 후보는 기존 `aria-pressed` 링으로 선택을 표시한다. 선택을 해제하면 큰 보기가 사라진다.
+- [x] e2e: 기존 열 수 단언(1440px 3열·390px 2열, 후보 3장)을 유지하고, 후보 1장일 때 1열·프롬프트 펼침, 후보 선택 시 큰 보기와 프롬프트 표시·해제 시 사라짐을 추가한다. 긴 프롬프트에서 가로 넘침이 없는지 기존 `bounded` 검사를 큰 보기 상태에서도 실행한다.
+- [x] `DESIGN.md` 버튼과 입력의 원본 준비 문단과 `docs/xHuman/frontend.md`의 `SpriteSourceDraftPanel` 설명을 새 배치로 갱신한다.
 
 ## Task 3: 공정 목록 종류별 한 줄 집계
 
 **Files:** `apps/frontend/src/domain/job/types.ts`, `apps/frontend/src/domain/job/types.test.ts`, `apps/frontend/src/features/screens/sprites/SpriteStudioScreen.tsx`, `apps/frontend/tests/e2e/sprites-static.spec.ts`, `DESIGN.md`, `docs/xHuman/frontend.md`
 
-- [ ] 순수 함수 `taskStatusGroups(tasks)`를 `domain/job/types.ts`에 추가한다. 입력 순서대로 첫 등장 kind 순서를 유지해 `{ kind, total, running, pending, succeeded, failed, canceled, retrying }`를 돌려준다. `retrying`은 `running`·`pending`이면서 `attemptCount > 1`인 수다.
-- [ ] `SpriteStudioScreen`은 현재 표시 대상 공정(생성 공정은 현재 `frame.currentTaskId`, 원본 공정은 최신 Ordinal 하나 — 기존 필터에서 `status !== 'succeeded'` 조건만 뺀 집합)을 집계한다. 성공이 아닌 공정이 하나라도 있는 종류만 한 줄로 표시한다: `라벨 · 전체 n · 실행 중 n · 대기 n · 성공 n · 실패 n · 취소 n · 재시도 중 n`, 0인 항목은 숨긴다. 상태 라벨은 `jobStatusLabel`을 쓴다. 각 줄에 `data-testid="sprite-task-summary"`.
-- [ ] 실패 공정은 집계 줄 아래 기존과 같은 개별 행(`라벨 · 실패 · 시도 n`, 실패 이유, [실패 공정 재시도])으로 유지한다.
-- [ ] 단위 테스트: 종류별 수·순서·`retrying`·빈 입력. e2e: 기존 `원본 후보 생성 · 실행 중` 같은 문구 단언을 새 형식으로 갱신하고, 배경 생성 공정 여러 개가 한 줄로 표시됨을 확인한다.
-- [ ] `DESIGN.md` 진행 상태에 "2D 공정 목록은 종류별 한 줄 집계, 실패만 개별 행" 한 줄, `docs/xHuman/frontend.md`의 `SpriteStudioScreen` 설명을 갱신한다.
+- [x] 순수 함수 `taskStatusGroups(tasks)`를 `domain/job/types.ts`에 추가한다. 입력 순서대로 첫 등장 kind 순서를 유지해 `{ kind, total, running, pending, succeeded, failed, canceled, retrying }`를 돌려준다. `retrying`은 `running`·`pending`이면서 `attemptCount > 1`인 수다.
+- [x] `SpriteStudioScreen`은 현재 표시 대상 공정(생성 공정은 현재 `frame.currentTaskId`, 원본 공정은 최신 Ordinal 하나 — 기존 필터에서 `status !== 'succeeded'` 조건만 뺀 집합)을 집계한다. 성공이 아닌 공정이 하나라도 있는 종류만 한 줄로 표시한다: `라벨 · 전체 n · 실행 중 n · 대기 n · 성공 n · 실패 n · 취소 n · 재시도 중 n`, 0인 항목은 숨긴다. 상태 라벨은 `jobStatusLabel`을 쓴다. 각 줄에 `data-testid="sprite-task-summary"`.
+- [x] 실패 공정은 집계 줄 아래 기존과 같은 개별 행(`라벨 · 실패 · 시도 n`, 실패 이유, [실패 공정 재시도])으로 유지한다.
+- [x] 단위 테스트: 종류별 수·순서·`retrying`·빈 입력. e2e: 기존 `원본 후보 생성 · 실행 중` 같은 문구 단언을 새 형식으로 갱신하고, 배경 생성 공정 여러 개가 한 줄로 표시됨을 확인한다.
+- [x] `DESIGN.md` 진행 상태에 "2D 공정 목록은 종류별 한 줄 집계, 실패만 개별 행" 한 줄, `docs/xHuman/frontend.md`의 `SpriteStudioScreen` 설명을 갱신한다.
 
 ## 실행 기록
 
-(진행하며 기록)
+- 방식: Subagent-driven. Task 1 `f4ef16b`, Task 2 `62e1b6a`, Task 3 `3341de5`. 작업별 리뷰는 모두 Approved
+- 최종 전체 리뷰: Important 1건. `재시도 중`이 Backend 시도 수 의미와 어긋남(`Claim`이 `AttemptCount++`, `ReleaseForRetry`는 유지) → `(running && attemptCount > 1) || (pending && attemptCount > 0)`로 수정하고, DESIGN.md 활동 점·대기 중 반복 모션 문구를 정리(`43c33e2`). 재리뷰에서 모두 해소
+- 결정: buffer는 공용 `JobProgressPanel`에 넣어 3D 배경·캐릭터에도 적용. 2D 집계 줄은 `전체 n`을 항상 표시. job `pending`에서도 buffer가 흐름
+- 검증(2026-10-14, Fake API): `pnpm test` 503 통과, `pnpm lint`·`pnpm typecheck`·`pnpm build` 통과, Playwright 363 통과. 4173 포트를 무관한 `vite preview`가 점유하고 있어 4183 임시 config로 실행
+- 후속 후보: 3D 실행 중 상단 stepper와 `StageProgress`의 buffer 두 개가 함께 흐르는지 시각 확인. 2D 집계에서 `packSprites`·`analyzeSprites`의 과거 성공 공정이 합산되는 점
