@@ -2,8 +2,15 @@
  * Design Ref: §8.3 L1-F #3·#4 — 종료 판정과 폴링 백오프.
  */
 import { describe, expect, it } from 'vitest'
-import { isActive, isTerminal, jobPollDelayMs, modelBadges, nextPollDelayMs } from './types'
-import type { JobModels, JobStatus, TaskKind } from './types'
+import {
+  isActive,
+  isTerminal,
+  jobPollDelayMs,
+  modelBadges,
+  nextPollDelayMs,
+  taskStatusGroups,
+} from './types'
+import type { JobModels, JobStatus, JobTask, TaskKind } from './types'
 import type { SpritePhase } from '../sprites/types'
 
 describe('isTerminal', () => {
@@ -123,5 +130,78 @@ describe('modelBadges', () => {
     // 이미지 생성 없이 접수된 옛 작업 — 빈 배지가 그려지면 안 된다
     expect(modelBadges({ text: models.text, image: null, mesh: null }, names)).toHaveLength(1)
     expect(modelBadges({ text: null, image: null, mesh: null }, names)).toEqual([])
+  })
+})
+
+describe('taskStatusGroups', () => {
+  const task = (kind: TaskKind, status: JobStatus, attemptCount = 1) => ({
+    kind,
+    status,
+    attemptCount,
+  })
+
+  it('빈 입력은 빈 목록이다', () => {
+    expect(taskStatusGroups([])).toEqual([])
+  })
+
+  it('종류별 상태 수를 첫 등장 순서로 센다', () => {
+    const tasks: Pick<JobTask, 'kind' | 'status' | 'attemptCount'>[] = [
+      task('generateSprite', 'running'),
+      task('analyzeSprites', 'succeeded'),
+      task('generateSprite', 'pending', 0),
+      task('generateSprite', 'succeeded'),
+      task('generateSprite', 'failed'),
+      task('generateSprite', 'canceled'),
+    ]
+    expect(taskStatusGroups(tasks)).toEqual([
+      {
+        kind: 'generateSprite',
+        total: 5,
+        running: 1,
+        pending: 1,
+        succeeded: 1,
+        failed: 1,
+        canceled: 1,
+        retrying: 0,
+      },
+      {
+        kind: 'analyzeSprites',
+        total: 1,
+        running: 0,
+        pending: 0,
+        succeeded: 1,
+        failed: 0,
+        canceled: 0,
+        retrying: 0,
+      },
+    ])
+  })
+
+  it('재시도 중은 시도 2회 이상 실행과 시도 1회 이상 대기만 센다', () => {
+    const [group] = taskStatusGroups([
+      task('generateSprite', 'running', 2),
+      task('generateSprite', 'pending', 3),
+      task('generateSprite', 'running', 1),
+      task('generateSprite', 'failed', 2),
+    ])
+    expect(group).toMatchObject({ total: 4, running: 2, pending: 1, failed: 1, retrying: 2 })
+  })
+
+  it.each([
+    ['pending', 1, 1],
+    ['pending', 0, 0],
+    ['running', 1, 0],
+    ['running', 2, 1],
+  ] as const)('%s 시도 %i회의 재시도 중 수는 %i이다', (status, attemptCount, retrying) => {
+    const [group] = taskStatusGroups([task('generateSprite', status, attemptCount)])
+    expect(group?.retrying).toBe(retrying)
+  })
+
+  it('집계 상태가 아닌 공정은 전체에만 센다', () => {
+    const [group] = taskStatusGroups([
+      task('generateSprite', 'pendingReview'),
+      task('generateSprite', 'partiallySucceeded'),
+    ])
+    expect(group).toMatchObject({ total: 2, running: 0, pending: 0, succeeded: 0, failed: 0 })
   })
 })

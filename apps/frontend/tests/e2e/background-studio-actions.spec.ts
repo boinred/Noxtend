@@ -201,7 +201,10 @@ test.describe('스튜디오 — 실행', () => {
 
     // buffer 가 value 보다 앞선다 — 진행 중인 단계까지 포함하기 때문이다
     const value = await page.getByTestId('progress-value').boundingBox()
-    const buffer = await page.getByTestId('progress-buffer').boundingBox()
+    const buffer = await page
+      .getByTestId('stage-progress')
+      .getByTestId('progress-buffer')
+      .boundingBox()
     expect(buffer!.width).toBeGreaterThan(value!.width)
   })
 
@@ -218,7 +221,7 @@ test.describe('스튜디오 — 실행', () => {
     await page.getByTestId('start-analysis').click()
     await expect(page.getByTestId('progress-bar')).toHaveAttribute('data-active', 'true')
 
-    const bar = page.getByTestId('progress-buffer')
+    const bar = page.getByTestId('stage-progress').getByTestId('progress-buffer')
 
     // 두 시점의 무늬 위치가 달라야 흐르는 것이다
     const first = await bar.screenshot()

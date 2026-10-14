@@ -487,6 +487,58 @@ export function activeSourceTask<T extends Pick<JobTask, 'kind' | 'status'>>(
   )
 }
 
+export interface TaskStatusGroup {
+  kind: TaskKind
+  total: number
+  running: number
+  pending: number
+  succeeded: number
+  failed: number
+  canceled: number
+  retrying: number
+}
+
+// 종류별 첫 등장 순서 유지
+export function taskStatusGroups(
+  tasks: readonly Pick<JobTask, 'kind' | 'status' | 'attemptCount'>[],
+): TaskStatusGroup[] {
+  const groups = new Map<TaskKind, TaskStatusGroup>()
+  for (const task of tasks) {
+    let group = groups.get(task.kind)
+    if (!group) {
+      group = {
+        kind: task.kind,
+        total: 0,
+        running: 0,
+        pending: 0,
+        succeeded: 0,
+        failed: 0,
+        canceled: 0,
+        retrying: 0,
+      }
+      groups.set(task.kind, group)
+    }
+    group.total++
+    if (
+      task.status === 'running' ||
+      task.status === 'pending' ||
+      task.status === 'succeeded' ||
+      task.status === 'failed' ||
+      task.status === 'canceled'
+    ) {
+      group[task.status]++
+    }
+    // 대기 중 시도 1회 이상은 자동 재시도 대기
+    if (
+      (task.status === 'running' && task.attemptCount > 1) ||
+      (task.status === 'pending' && task.attemptCount > 0)
+    ) {
+      group.retrying++
+    }
+  }
+  return [...groups.values()]
+}
+
 // ─────────────────── 파츠 생성 (사이클 #7) ───────────────────
 //
 // Design Ref: §5.2 · §5.3

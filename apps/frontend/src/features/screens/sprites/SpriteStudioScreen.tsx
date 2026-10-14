@@ -3,7 +3,14 @@ import { Button } from '@/components/ui/button'
 import { useJob, useRetryTask, useCancelJob } from '@/app/queries/useJob'
 import { apiErrorMessage } from '@/app/queries/errors'
 import { useProviders } from '@/app/queries/useProviders'
-import { jobStatusLabel, taskKindLabel, isTerminal, isSourceTask } from '@/domain/job/types'
+import {
+  jobStatusLabel,
+  taskKindLabel,
+  taskStatusGroups,
+  isTerminal,
+  isSourceTask,
+  type TaskStatusGroup,
+} from '@/domain/job/types'
 import { ROUTES } from '@/routes/paths'
 import { PageContainer } from '../PageContainer'
 import { ModelSummary } from '../ModelSummary'
@@ -16,6 +23,16 @@ import { SpriteExport } from './SpriteExport'
 import { SpriteProgress } from './SpriteProgress'
 import { SpriteSourceDraftPanel } from './SpriteSourceDraftPanel'
 import { spriteStyles as styles } from './spriteStyles'
+
+const SUMMARY_STATUSES = ['running', 'pending', 'succeeded', 'failed', 'canceled'] as const
+
+export function taskGroupSummary(group: TaskStatusGroup): string {
+  const parts = SUMMARY_STATUSES.filter((status) => group[status] > 0).map(
+    (status) => `${jobStatusLabel(status)} ${group[status]}`,
+  )
+  if (group.retrying > 0) parts.push(`재시도 중 ${group.retrying}`)
+  return [taskKindLabel(group.kind), `전체 ${group.total}`, ...parts].join(' · ')
+}
 
 export function SpriteStudioScreen() {
   const { jobId } = useParams()
@@ -38,6 +55,12 @@ export function SpriteStudioScreen() {
         .sort((a, b) => a.ordinal - b.ordinal)
         .at(-1)
     : undefined
+  const relevantTasks = (job?.tasks ?? []).filter(
+    (task) =>
+      (task.kind !== 'generateSprite' || currentFrameTasks.has(task.id)) &&
+      (!isSourceTask(task) || task.id === currentSourceTask?.id),
+  )
+  const taskGroups = taskStatusGroups(relevantTasks)
   const packTask = job?.tasks.filter((task) => task.kind === 'packSprites').at(-1)
   const packing =
     sprite?.phase === 'packaging' &&
@@ -119,13 +142,19 @@ export function SpriteStudioScreen() {
                 {job.failureReason}
               </p>
             ) : null}
-            {job.tasks
-              .filter(
-                (task) =>
-                  task.status !== 'succeeded' &&
-                  (task.kind !== 'generateSprite' || currentFrameTasks.has(task.id)) &&
-                  (!isSourceTask(task) || task.id === currentSourceTask?.id),
-              )
+            {taskGroups
+              .filter((group) => group.total > group.succeeded)
+              .map((group) => (
+                <p
+                  key={group.kind}
+                  data-testid="sprite-task-summary"
+                  className="text-sm tabular-nums break-words"
+                >
+                  {taskGroupSummary(group)}
+                </p>
+              ))}
+            {relevantTasks
+              .filter((task) => task.status === 'failed')
               .map((task) => (
                 <div key={task.id} className={styles.row}>
                   <span>
@@ -135,7 +164,7 @@ export function SpriteStudioScreen() {
                   {task.failureReason ? (
                     <span className={styles.error}>{task.failureReason}</span>
                   ) : null}
-                  {task.status === 'failed' && !canceled ? (
+                  {!canceled ? (
                     <Button
                       variant="outline"
                       disabled={retry.isPending || query.isError}

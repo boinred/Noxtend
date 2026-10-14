@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { jobStatusLabel, type JobStatus } from '@/domain/job/types'
 import { Icon, type IconName } from '@/features/shell/Icon'
 import { cn } from '@/lib/utils'
+import { backgroundStyles } from './background/backgroundStyles'
 
 export type JobProgressActions = {
   onRefresh: () => void
@@ -72,6 +73,9 @@ export function JobProgressPanel({
   const detailsId = useId()
   const completedCount = steps.filter((step) => step.completed).length
   const completionPercent = Math.round((completedCount / steps.length) * 100)
+  const active = status === 'running' || status === 'pending'
+  // 시작된 단계까지만 말하고 단계 안의 진행은 추정하지 않음
+  const bufferPercent = Math.max(completionPercent, (currentPosition / steps.length) * 100)
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
@@ -141,9 +145,16 @@ export function JobProgressPanel({
         aria-valuemax={steps.length}
         aria-valuenow={completedCount}
         aria-valuetext={`${completedCount} / ${steps.length} 단계 완료`}
-        className="h-2 w-full overflow-hidden rounded-full bg-muted"
+        className="relative h-2 w-full overflow-hidden rounded-full bg-muted"
       >
-        <div className="h-full bg-primary" style={{ width: `${completionPercent}%` }} />
+        {active ? (
+          <span
+            className={backgroundStyles.progressBuffer}
+            style={{ width: `${bufferPercent}%` }}
+            data-testid="progress-buffer"
+          />
+        ) : null}
+        <div className="relative h-full bg-primary" style={{ width: `${completionPercent}%` }} />
       </div>
       <nav aria-label={navigationLabel}>
         <ol
@@ -152,17 +163,17 @@ export function JobProgressPanel({
           className="grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-1.5"
         >
           {steps.map((step, index) => {
-            const active = step.id === currentStepId
+            const current = step.id === currentStepId
             const done = step.completed
             return (
               <li
                 key={step.id}
                 data-testid={step.testId}
                 data-state={step.state}
-                aria-current={active ? 'step' : undefined}
+                aria-current={current ? 'step' : undefined}
                 className={cn(
                   'flex min-w-0 items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-center',
-                  active
+                  current
                     ? cn('border-current/40 bg-current/10', statusTone(step.state))
                     : done
                       ? 'border-primary/30 bg-primary/10 text-primary'
@@ -171,6 +182,13 @@ export function JobProgressPanel({
                         : 'border-border/60 bg-muted/40 text-muted-foreground',
                 )}
               >
+                {current && active ? (
+                  <span
+                    aria-hidden="true"
+                    data-status-activity
+                    className="size-1.5 shrink-0 rounded-full bg-current animate-pulse motion-reduce:animate-none"
+                  />
+                ) : null}
                 <span className="shrink-0 font-mono text-[0.6875rem] font-bold opacity-70">
                   {index + 1}.
                 </span>
