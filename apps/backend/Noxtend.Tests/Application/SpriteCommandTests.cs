@@ -399,6 +399,78 @@ public sealed class SpriteCommandTests
         Assert.Equal(0, f.Blobs.Count);
     }
 
+    [Fact]
+    public async Task ObjectPlan_QueriesOnlyForNewOutputAndChecksTargetGeneration()
+    {
+        var f = new PipelineFixture();
+        var command = await SpriteAnalysisTests.Prepare(f);
+        var job = PipelineJob.CreateSprites(command.UploadId!.Value, command.ImageProviderConfigId, command.ImageModel,
+            new(SpriteView.SideView, SpriteOutputKind.Tiles), new(800, 600), new(1024, 1024), f.Clock.Now).Value!;
+        await f.Jobs.AddAsync(job, default);
+        var tile = new SpriteAssetPlan(Guid.NewGuid(), "tile", 0, new(0, 0, .25, .25), true);
+        var obj = tile with { Id = Guid.NewGuid(), Name = "object", Order = 1, Role = SpriteAssetRole.Object };
+        var queries = f.Catalog.ImageQueries;
+        f.Catalog.Failure = new ProviderCallFailedException("lookup");
+        Assert.True((await f.SpriteCommands.UpdatePlanAsync(Context(job), [tile], null, default)).IsSuccess);
+        Assert.Equal(queries, f.Catalog.ImageQueries);
+        f.Catalog.Failure = null;
+        Assert.True((await f.SpriteCommands.UpdatePlanAsync(Context(job), [tile, obj], null, default)).IsSuccess);
+        Assert.Equal(queries + 1, f.Catalog.ImageQueries);
+        var revision = job.Sprites!.ReviewRevision;
+        f.Catalog.Failure = new ProviderCallFailedException("unexpected lookup");
+        Assert.True((await f.SpriteCommands.UpdatePlanAsync(Context(job), [tile, obj with { Name = "renamed", Fps = 12 }], null, default)).IsSuccess);
+        Assert.Equal(queries + 1, f.Catalog.ImageQueries);
+        f.Catalog.Failure = null;
+        f.Catalog.ImageModels.Clear();
+        Assert.Equal(ErrorCode.JobImageModelUnavailable,
+            (await f.SpriteCommands.UpdatePlanAsync(Context(job), [tile, obj with { SourceBounds = new(0, 0, .5, .5) }], null, default)).ErrorCode);
+        Assert.Equal(revision + 1, job.Sprites.ReviewRevision);
+    }
+
+    [Fact]
+    public async Task GenerationCommands_CheckTargetAssetCanvasAndPreserveRevisionOnUnavailableModel()
+    {
+        var f = new PipelineFixture();
+        var command = await SpriteAnalysisTests.Prepare(f);
+        var job = PipelineJob.CreateSprites(command.UploadId!.Value, command.ImageProviderConfigId, command.ImageModel,
+            new(SpriteView.SideView, SpriteOutputKind.Tiles), new(800, 600), new(1024, 1024), f.Clock.Now).Value!;
+        var tile = new SpriteAssetPlan(Guid.NewGuid(), "tile", 0, new(0, 0, .25, .25), true);
+        var obj = tile with { Id = Guid.NewGuid(), Order = 1, Role = SpriteAssetRole.Object, SourceBounds = new(0, 0, .5, .25) };
+        job.ReplaceSpritePlan([tile, obj], new(.25), [new(1536, 1024)], 0);
+        await f.Jobs.AddAsync(job, default);
+        f.Catalog.ImageModels.Clear();
+        f.Catalog.ImageModels.Add(new(command.ImageModel, "sprite", new(true, [new(1024, 1024)])));
+        var revision = job.Sprites!.ReviewRevision;
+        Assert.Equal(ErrorCode.JobImageModelUnavailable, (await f.SpriteCommands.ApprovePlanAsync(Context(job), default)).ErrorCode);
+        Assert.Equal(ErrorCode.JobImageModelUnavailable, (await f.SpriteCommands.ApproveBasesAsync(Context(job), [obj.Id], default)).ErrorCode);
+        Assert.Equal(ErrorCode.JobImageModelUnavailable, (await f.SpriteCommands.RegenerateAsync(Context(job), obj.Id, 0, default)).ErrorCode);
+        Assert.Equal(revision, job.Sprites.ReviewRevision);
+        Assert.Empty(job.Tasks);
+        Assert.True((await f.SpriteCommands.RegenerateAsync(Context(job), tile.Id, 0, default)).IsSuccess);
+    }
+
+    [Theory]
+    [InlineData(SpriteOutputKind.Layers, SpriteAssetRole.Layer)]
+    [InlineData(SpriteOutputKind.Tiles, SpriteAssetRole.Tile)]
+    public async Task UpdatePlan_DefaultRoleAndReceiptPrecedeCancellation(SpriteOutputKind kind, SpriteAssetRole role)
+    {
+        var f = new PipelineFixture();
+        var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "fake", new(SpriteView.SideView, kind),
+            new(800, 600), new(1024, 1024), f.Clock.Now).Value!;
+        await f.Jobs.AddAsync(job, default);
+        var plan = new SpriteAssetPlan(Guid.NewGuid(), "asset", 0, new(0, 0, 1, 1), false);
+        var context = Context(job);
+        var first = await f.SpriteCommands.UpdatePlanAsync(context, [plan], null, default);
+        Assert.True(first.IsSuccess);
+        Assert.Null(job.Sprites!.Assets[0].Plan.Role);
+        job.Cancel(f.Clock.Now);
+        f.Catalog.Failure = new ProviderCallFailedException("unexpected lookup");
+        var duplicate = await f.SpriteCommands.UpdatePlanAsync(context, [plan with { Role = role }], null, default);
+        Assert.Equal(first.Value, duplicate.Value);
+        Assert.Equal(ErrorCode.SpriteRequestConflict,
+            (await f.SpriteCommands.UpdatePlanAsync(context, [plan], new(.5), default)).ErrorCode);
+    }
+
     internal static SpriteCommandContext Context(PipelineJob job) => new(job.Id, Guid.NewGuid(), job.Sprites!.ReviewRevision);
     internal static async Task<PipelineJob> Plan(PipelineFixture f, int count = 1)
     {

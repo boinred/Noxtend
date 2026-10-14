@@ -1091,6 +1091,10 @@ namespace Noxtend.Infrastructure.Persistence.Migrations
                                 .HasColumnType("nvarchar(max)")
                                 .HasColumnName("SpriteGenerationCanvasJson");
 
+                            b1.Property<string>("Grid")
+                                .HasColumnType("nvarchar(max)")
+                                .HasColumnName("SpriteGridJson");
+
                             b1.Property<string>("OutputCanvas")
                                 .IsRequired()
                                 .HasColumnType("nvarchar(max)")
@@ -1187,6 +1191,10 @@ namespace Noxtend.Infrastructure.Persistence.Migrations
 
                                     b2.Property<Guid?>("ApprovedBaseImageId")
                                         .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<string>("Canvas")
+                                        .HasColumnType("nvarchar(max)")
+                                        .HasColumnName("CanvasJson");
 
                                     b2.Property<Guid>("JobId")
                                         .HasColumnType("uniqueidentifier");

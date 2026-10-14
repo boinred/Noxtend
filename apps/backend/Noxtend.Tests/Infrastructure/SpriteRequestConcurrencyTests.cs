@@ -22,6 +22,28 @@ public sealed class SpriteRequestConcurrencyTests(SqlServerFixture sql)
 {
     private readonly string connectionString = sql.FreshDatabase(nameof(SpriteRequestConcurrencyTests));
 
+    [Fact]
+    public async Task SameRequestIdDifferentGrid_ReturnsConflictAfterSqlRace()
+    {
+        var f = new PipelineFixture();
+        var command = await SpriteAnalysisTests.Prepare(f);
+        var job = PipelineJob.CreateSprites(command.UploadId!.Value, command.ImageProviderConfigId, command.ImageModel,
+            new(SpriteView.SideView, SpriteOutputKind.Tiles), new(800, 600), new(1024, 1024), f.Clock.Now).Value!;
+        var plan = new SpriteAssetPlan(Guid.NewGuid(), "tile", 0, new(0, 0, 1, 1), false);
+        job.ReplaceSpritePlan([plan], 0);
+        await Seed(f, job);
+        var context = SpriteCommandTests.Context(job);
+        var barrier = new SaveBarrier();
+        async Task<Result<SpriteReceipt>> Submit(double cellWidth)
+        {
+            await using var db = Context(barrier);
+            return await Handler(f, new EfJobRepository(db)).UpdatePlanAsync(context, [plan], new(cellWidth), default);
+        }
+        var results = await Task.WhenAll(Submit(.25), Submit(.5)).WaitAsync(TimeSpan.FromSeconds(45));
+        Assert.Single(results, r => r.IsSuccess);
+        Assert.Equal(ErrorCode.SpriteRequestConflict, results.Single(r => !r.IsSuccess).ErrorCode);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

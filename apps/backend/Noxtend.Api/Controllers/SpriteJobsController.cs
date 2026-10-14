@@ -63,7 +63,7 @@ public sealed class SpriteJobsController(StartSpriteJobHandler start, SpriteComm
         var plans = request.Assets?.Select(asset => asset?.ToDomain()).ToArray();
         // fingerprint 직렬화 전 유한 ROI·중첩 null 차단
         if (plans is null || plans.Any(plan => plan is null)) return Invalid(ErrorCode.SpritePlanInvalid);
-        return Accepted(await commands.UpdatePlanAsync(new(id, request.RequestId, request.ExpectedRevision), plans!, ct));
+        return Accepted(await commands.UpdatePlanAsync(new(id, request.RequestId, request.ExpectedRevision), plans!, null, ct));
     }
 
     [HttpPost("{id:guid}/sprites/plan/approve")]

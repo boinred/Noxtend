@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Noxtend.Domain.Upload;
+using Noxtend.Domain.Common;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -762,6 +763,114 @@ public sealed class SpritePersistenceTests(SqlServerFixture sql)
         var manifest = Pack(job, [image.AssetId]).Manifest;
         var invalid = manifest with { Assets = [manifest.Assets[0] with { Frames = [null!] }] };
         Assert.Throws<JsonException>(() => SpriteJsonSerializer.Serialize(invalid));
+    }
+
+    [Theory]
+    [InlineData(SpriteOutputKind.Layers, SpriteAssetRole.Layer, "11111111-1111-1111-1111-111111111111", "49E0C8BD15C6F1110CB50271F7F8996C37A41893117449D7FF190AB754BB1401")]
+    [InlineData(SpriteOutputKind.Tiles, SpriteAssetRole.Tile, "33333333-3333-3333-3333-333333333333", "6E887F44A23C900789090AF146975EEFAC601A990B02EEFA0D8477826E7082C0")]
+    public async Task PreRoleFingerprint_SqlReceiptRemainsByteCompatible(SpriteOutputKind kind, SpriteAssetRole role,
+        string jobId, string fingerprint)
+    {
+        await using var db = Context();
+        await db.Database.MigrateAsync();
+        var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "fake", new(SpriteView.SideView, kind),
+            new(800, 600), new(1024, 1024), Now).Value!;
+        typeof(PipelineJob).GetProperty(nameof(PipelineJob.Id))!.SetValue(job, Guid.Parse(jobId));
+        var plan = new SpriteAssetPlan(Guid.Parse("22222222-2222-2222-2222-222222222222"), "asset", 0, new(0, 0, 1, 1), false);
+        job.ReplaceSpritePlan([plan], 0);
+        db.Jobs.Add(job);
+        await db.SaveChangesAsync();
+        var f = new PipelineFixture();
+        var jobs = new EfJobRepository(db);
+        var handler = new SpriteCommandsHandler(jobs, f.Orchestrator, f.Providers, f.Catalog);
+        var context = new SpriteCommandContext(job.Id, Guid.NewGuid(), 1);
+        var first = await handler.UpdatePlanAsync(context, [plan], null, default);
+        Assert.True(first.IsSuccess);
+        Assert.Equal(fingerprint, (await jobs.GetSpriteRequestAsync(context.RequestId, default))!.Fingerprint);
+        context = context with { RequestId = Guid.NewGuid() };
+        job.AcceptSpriteRequest(SpriteAcceptedRequest.Create(context.RequestId, job.Id, SpriteRequestKind.UpdatePlan,
+            fingerprint, first.Value!));
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+        var reloaded = (await jobs.GetAsync(job.Id, default))!;
+        reloaded.Cancel(Now);
+        await db.SaveChangesAsync();
+        var duplicate = (await handler.UpdatePlanAsync(context, [plan with { Role = role }], null, default)).Value!;
+        Assert.Equal(first.Value!.JobId, duplicate.JobId);
+        Assert.Equal(first.Value.Revision, duplicate.Revision);
+        Assert.Equal(first.Value.TaskIds, duplicate.TaskIds);
+        Assert.Equal(ErrorCode.SpriteRequestConflict,
+            (await handler.UpdatePlanAsync(context, [plan with { Name = "different" }], null, default)).ErrorCode);
+        Assert.Equal(ErrorCode.SpriteRequestConflict,
+            (await handler.UpdatePlanAsync(context, [plan], new(.5), default)).ErrorCode);
+    }
+
+    [Fact]
+    public async Task RoleGridCanvas_RoundTripAndLegacyNullColumns()
+    {
+        await using var db = Context();
+        await db.Database.MigrateAsync();
+        var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "fake",
+            new(SpriteView.Isometric, SpriteOutputKind.Tiles), new(800, 600), new(1024, 1024), Now).Value!;
+        var tile = new SpriteAssetPlan(Guid.NewGuid(), "tile", 1, new(0, 0, .25, .25), true);
+        var obj = tile with { Id = Guid.NewGuid(), Name = "object", Order = 2, Role = SpriteAssetRole.Object };
+        var back = tile with { Id = Guid.NewGuid(), Name = "backdrop", Order = 0, Role = SpriteAssetRole.Backdrop, RequiresTransparency = false };
+        Assert.True(job.ReplaceSpritePlan([tile, obj, back], new(.25), [new(1024, 1024)], 0).IsSuccess);
+        foreach (var input in job.ApproveSpritePlan(job.Sprites!.ReviewRevision).Value!) Complete(job, input);
+        job.ApproveSpriteBases([tile.Id, obj.Id, back.Id], job.Sprites.ReviewRevision);
+        db.Jobs.Add(job);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+        var restored = (await new EfJobRepository(db).GetAsync(job.Id, default))!;
+        Assert.Equal(new SpriteGrid(.25), restored.Sprites!.Grid);
+        Assert.Equal(job.Sprites.Assets.OrderBy(a => a.Id).Select(a => a.Canvas), restored.Sprites.Assets.OrderBy(a => a.Id).Select(a => a.Canvas));
+        Assert.All(restored.Sprites.Assets, a => Assert.Equal(a.Anchor, a.Approval!.Snapshot.Anchor));
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE Jobs SET SpriteGridJson = NULL WHERE Id = {job.Id}");
+        var legacyPlan = System.Text.Json.Nodes.JsonNode.Parse(SpriteJsonSerializer.Serialize(tile))!.AsObject();
+        legacyPlan["value"]!.AsObject().Remove("role");
+        var oldPlanJson = legacyPlan.ToJsonString();
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE SpriteAssets SET CanvasJson = NULL, PlanJson = {oldPlanJson} WHERE Id = {tile.Id}");
+        db.ChangeTracker.Clear();
+        restored = (await new EfJobRepository(db).GetAsync(job.Id, default))!;
+        Assert.Null(restored.Sprites!.Grid);
+        Assert.Null(restored.Sprites.Assets.Single(a => a.Id == tile.Id).Canvas);
+        Assert.Null(restored.Sprites.Assets.Single(a => a.Id == tile.Id).Plan.Role);
+    }
+
+    [Fact]
+    public void ExportV2_EnvelopeRemainsV1AndDetailsRoundTrip()
+    {
+        var job = Planned();
+        var image = Complete(job, job.ApproveSpritePlan(job.Sprites!.ReviewRevision).Value![0]);
+        job.ApproveSpriteBases([image.AssetId], job.Sprites.ReviewRevision);
+        var old = job.CaptureSpriteExport([image.AssetId], job.Sprites.ReviewRevision).Value!;
+        Assert.Equal(1, old.SchemaVersion);
+        var input = old with { SchemaVersion = 2, TileWidth = 128, AssetDetails =
+            [new(image.AssetId, SpriteAssetRole.Layer, old.OutputCanvas, 1, new(0, 0, 1, 1))] };
+        var json = SpriteJsonSerializer.Serialize(input);
+        Assert.Equal(1, JsonDocument.Parse(json).RootElement.GetProperty("schemaVersion").GetInt32());
+        var restored = SpriteJsonSerializer.Deserialize<SpriteExportInput>(json);
+        Assert.Equal(input.AssetDetails, restored.AssetDetails);
+        Assert.Equal(128, restored.TileWidth);
+        Assert.Throws<JsonException>(() => SpriteJsonSerializer.Serialize(input with { SchemaVersion = 3 }));
+        var legacy = JsonDocument.Parse(SpriteJsonSerializer.Serialize(old)).RootElement.GetProperty("value").GetRawText();
+        var node = System.Text.Json.Nodes.JsonNode.Parse(legacy)!.AsObject();
+        node.Remove("grid"); node.Remove("tileWidth"); node.Remove("assetDetails");
+        var read = SpriteJsonSerializer.Deserialize<SpriteExportInput>("{\"schemaVersion\":1,\"value\":" + node.ToJsonString() + "}");
+        Assert.Null(read.AssetDetails);
+        Assert.Null(read.Grid);
+        Assert.Null(read.TileWidth);
+    }
+
+    [Fact]
+    public void StoredPlan_ValidatesIndividualFieldsWithoutInventingLayerSettings()
+    {
+        var plan = new SpriteAssetPlan(Guid.NewGuid(), "object", 0, new(0, 0, .5, .5), true, Role: SpriteAssetRole.Object);
+        Assert.Equal(plan, SpriteJsonSerializer.Deserialize<SpriteAssetPlan>(SpriteJsonSerializer.Serialize(plan)));
+        Assert.False(SpriteRules.Validate(new(SpriteView.SideView, SpriteOutputKind.Layers), new(800, 600), [plan]).IsSuccess);
+        Assert.Throws<JsonException>(() => SpriteJsonSerializer.Serialize(plan with { Role = (SpriteAssetRole)99 }));
+        Assert.Throws<JsonException>(() => SpriteJsonSerializer.Serialize(plan with { SourceBounds = new(0, 0, double.NaN, 1) }));
+        Assert.Throws<JsonException>(() => SpriteJsonSerializer.Serialize(plan with { Loop = true, FrameCount = 3 }));
     }
 
     private static void Accept(PipelineJob job, Guid requestId)

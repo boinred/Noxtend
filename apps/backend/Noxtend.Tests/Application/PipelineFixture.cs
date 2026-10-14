@@ -76,7 +76,7 @@ public sealed class PipelineFixture
         SpriteSource = new SpriteSourceCommandsHandler(Jobs, Images, Blobs, Providers, Catalog, Prompts,
             new SkiaImageTranscoder(), Orchestrator, Clock, NullLogger<SpriteSourceCommandsHandler>.Instance);
         RunSpriteAnalysis = new RunSpriteAnalysisTaskHandler(Images, Blobs, new StubProviderFactory(Llm),
-            Prompts, Execution, Options, RateLimitGate);
+            Prompts, Execution, Options, RateLimitGate, Providers, Catalog);
         RunSpriteGeneration = new RunSpriteGenerationTaskHandler(Jobs, Images, Blobs,
             new StubImageProviderFactory(Images_), Prompts, new SkiaImageTranscoder(), Execution,
             Clock, Options, GenerationOptions, RateLimitGate, NullLogger<RunSpriteGenerationTaskHandler>.Instance);
@@ -536,11 +536,15 @@ public sealed class StubModelCatalog : IModelCatalog
             ? Task.FromException<IReadOnlyList<ProviderModel>>(Failure)
             : Task.FromResult<IReadOnlyList<ProviderModel>>(Models);
 
+    public int ImageQueries { get; private set; }
     public Task<IReadOnlyList<ProviderModel>> ListImageModelsAsync(
         Guid providerConfigId, CancellationToken ct)
-        => Failure is not null
+    {
+        ImageQueries++;
+        return Failure is not null
             ? Task.FromException<IReadOnlyList<ProviderModel>>(Failure)
             : Task.FromResult<IReadOnlyList<ProviderModel>>(ImageModels);
+    }
 
     /// <summary>3D 모델 목록 (사이클 #10). 이미지와 같은 이유로 따로 있다.</summary>
     public List<ProviderModel> MeshModels { get; } =

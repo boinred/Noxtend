@@ -63,7 +63,10 @@ public sealed class SpriteAnalysisTests
         Assert.Equal(new SpriteCanvas(1536, 1024), job.Sprites!.GenerationCanvas);
         Assert.Equal(new SpriteCanvas(24, 16), job.Sprites.SourceCanvas);
         Assert.Equal(7, (int)job.Tasks.Single().Kind);
+        var queries = f.Catalog.ImageQueries;
+        f.Catalog.Failure = new ProviderCallFailedException("unexpected generation sizes lookup");
         await f.RunSpriteAnalysis.HandleAsync(job.Tasks.Single().Id, Ct);
+        Assert.Equal(queries, f.Catalog.ImageQueries);
         Assert.Equal(1, calls);
         Assert.Equal(0, imageCalls);
         Assert.Equal(JobStatus.PendingReview, job.Status);
@@ -88,7 +91,10 @@ public sealed class SpriteAnalysisTests
             new() { MaxAttempts = 1 });
         var receipt = await f.StartSprites.HandleAsync(await Prepare(f), Ct);
         var job = (await f.Jobs.GetAsync(receipt.Value!.JobId, Ct))!;
+        var queries = f.Catalog.ImageQueries;
         await f.RunSpriteAnalysis.HandleAsync(job.Tasks.Single().Id, Ct);
+        Assert.Equal(queries, f.Catalog.ImageQueries);
+        Assert.Equal(ErrorCode.SpritePlanInvalid, job.Tasks.Single().FailureReason);
         Assert.Equal(JobStatus.Failed, job.Status);
         Assert.Empty(job.Sprites!.Assets);
     }

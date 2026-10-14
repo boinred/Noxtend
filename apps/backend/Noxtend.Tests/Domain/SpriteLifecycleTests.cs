@@ -455,6 +455,126 @@ public sealed class SpriteLifecycleTests
         Assert.Equal(2, job.Sprites.Exports.Count);
     }
 
+    [Fact]
+    public void ObjectCanvas_GridChangeInvalidatesOnlyObjectAndReusesGenerationWhenUnchanged()
+    {
+        var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "fake",
+            new(SpriteView.Isometric, SpriteOutputKind.Tiles), new(800, 600), new(1024, 1024), Now).Value!;
+        var tile = Plan() with { RequiresTransparency = true, SourceBounds = new(0, 0, .25, .25) };
+        var obj = tile with { Id = Guid.NewGuid(), Order = 1, Role = SpriteAssetRole.Object, SourceBounds = new(0, 0, .5, .5) };
+        Assert.True(job.ReplaceSpritePlan([tile, obj], new(.25), [new(1024, 1024)], 0).IsSuccess);
+        var objectAsset = job.Sprites!.Assets.Single(a => a.Id == obj.Id);
+        Assert.Equal(new SpriteCanvas(256, 192), objectAsset.Canvas!.Output);
+        foreach (var input in job.ApproveSpritePlan(Revision(job)).Value!) Complete(job, input);
+        job.ApproveSpriteBases([tile.Id, obj.Id], Revision(job));
+        Assert.Equal(SpriteTileLayout.Square, objectAsset.Approval!.Snapshot.Layout);
+        Assert.Equal(objectAsset.Anchor, objectAsset.Approval.Snapshot.Anchor);
+        var revision = objectAsset.PlanRevision;
+        Assert.False(job.ReplaceSpritePlan([tile, obj], new(.25), [new(512, 512)], Revision(job)).Value);
+        Assert.Equal(new SpriteCanvas(1024, 1024), objectAsset.Canvas.Generation);
+        Assert.True(job.ReplaceSpritePlan([tile, obj], new(.5), [new(512, 512)], Revision(job)).IsSuccess);
+        Assert.Equal(revision + 1, objectAsset.PlanRevision);
+        Assert.Null(objectAsset.Approval);
+        Assert.Null(objectAsset.Frames[0].CurrentImageId);
+        Assert.NotNull(job.Sprites.Assets.Single(a => a.Id == tile.Id).Approval);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DefaultRoleNormalizationAndGridOnlyEdit_PreserveApprovedTileAndCompletedId(bool failed)
+    {
+        var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "fake",
+            new(SpriteView.Isometric, SpriteOutputKind.Tiles), new(800, 600), new(1024, 1024), Now).Value!;
+        var plan = Plan() with { RequiresTransparency = true };
+        job.ReplaceSpritePlan([plan], 0);
+        Complete(job, job.ApproveSpritePlan(Revision(job)).Value![0]);
+        job.ApproveSpriteBases([plan.Id], Revision(job));
+        var input = job.CaptureSpriteExport([plan.Id], Revision(job)).Value!;
+        var task = job.PlanTask(TaskKind.PackSprites, job.Tasks.Count);
+        task.BindSpriteExport(input);
+        task.Claim(Now, TimeSpan.FromMinutes(2));
+        if (failed) task.Fail(ErrorCode.ProviderBadResponse, Now);
+        else
+        {
+            task.Succeed(Now);
+            Assert.True(job.TryAttachSpriteExport(SpriteExport.Create(task.Id, input,
+                new(1, job.Id, ProductionMode.TwoD, input, "topLeft", "pixels", []), "export.zip", Now)));
+        }
+        job.ReconcileFromTasks(Now);
+        var revision = Revision(job);
+        var approval = job.Sprites!.Assets[0].Approval;
+        Assert.False(job.ReplaceSpritePlan([plan with { Role = SpriteAssetRole.Tile }], null, [], revision).Value);
+        if (!failed) Assert.True(job.Sprites.Exports[0].IsCurrent);
+        Assert.True(job.ReplaceSpritePlan([plan with { Role = SpriteAssetRole.Tile }], new(.5), [], revision).IsSuccess);
+        Assert.Equal(approval, job.Sprites.Assets[0].Approval);
+        Assert.Equal(1, job.Sprites.Assets[0].PlanRevision);
+        if (!failed) Assert.False(job.Sprites.Exports[0].IsCurrent);
+        Assert.True(job.IsCurrentTask(task));
+        Assert.Equal(input.ExportId, job.Sprites.CompletedExportId);
+        Assert.Equal(SpritePhase.ExportReady, job.Sprites.Phase);
+        job.ReconcileFromTasks(Now);
+        Assert.Equal(JobStatus.PendingReview, job.Status);
+        Assert.Null(job.FailureReason);
+    }
+
+    [Fact]
+    public void RoleTransitions_UpdateStoredAndSnapshotAnchorsAndMissingSizesAreAtomic()
+    {
+        var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "fake",
+            new(SpriteView.Isometric, SpriteOutputKind.Tiles), new(800, 600), new(1024, 1024), Now).Value!;
+        var plan = Plan() with { RequiresTransparency = true };
+        job.ReplaceSpritePlan([plan], 0);
+        var obj = plan with { Role = SpriteAssetRole.Object };
+        Assert.Equal(ErrorCode.SpritePlanInvalid, job.ReplaceSpritePlan([obj], null, [], Revision(job)).ErrorCode);
+        Assert.Equal(ErrorCode.JobImageModelUnavailable, job.ReplaceSpritePlan([obj], new(.5), [], Revision(job)).ErrorCode);
+        Assert.Null(job.Sprites!.Grid);
+        Assert.Null(job.Sprites.Assets[0].Plan.Role);
+        Assert.True(job.ReplaceSpritePlan([obj], new(.5), [new(1024, 1024)], Revision(job)).IsSuccess);
+        Complete(job, job.ApproveSpritePlan(Revision(job)).Value![0]);
+        job.ApproveSpriteBases([plan.Id], Revision(job));
+        Assert.Equal(new SpriteAnchor(128, 96), job.Sprites.Assets[0].Anchor);
+        Assert.Equal(job.Sprites.Assets[0].Anchor, job.Sprites.Assets[0].Approval!.Snapshot.Anchor);
+        var backdrop = obj with { Role = SpriteAssetRole.Backdrop, RequiresTransparency = false };
+        Assert.True(job.ReplaceSpritePlan([backdrop], new(.5), [], Revision(job)).IsSuccess);
+        Assert.Equal(new SpriteAnchor(0, 0), job.Sprites.Assets[0].Anchor);
+        Complete(job, job.ApproveSpritePlan(Revision(job)).Value![0]);
+        job.ApproveSpriteBases([plan.Id], Revision(job));
+        var asset = job.Sprites.Assets[0];
+        Assert.Equal(asset.Anchor, asset.Approval!.Snapshot.Anchor);
+        Assert.True(job.ReplaceSpritePlan([backdrop], new(.1), [new(1024, 1024)], Revision(job)).IsSuccess);
+        Complete(job, job.ApproveSpritePlan(Revision(job)).Value![0]);
+        job.ApproveSpriteBases([plan.Id], Revision(job));
+        var approval = asset.Approval;
+        var revision = asset.PlanRevision;
+        Assert.True(job.ReplaceSpritePlan([backdrop], new(.05), [], Revision(job)).IsSuccess);
+        Assert.Equal(approval, asset.Approval);
+        Assert.Equal(revision, asset.PlanRevision);
+        Assert.Equal(.4, asset.Canvas!.Scale);
+    }
+
+    [Fact]
+    public void GridOutputChangeWhileObjectRunning_IsAtomicAndFrozenInputUsesAssetCanvas()
+    {
+        var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "fake",
+            new(SpriteView.Isometric, SpriteOutputKind.Tiles), new(800, 600), new(1024, 1024), Now).Value!;
+        var obj = Plan() with { Role = SpriteAssetRole.Object, RequiresTransparency = true, SourceBounds = new(0, 0, .5, .5) };
+        job.ReplaceSpritePlan([obj], new(.25), [new(1536, 1024)], 0);
+        var input = job.ApproveSpritePlan(Revision(job)).Value![0];
+        Assert.Equal(job.Sprites!.Assets[0].Canvas!.Output, input.Canvas);
+        Assert.Equal(job.Sprites.Assets[0].Canvas!.Generation, input.GenerationCanvas);
+        Assert.Equal(job.Sprites.Assets[0].Canvas!.Transform, input.Transform);
+        var task = job.PlanTask(TaskKind.GenerateSprite, 0);
+        job.BindSpriteFrame(task.Id, input);
+        task.Claim(Now, TimeSpan.FromMinutes(2));
+        var revision = Revision(job);
+        Assert.Equal(ErrorCode.SpriteBusy, job.ReplaceSpritePlan([obj], new(.5), [new(1024, 1024)], revision).ErrorCode);
+        Assert.Equal(revision, Revision(job));
+        Assert.Equal(new SpriteGrid(.25), job.Sprites.Grid);
+        Assert.True(job.IsCurrentTask(task));
+        Assert.Equal(input.Canvas, job.Sprites.Assets[0].Canvas!.Output);
+    }
+
     private static (PipelineJob Job, SpriteAssetPlan First, SpriteAssetPlan Second) ApprovedPair()
     {
         var (job, first) = Planned();

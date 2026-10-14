@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Noxtend.Application.Job;
 using Noxtend.Domain.Common;
 using Noxtend.Domain.Job;
@@ -12,8 +13,12 @@ public sealed class SpriteCommandsHandler(IJobRepository jobs, JobOrchestrator o
     IProviderConfigRepository providers, IModelCatalog catalog)
 {
     public Task<Result<SpriteReceipt>> UpdatePlanAsync(SpriteCommandContext context, IReadOnlyList<SpriteAssetPlan> plans, CancellationToken ct)
-        => ApplyAsync(context, SpriteRequestKind.UpdatePlan, null, null, plans?.OrderBy(p => p?.Id).ToArray(),
-            job => NoTasks(job.ReplaceSpritePlan(plans!, context.ExpectedRevision)), false, ct);
+        => UpdatePlanAsync(context, plans, null, ct);
+
+    public Task<Result<SpriteReceipt>> UpdatePlanAsync(SpriteCommandContext context, IReadOnlyList<SpriteAssetPlan> plans,
+        SpriteGrid? grid, CancellationToken ct)
+        => ApplyAsync(context, SpriteRequestKind.UpdatePlan, null, null, plans,
+            job => NoTasks(job.ReplaceSpritePlan(plans!, grid, [], context.ExpectedRevision)), false, ct, grid);
 
     public Task<Result<SpriteReceipt>> ApprovePlanAsync(SpriteCommandContext context, CancellationToken ct)
         => ApplyAsync(context, SpriteRequestKind.ApprovePlan, null, null, null,
@@ -48,36 +53,55 @@ public sealed class SpriteCommandsHandler(IJobRepository jobs, JobOrchestrator o
 
     private async Task<Result<SpriteReceipt>> ApplyAsync(SpriteCommandContext context, SpriteRequestKind kind,
         Guid? assetId, int? index, object? body, Func<PipelineJob, Result<IReadOnlyList<PipelineTask>>> mutate,
-        bool generates, CancellationToken ct)
+        bool generates, CancellationToken ct, SpriteGrid? grid = null)
     {
         if (context.JobId == Guid.Empty || context.RequestId == Guid.Empty || context.ExpectedRevision < 0)
             return Result<SpriteReceipt>.Fail(ErrorCode.SpriteSettingsInvalid, "작업·요청 ID와 revision이 필요합니다");
-        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(
-            new { kind, context.JobId, assetId, index, context.ExpectedRevision, body })));
-        // 중복 접수는 현재 revision·모델 상태보다 우선
-        if (await jobs.GetSpriteRequestAsync(context.RequestId, ct) is { } accepted)
-            return Receipt(accepted, context.JobId, kind, fingerprint);
+        IReadOnlyList<SpriteAssetPlan>? normalizedPlans = null;
         var job = await jobs.GetAsync(context.JobId, ct);
-        // 요청 조회와 작업 조회 사이의 동시 접수 확정
-        if (await jobs.GetSpriteRequestAsync(context.RequestId, ct) is { } freshlyAccepted)
-            return Receipt(freshlyAccepted, context.JobId, kind, fingerprint);
         if (job is null) return Result<SpriteReceipt>.Fail(ErrorCode.JobNotFound, "작업을 찾을 수 없습니다");
         if (job.ProductionMode != ProductionMode.TwoD || job.Sprites is null)
             return Result<SpriteReceipt>.Fail(ErrorCode.SpriteWrongMode, "2D 배경 작업이 필요합니다");
+        if (kind == SpriteRequestKind.UpdatePlan && body is IReadOnlyList<SpriteAssetPlan> requestedPlans)
+        {
+            var normalized = requestedPlans.Select(p => p is null ? p : SpriteRules.NormalizeRole(job.Sprites.Settings, p))
+                .OrderBy(p => p?.Id).ToArray();
+            normalizedPlans = normalized!;
+            body = grid is null ? normalized : new { plans = normalized, grid };
+        }
+        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(
+            new { kind, context.JobId, assetId, index, context.ExpectedRevision, body }, FingerprintJson)));
+        // 중복 접수는 현재 revision·취소·모델 상태보다 우선
+        if (await jobs.GetSpriteRequestAsync(context.RequestId, ct) is { } accepted)
+            return Receipt(accepted, context.JobId, kind, fingerprint);
         if (context.ExpectedRevision != job.Sprites.ReviewRevision)
             return Result<SpriteReceipt>.Fail(ErrorCode.SpriteRevisionConflict, "검수 revision이 변경되었습니다");
         if (job.Status == JobStatus.Canceled)
             return Result<SpriteReceipt>.Fail(ErrorCode.JobAlreadyTerminal, "취소된 작업은 다시 열 수 없습니다");
+        IReadOnlyList<SpriteCanvas> sizes = [];
+        if (kind == SpriteRequestKind.UpdatePlan)
+        {
+            var plans = normalizedPlans!;
+            var validation = SpriteRules.Validate(job.Sprites.Settings, job.Sprites.SourceCanvas, plans, grid);
+            if (!validation.IsSuccess) return Result<SpriteReceipt>.Fail(validation.ErrorCode!, validation.ErrorMessage!);
+            if (job.SpritePlanNeedsGenerationSizes(plans, grid))
+            {
+                var resolved = await SpriteGenerationSizes.ResolveAsync(job, providers, catalog, ct);
+                if (!resolved.IsSuccess) return Result<SpriteReceipt>.Fail(resolved.ErrorCode!, resolved.ErrorMessage!);
+                sizes = resolved.Value!;
+            }
+            mutate = current => NoTasks(current.ReplaceSpritePlan(plans, grid, sizes, context.ExpectedRevision));
+        }
         if (generates)
         {
-            var provider = job.ImageProviderConfigId is { } id ? await providers.GetAsync(id, ct) : null;
-            if (provider is null || !provider.IsEnabled)
-                return Result<SpriteReceipt>.Fail(ErrorCode.JobImageProviderDisabled, "이미지 공급자를 사용할 수 없습니다");
-            var model = (await catalog.ListImageModelsAsync(provider.Id, ct)).FirstOrDefault(m => m.Id == job.ImageModel);
-            if (model?.Sprite is not { SupportsTransparency: true } capability
-                || capability.Sizes?.Any(s => s.Width == job.Sprites.GenerationCanvas.Width
-                    && s.Height == job.Sprites.GenerationCanvas.Height) != true)
-                return Result<SpriteReceipt>.Fail(ErrorCode.JobImageModelUnavailable, "투명 지원과 생성 크기가 확인된 이미지 모델이 필요합니다");
+            var resolved = await SpriteGenerationSizes.ResolveAsync(job, providers, catalog, ct);
+            if (!resolved.IsSuccess) return Result<SpriteReceipt>.Fail(resolved.ErrorCode!, resolved.ErrorMessage!);
+            var targets = kind == SpriteRequestKind.ApprovePlan ? job.Sprites.Assets
+                : kind == SpriteRequestKind.ApproveBases ? job.Sprites.Assets.Where(a => ((IReadOnlyList<Guid>)body!).Contains(a.Id))
+                : job.Sprites.Assets.Where(a => a.Id == assetId);
+            if (targets.Any(a => !resolved.Value!.Contains(job.SpriteAssetCanvasOf(a).Generation)))
+                return Result<SpriteReceipt>.Fail(ErrorCode.JobImageModelUnavailable,
+                    "투명 지원과 생성 크기가 확인된 이미지 모델이 필요합니다");
         }
         var result = mutate(job);
         if (!result.IsSuccess) return Result<SpriteReceipt>.Fail(result.ErrorCode!, result.ErrorMessage!);
@@ -96,6 +120,18 @@ public sealed class SpriteCommandsHandler(IJobRepository jobs, JobOrchestrator o
         }
         await orchestrator.StartAsync(job, ct);
         return Result<SpriteReceipt>.Ok(receipt);
+    }
+
+    private static readonly JsonSerializerOptions FingerprintJson = CreateFingerprintJson();
+    private static JsonSerializerOptions CreateFingerprintJson()
+    {
+        var resolver = new DefaultJsonTypeInfoResolver();
+        resolver.Modifiers.Add(info =>
+        {
+            if (info.Type == typeof(SpriteAssetPlan))
+                info.Properties.Single(p => p.Name == nameof(SpriteAssetPlan.Role)).ShouldSerialize = (_, value) => value is not null;
+        });
+        return new() { TypeInfoResolver = resolver };
     }
 
     private static Result<SpriteReceipt> Receipt(SpriteAcceptedRequest request, Guid jobId, SpriteRequestKind kind, string fingerprint)
