@@ -528,7 +528,11 @@ export function taskStatusGroups(
     ) {
       group[task.status]++
     }
-    if ((task.status === 'running' || task.status === 'pending') && task.attemptCount > 1) {
+    // 대기 중 시도 1회 이상은 자동 재시도 대기
+    if (
+      (task.status === 'running' && task.attemptCount > 1) ||
+      (task.status === 'pending' && task.attemptCount > 0)
+    ) {
       group.retrying++
     }
   }

@@ -148,7 +148,7 @@ describe('taskStatusGroups', () => {
     const tasks: Pick<JobTask, 'kind' | 'status' | 'attemptCount'>[] = [
       task('generateSprite', 'running'),
       task('analyzeSprites', 'succeeded'),
-      task('generateSprite', 'pending'),
+      task('generateSprite', 'pending', 0),
       task('generateSprite', 'succeeded'),
       task('generateSprite', 'failed'),
       task('generateSprite', 'canceled'),
@@ -177,7 +177,7 @@ describe('taskStatusGroups', () => {
     ])
   })
 
-  it('재시도 중은 시도 2회 이상인 실행·대기만 센다', () => {
+  it('재시도 중은 시도 2회 이상 실행과 시도 1회 이상 대기만 센다', () => {
     const [group] = taskStatusGroups([
       task('generateSprite', 'running', 2),
       task('generateSprite', 'pending', 3),
@@ -185,6 +185,16 @@ describe('taskStatusGroups', () => {
       task('generateSprite', 'failed', 2),
     ])
     expect(group).toMatchObject({ total: 4, running: 2, pending: 1, failed: 1, retrying: 2 })
+  })
+
+  it.each([
+    ['pending', 1, 1],
+    ['pending', 0, 0],
+    ['running', 1, 0],
+    ['running', 2, 1],
+  ] as const)('%s 시도 %i회의 재시도 중 수는 %i이다', (status, attemptCount, retrying) => {
+    const [group] = taskStatusGroups([task('generateSprite', status, attemptCount)])
+    expect(group?.retrying).toBe(retrying)
   })
 
   it('집계 상태가 아닌 공정은 전체에만 센다', () => {

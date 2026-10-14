@@ -26,7 +26,7 @@ import { spriteStyles as styles } from './spriteStyles'
 
 const SUMMARY_STATUSES = ['running', 'pending', 'succeeded', 'failed', 'canceled'] as const
 
-function taskGroupSummary(group: TaskStatusGroup): string {
+export function taskGroupSummary(group: TaskStatusGroup): string {
   const parts = SUMMARY_STATUSES.filter((status) => group[status] > 0).map(
     (status) => `${jobStatusLabel(status)} ${group[status]}`,
   )
