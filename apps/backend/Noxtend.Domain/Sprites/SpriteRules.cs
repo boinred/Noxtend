@@ -22,7 +22,7 @@ public static class SpriteRules
     }
 
     public static Result<bool> Validate(
-        SpriteSettings settings, SpriteCanvas source, IReadOnlyList<SpriteAssetPlan> assets)
+        SpriteSettings settings, SpriteCanvas source, IReadOnlyList<SpriteAssetPlan> assets, SpriteGrid? grid = null)
     {
         var settingsResult = ValidateSettings(settings, source);
         if (!settingsResult.IsSuccess)
@@ -41,7 +41,18 @@ public static class SpriteRules
             return Result<bool>.Fail(ErrorCode.SpritePlanInvalid, "대상 ID와 순서는 중복될 수 없습니다");
         }
 
+        if (grid is not null && (settings.OutputKind == SpriteOutputKind.Layers
+            || !double.IsFinite(grid.CellWidth) || grid.CellWidth <= 0 || grid.CellWidth > 1))
+        {
+            return Result<bool>.Fail(ErrorCode.SpritePlanInvalid, "격자는 타일 작업의 0 초과 1 이하 칸 너비여야 합니다");
+        }
+
         var backmost = assets.Min(a => a.Order);
+        if (assets.Count(a => RoleOf(settings, a) == SpriteAssetRole.Backdrop) > 1
+            || assets.Any(a => RoleOf(settings, a) == SpriteAssetRole.Backdrop && a.Order != backmost))
+        {
+            return Result<bool>.Fail(ErrorCode.SpritePlanInvalid, "배경은 최대 하나이며 가장 뒤에 있어야 합니다");
+        }
         var totalFrames = 0;
         foreach (var asset in assets)
         {
@@ -61,23 +72,110 @@ public static class SpriteRules
                 return Result<bool>.Fail(ErrorCode.SpritePlanInvalid, "루프는 4·8프레임, FPS는 1~30, 동작 설명은 최대 500자여야 합니다");
             }
 
-            // 오름차순은 뒤에서 앞으로, 다이아몬드는 셀 밖 투명 영역 필수
-            var needsTransparency = settings.OutputKind == SpriteOutputKind.Layers
-                ? asset.Order != backmost
-                : settings.View == SpriteView.Isometric;
+            var role = RoleOf(settings, asset);
+            if (!Enum.IsDefined(role) || (settings.OutputKind == SpriteOutputKind.Layers
+                ? role != SpriteAssetRole.Layer : role == SpriteAssetRole.Layer))
+            {
+                return Result<bool>.Fail(ErrorCode.SpritePlanInvalid, "결과 유형에 허용되지 않는 에셋 역할입니다");
+            }
+
+            var needsTransparency = role == SpriteAssetRole.Layer && asset.Order != backmost
+                || role == SpriteAssetRole.Tile && settings.View == SpriteView.Isometric;
             if (needsTransparency && !asset.RequiresTransparency)
             {
                 return Result<bool>.Fail(ErrorCode.SpritePlanInvalid, "앞쪽 레이어와 다이아몬드 타일은 투명이 필요합니다");
+            }
+            if (role == SpriteAssetRole.Object && !asset.RequiresTransparency)
+            {
+                return Result<bool>.Fail(ErrorCode.SpritePlanInvalid, "오브젝트는 투명이 필요합니다");
+            }
+            if (role == SpriteAssetRole.Backdrop && asset.RequiresTransparency)
+            {
+                return Result<bool>.Fail(ErrorCode.SpritePlanInvalid, "배경은 불투명이어야 합니다");
             }
 
             // 정적 대상은 기본 FrameCount와 무관하게 기준 이미지 한 장
             totalFrames += asset.Loop ? asset.FrameCount : 1;
         }
 
+        var cellWidth = CellWidth(grid, assets, settings);
+        foreach (var asset in assets.Where(a => RoleOf(settings, a) is SpriteAssetRole.Object or SpriteAssetRole.Backdrop))
+        {
+            var output = AssetOutput(settings, source, cellWidth, asset);
+            if (!output.IsSuccess)
+                return Result<bool>.Fail(output.ErrorCode!, output.ErrorMessage!);
+        }
+
         return totalFrames <= 64
             ? Result<bool>.Ok(true)
             : Result<bool>.Fail(ErrorCode.SpritePlanInvalid, "기준 이미지를 포함해 최대 64프레임까지 승인할 수 있습니다");
     }
+
+    public static SpriteAssetRole RoleOf(SpriteSettings settings, SpriteAssetPlan plan)
+        => plan.Role ?? (settings.OutputKind == SpriteOutputKind.Layers ? SpriteAssetRole.Layer : SpriteAssetRole.Tile);
+
+    public static SpriteAssetPlan NormalizeRole(SpriteSettings settings, SpriteAssetPlan plan)
+        => plan.Role == (settings.OutputKind == SpriteOutputKind.Layers ? SpriteAssetRole.Layer : SpriteAssetRole.Tile)
+            ? plan with { Role = null } : plan;
+
+    public static double? CellWidth(SpriteGrid? grid, IReadOnlyList<SpriteAssetPlan> plans, SpriteSettings settings)
+    {
+        if (grid is not null)
+            return grid.CellWidth;
+        var widths = plans.Where(p => RoleOf(settings, p) == SpriteAssetRole.Tile)
+            .Select(p => p.SourceBounds.W).Order().ToArray();
+        if (widths.Length == 0)
+            return null;
+        return (widths[(widths.Length - 1) / 2] + widths[widths.Length / 2]) / 2;
+    }
+
+    public static Result<(SpriteCanvas Canvas, double Scale)> AssetOutput(
+        SpriteSettings settings, SpriteCanvas source, double? cellWidth, SpriteAssetPlan plan)
+    {
+        var role = RoleOf(settings, plan);
+        if (role is SpriteAssetRole.Tile or SpriteAssetRole.Layer)
+            return Result<(SpriteCanvas, double)>.Ok((OutputCanvas(settings, source), 1));
+        if (cellWidth is null || !double.IsFinite(cellWidth.Value) || cellWidth <= 0 || cellWidth > 1)
+            return Result<(SpriteCanvas, double)>.Fail(ErrorCode.SpritePlanInvalid, "격자 칸 너비가 필요합니다");
+
+        var worldScale = settings.TileWidth / (cellWidth.Value * source.Width);
+        var width = source.Width * worldScale;
+        var height = source.Height * worldScale;
+        var scale = 1.0;
+        if (role == SpriteAssetRole.Object)
+        {
+            width *= plan.SourceBounds.W;
+            height *= plan.SourceBounds.H;
+        }
+        else
+        {
+            scale = Math.Min(1, 1024 / Math.Max(width, height));
+            width *= scale;
+            height *= scale;
+        }
+        width = Math.Round(width, MidpointRounding.AwayFromZero);
+        height = Math.Round(height, MidpointRounding.AwayFromZero);
+        if (!double.IsFinite(width) || !double.IsFinite(height) || width is < 1 or > 1024 || height is < 1 or > 1024)
+            return Result<(SpriteCanvas, double)>.Fail(ErrorCode.SpritePlanInvalid,
+                role == SpriteAssetRole.Object ? "오브젝트 출력 크기는 1~1024픽셀이어야 합니다" : "배경 출력 크기는 1~1024픽셀이어야 합니다");
+        return Result<(SpriteCanvas, double)>.Ok((new((int)width, (int)height), scale));
+    }
+
+    public static Result<SpriteAssetCanvas> AssetCanvas(SpriteSettings settings, SpriteCanvas source,
+        SpriteCanvas jobGeneration, double? cellWidth, SpriteAssetPlan plan, IReadOnlyList<SpriteCanvas> generationSizes)
+    {
+        var output = AssetOutput(settings, source, cellWidth, plan);
+        if (!output.IsSuccess)
+            return Result<SpriteAssetCanvas>.Fail(output.ErrorCode!, output.ErrorMessage!);
+        var generation = RoleOf(settings, plan) is SpriteAssetRole.Tile or SpriteAssetRole.Layer
+            ? jobGeneration : GenerationCanvas(output.Value.Canvas, generationSizes);
+        return Result<SpriteAssetCanvas>.Ok(new(output.Value.Canvas, generation,
+            Transform(generation, output.Value.Canvas), output.Value.Scale));
+    }
+
+    public static SpriteAnchor Anchor(SpriteAssetRole role, SpriteCanvas output)
+        => role is SpriteAssetRole.Layer or SpriteAssetRole.Backdrop
+            ? new(0, 0) : new(output.Width / 2.0, output.Height / 2.0);
 
     public static SpriteCanvas OutputCanvas(SpriteSettings settings, SpriteCanvas source)
     {
