@@ -5,6 +5,7 @@ import type { SpriteAssetPlan, SpriteState } from '@/domain/sprites/types'
 function plan(id: string, loop: boolean, frameCount = 8): SpriteAssetPlan {
   return {
     id,
+    role: 'layer',
     name: id,
     order: id === 'back' ? 0 : 1,
     sourceBounds: { x: 0, y: 0, w: 1, h: 1 },
@@ -18,6 +19,7 @@ function plan(id: string, loop: boolean, frameCount = 8): SpriteAssetPlan {
 
 function sprite(overrides: Partial<SpriteState> = {}): SpriteState {
   return {
+    grid: null,
     settings: { view: 'sideView', outputKind: 'layers', tileWidth: 128, repeat: 'both' },
     sourceCanvas: { width: 1920, height: 1080 },
     generationCanvas: { width: 1536, height: 1024 },
@@ -29,6 +31,8 @@ function sprite(overrides: Partial<SpriteState> = {}): SpriteState {
     assets: [plan('back', false), plan('water', true, 4)].map((p) => ({
       id: p.id,
       plan: p,
+      canvas: { width: 1920, height: 1080 },
+      scale: 1,
       planRevision: 1,
       anchor: { x: 0, y: 0 },
       approvedBaseImageId: null,

@@ -19,7 +19,11 @@ import {
 } from './useSprites'
 import { queryKeys } from './keys'
 import { ApiError } from '@/infra/api/client'
-import type { SpriteAccepted, SpriteMutationContext } from '@/domain/sprites/types'
+import type {
+  SpriteAccepted,
+  SpriteMutationContext,
+  UpdateSpritePlanInput,
+} from '@/domain/sprites/types'
 
 const mocks = vi.hoisted(() => ({
   result: {
@@ -275,4 +279,21 @@ describe('sprite mutation cache and retry', () => {
       expectedRevision: 4,
     })
   })
+})
+
+it('passes plan role and grid unchanged through the mutation', async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValue(new Response(JSON.stringify({ data: receipt, error: null })))
+  vi.stubGlobal('fetch', fetch)
+  useUpdateSpritePlan()
+  const options = mocks.mutation.mock.calls.at(-1)![0] as MutationOptions<
+    SpriteAccepted,
+    Error,
+    UpdateSpritePlanInput
+  >
+  const fixture = await import('@/infra/api/fixtures/sprite-roles.request.json')
+  const input = { jobId: context.jobId, ...fixture.default.tiles } as UpdateSpritePlanInput
+  await options.mutationFn!(input, {} as never)
+  expect(JSON.parse(fetch.mock.calls[0]![1].body)).toEqual(fixture.default.tiles)
 })

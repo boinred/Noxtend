@@ -1,3 +1,4 @@
+import type { SpriteAssetRole } from './types'
 import type { SpriteOutputKind, SpriteRepeat, SpriteSettings, SpriteView } from './types'
 
 const VIEW_LABELS: Record<SpriteView, string> = {
@@ -29,4 +30,10 @@ export function spriteRepeatLabel(repeat: SpriteRepeat, view: SpriteView): strin
 export function spriteOutputLabel(settings: SpriteSettings): string {
   if (settings.outputKind === 'layers') return spriteOutputKindLabel('layers')
   return `${spriteOutputKindLabel('tiles')} · ${settings.tileWidth}px · ${spriteRepeatLabel(settings.repeat, settings.view)}`
+}
+
+export function spriteRoleLabel(role: SpriteAssetRole): string {
+  return { tile: '반복 타일', object: '오브젝트', backdrop: '원경 배경', layer: '배경 레이어' }[
+    role
+  ]
 }

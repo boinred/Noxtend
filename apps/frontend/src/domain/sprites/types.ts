@@ -3,6 +3,10 @@ import type { Bounds, Job, JobStatus, JobSummary } from '../job/types'
 export type ProductionMode = 'threeD' | 'twoD'
 export type SpriteView = 'sideView' | 'topDown' | 'isometric'
 export type SpriteOutputKind = 'layers' | 'tiles'
+export type SpriteAssetRole = 'layer' | 'tile' | 'backdrop' | 'object'
+export interface SpriteGrid {
+  cellWidth: number
+}
 export type SpriteRepeat = 'x' | 'y' | 'both'
 export type SpriteTileLayout = 'square' | 'diamond'
 export type SpritePhase =
@@ -37,6 +41,7 @@ export interface SpriteSettings {
   repeat: SpriteRepeat
 }
 export interface SpriteAssetPlan {
+  role: SpriteAssetRole
   id: string
   name: string
   order: number
@@ -69,6 +74,8 @@ export interface SpriteAssetApproval {
   snapshot: SpriteApprovedAsset
 }
 export interface SpriteAsset {
+  canvas: SpriteCanvas
+  scale: number
   id: string
   plan: SpriteAssetPlan
   planRevision: number
@@ -113,6 +120,7 @@ export interface SpriteSourceDraft {
   candidates: SpriteSourceCandidate[]
 }
 export interface SpriteState {
+  grid: SpriteGrid | null
   settings: SpriteSettings
   sourceCanvas: SpriteCanvas
   generationCanvas: SpriteCanvas
@@ -145,7 +153,10 @@ export interface SpriteMutationContext {
   requestId: string
   expectedRevision: number
 }
-export type UpdateSpritePlanInput = SpriteMutationContext & { assets: SpriteAssetPlan[] }
+export type UpdateSpritePlanInput = SpriteMutationContext & {
+  assets: SpriteAssetPlan[]
+  grid: SpriteGrid | null
+}
 export type SpriteAssetsInput = SpriteMutationContext & { assetIds: string[] }
 export type SpriteAssetInput = SpriteMutationContext & { assetId: string }
 export type RegenerateSpriteFrameInput = SpriteAssetInput & { index: number }
@@ -236,8 +247,10 @@ function readAnchor(value: unknown): void {
   const anchor = record(value)
   requireShape(finite(anchor.x) && finite(anchor.y))
 }
-function readPlan(value: unknown): void {
+function readPlan(value: unknown, defaultRole: SpriteAssetRole): void {
   const plan = record(value)
+  if (plan.role === undefined) plan.role = defaultRole
+  requireShape(member(plan.role, ['layer', 'tile', 'backdrop', 'object']))
   requireShape(
     text(plan.id) &&
       text(plan.name) &&
@@ -267,12 +280,16 @@ function readApprovedAsset(value: unknown): void {
   )
   readAnchor(asset.anchor)
 }
-function readAsset(value: unknown): void {
+function readAsset(value: unknown, defaultRole: SpriteAssetRole, canvas: unknown): void {
   const asset = record(value)
   requireShape(
     text(asset.id) && integer(asset.planRevision) && nullableId(asset.approvedBaseImageId),
   )
-  readPlan(asset.plan)
+  readPlan(asset.plan, defaultRole)
+  if (asset.canvas === undefined) asset.canvas = canvas
+  if (asset.scale === undefined) asset.scale = 1
+  readCanvas(asset.canvas)
+  requireShape(finite(asset.scale) && asset.scale > 0)
   readAnchor(asset.anchor)
   if (asset.approval !== null) {
     const approval = record(asset.approval)
@@ -349,7 +366,14 @@ function readState(value: unknown): void {
       integer(state.reviewRevision) &&
       nullableId(state.completedExportId),
   )
-  items(state.assets, readAsset)
+  if (state.grid === undefined) state.grid = null
+  if (state.grid !== null) {
+    const grid = record(state.grid)
+    requireShape(finite(grid.cellWidth) && grid.cellWidth > 0 && grid.cellWidth <= 1)
+  }
+  items(state.assets, (asset) =>
+    readAsset(asset, settings.outputKind === 'layers' ? 'layer' : 'tile', state.outputCanvas),
+  )
   items(state.images, readImage)
   items(state.exports, readExport)
   readSource(state.source)

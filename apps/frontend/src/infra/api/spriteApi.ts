@@ -93,6 +93,7 @@ export function updateSpritePlan(
       frameCount,
       fps,
       motionNotes,
+      role,
     }) => {
       const { x, y, w, h } = sourceBounds
       return {
@@ -105,10 +106,21 @@ export function updateSpritePlan(
         frameCount,
         fps,
         motionNotes,
+        role,
       }
     },
   )
-  return mutate(input, 'plan', { ...mutationBody(input), assets }, 'PUT', signal)
+  return mutate(
+    input,
+    'plan',
+    {
+      ...mutationBody(input),
+      assets,
+      grid: input.grid === null ? null : { cellWidth: input.grid.cellWidth },
+    },
+    'PUT',
+    signal,
+  )
 }
 export function approveSpritePlan(
   input: SpriteMutationContext,

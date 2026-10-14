@@ -1,3 +1,4 @@
+import type { SpriteAssetRole } from './types'
 import { describe, expect, it } from 'vitest'
 import {
   spriteOutputKindLabel,
@@ -34,4 +35,11 @@ describe('sprite labels', () => {
       spriteOutputLabel({ view: 'isometric', outputKind: 'tiles', tileWidth: 64, repeat: 'x' }),
     ).toBe('반복 타일 · 64px · 격자 X축')
   })
+})
+
+it('labels every asset role', async () => {
+  const { spriteRoleLabel } = await import('./labels')
+  expect(
+    ['tile', 'object', 'backdrop', 'layer'].map((role) => spriteRoleLabel(role as SpriteAssetRole)),
+  ).toEqual(['반복 타일', '오브젝트', '원경 배경', '배경 레이어'])
 })

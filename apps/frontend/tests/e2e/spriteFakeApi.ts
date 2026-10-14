@@ -1,3 +1,4 @@
+import { assetOutputSize, cellWidthOf } from '../../src/domain/sprites/rules'
 import type { Page, Route } from '@playwright/test'
 import { crc32, deflateSync } from 'node:zlib'
 import type { Job, JobTask } from '../../src/domain/job/types'
@@ -88,8 +89,8 @@ export const SPRITE_SOURCE_PNG = png(320, 180, (x, y) => [
   255,
 ])
 function framePixel(sprite: SpriteState, asset: SpriteAsset, x: number, y: number) {
-  const { width, height } = sprite.outputCanvas
-  const diamond = sprite.settings.outputKind === 'tiles' && sprite.settings.view === 'isometric'
+  const { width, height } = asset.canvas
+  const diamond = asset.plan.role === 'tile' && sprite.settings.view === 'isometric'
   const inside = diamond
     ? Math.abs((x + 0.5 - width / 2) / (width / 2)) +
         Math.abs((y + 0.5 - height / 2) / (height / 2)) <=
@@ -99,9 +100,7 @@ function framePixel(sprite: SpriteState, asset: SpriteAsset, x: number, y: numbe
   return inside ? [70 + asset.plan.order * 35, 125, 100, 255] : [0, 0, 0, 0]
 }
 export function spritePng(sprite: SpriteState, asset: SpriteAsset) {
-  return png(sprite.outputCanvas.width, sprite.outputCanvas.height, (x, y) =>
-    framePixel(sprite, asset, x, y),
-  )
+  return png(asset.canvas.width, asset.canvas.height, (x, y) => framePixel(sprite, asset, x, y))
 }
 
 // ponytail: 소규모 uncompressed ZIP, ZIP64 fixture는 표준 압축 도구로 교체
@@ -146,9 +145,9 @@ export function spriteZip(job: Job, included: string[], exportId: string) {
   const files: { name: string; data: Buffer }[] = []
   const assets = sprite.assets.filter((a) => included.includes(a.id))
   const manifestAssets = assets.map((a) => {
-    const basePath = `${sprite.settings.outputKind}/asset-${a.id}.png`
+    const basePath = `${{ layer: 'layers', tile: 'tiles', object: 'objects', backdrop: 'backdrop' }[a.plan.role]}/asset-${a.id}.png`
     const sheetPath = `sheets/asset-${a.id}-000.png`
-    const { width, height } = sprite.outputCanvas
+    const { width, height } = a.canvas
     const cellWidth = width + 4,
       cellHeight = height + 4
     files.push({ name: basePath, data: spritePng(sprite, a) })
@@ -178,13 +177,31 @@ export function spriteZip(job: Job, included: string[], exportId: string) {
     return { asset: a.approval!.snapshot, basePath, frames }
   })
   const input = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     exportId,
     reviewRevision: sprite.reviewRevision,
     view: sprite.settings.view,
     outputKind: sprite.settings.outputKind,
     sourceCanvas: sprite.sourceCanvas,
     outputCanvas: sprite.outputCanvas,
+    grid:
+      sprite.settings.outputKind === 'tiles'
+        ? {
+            cellWidth: cellWidthOf(
+              sprite.grid,
+              sprite.assets.map((a) => a.plan),
+              sprite.settings,
+            )!,
+          }
+        : null,
+    tileWidth: sprite.settings.tileWidth,
+    assetDetails: assets.map((a) => ({
+      id: a.id,
+      role: a.plan.role,
+      canvas: a.canvas,
+      scale: a.scale,
+      sourceBounds: a.plan.sourceBounds,
+    })),
     assets: assets.map((a) => a.approval!.snapshot),
     excludedAssetIds: sprite.assets.filter((a) => !included.includes(a.id)).map((a) => a.id),
   }
@@ -192,7 +209,7 @@ export function spriteZip(job: Job, included: string[], exportId: string) {
     name: 'manifest.json',
     data: Buffer.from(
       JSON.stringify({
-        schemaVersion: 1,
+        schemaVersion: 2,
         jobId: job.id,
         productionMode: 'twoD',
         input,
@@ -231,6 +248,30 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
   let job: Job | null = null
   const receipts = new Map<string, { fingerprint: string; receipt: SpriteAccepted }>()
   const archives = new Map<string, Buffer>()
+  const exportInputs = new Map<string, string>()
+  function exportFingerprint(sprite: SpriteState, ids: string[]) {
+    return JSON.stringify({
+      grid:
+        sprite.settings.outputKind === 'tiles'
+          ? cellWidthOf(
+              sprite.grid,
+              sprite.assets.map((a) => a.plan),
+              sprite.settings,
+            )
+          : null,
+      assets: sprite.assets
+        .filter((a) => ids.includes(a.id))
+        .map((a) => ({
+          id: a.id,
+          role: a.plan.role,
+          canvas: a.canvas,
+          scale: a.scale,
+          sourceBounds: a.plan.sourceBounds,
+          approval: a.approval,
+        })),
+      excludedAssetIds: sprite.assets.filter((a) => !ids.includes(a.id)).map((a) => a.id),
+    })
+  }
   const storedImages = new Set<string>()
   const sourceGets = new Map<string, number>()
   const sourceInputs = new Map<string, string>()
@@ -267,6 +308,7 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
     const scale = Math.min(outputCanvas.width / 1024, outputCanvas.height / 1024)
     const sprite: SpriteState = {
       settings,
+      grid: null,
       sourceCanvas: { width: 320, height: 180 },
       generationCanvas: { width: 1024, height: 1024 },
       outputCanvas,
@@ -283,27 +325,47 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
       exports: [],
       source: null,
     }
-    sprite.assets = [0, 1].map((order) => {
-      const id = guid(6)
+    sprite.assets = (settings.outputKind === 'tiles' ? [0, 1, 2] : [0, 1]).map((order) => {
+      const role =
+        settings.outputKind === 'layers'
+          ? 'layer'
+          : order === 0
+            ? 'backdrop'
+            : order === 1
+              ? 'tile'
+              : 'object'
+      const plan: SpriteAssetPlan = {
+        id: guid(6),
+        name: order === 2 ? '오브젝트 바위' : order ? '전경 나무' : '후경 지면',
+        order,
+        sourceBounds: {
+          x: 0,
+          y: 0,
+          w: role === 'object' ? 0.5 : 1,
+          h: role === 'object' ? 0.5 : 1,
+        },
+        requiresTransparency:
+          role === 'object' ||
+          (role === 'layer' && order !== 0) ||
+          (role === 'tile' && settings.view === 'isometric'),
+        loop: false,
+        frameCount: 8,
+        fps: 8,
+        motionNotes: '',
+        role,
+      }
+      const size = assetOutputSize(settings, sprite.sourceCanvas, 1, plan)
+      if ('error' in size) throw new Error(size.error)
+      const id = plan.id
       return {
         id,
-        plan: {
-          id,
-          name: order ? '전경 나무' : '후경 지면',
-          order,
-          sourceBounds: { x: 0, y: 0, w: 1, h: 1 },
-          requiresTransparency:
-            settings.outputKind === 'layers' ? order !== 0 : settings.view === 'isometric',
-          loop: false,
-          frameCount: 8,
-          fps: 8,
-          motionNotes: '',
-        },
+        plan,
+        ...size,
         planRevision: 1,
         anchor:
-          settings.outputKind === 'layers'
+          role === 'layer' || role === 'backdrop'
             ? { x: 0, y: 0 }
-            : { x: outputCanvas.width / 2, y: outputCanvas.height / 2 },
+            : { x: size.canvas.width / 2, y: size.canvas.height / 2 },
         approvedBaseImageId: null,
         approval: null,
         frames: [{ index: 0, currentTaskId: null, currentImageId: null }],
@@ -451,7 +513,7 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
           frameIndex: 0,
           planRevision: a.planRevision,
           baseImageId: null,
-          ...sprite.outputCanvas,
+          ...a.canvas,
           contentType: 'image/png',
           createdAt: now,
         })
@@ -471,7 +533,7 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
         frameIndex: index,
         planRevision: asset.planRevision,
         baseImageId: index === 0 ? null : asset.approvedBaseImageId,
-        ...sprite.outputCanvas,
+        ...asset.canvas,
         contentType: 'image/png',
         createdAt: now,
       })
@@ -489,9 +551,7 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
         anchor: a.anchor,
         repeat: sprite.settings.repeat,
         layout:
-          sprite.settings.view === 'isometric' && sprite.settings.outputKind === 'tiles'
-            ? 'diamond'
-            : 'square',
+          sprite.settings.view === 'isometric' && a.plan.role === 'tile' ? 'diamond' : 'square',
         baseImageId: a.approvedBaseImageId!,
         imageIds: a.frames.map((f) => f.currentImageId!),
       },
@@ -528,6 +588,7 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
     sprite.exports.forEach((e) => (e.isCurrent = false))
     sprite.exports.push(item)
     archives.set(id, spriteZip(job!, ids, id))
+    exportInputs.set(id, exportFingerprint(sprite, ids))
     const active = sprite.assets
       .flatMap((a) => a.frames)
       .filter((f) =>
@@ -680,7 +741,19 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
         return fail(route, 503, '작업 연결 실패')
       }
       settleSource()
-      return job ? ok(route, job) : fail(route, 404, '작업을 찾을 수 없습니다')
+      return job
+        ? ok(route, {
+            ...job,
+            sprite: {
+              ...job.sprite!,
+              completedExportId: job.sprite!.exports.some(
+                (item) => item.id === job!.sprite!.completedExportId && item.isCurrent,
+              )
+                ? job.sprite!.completedExportId
+                : null,
+            },
+          })
+        : fail(route, 404, '작업을 찾을 수 없습니다')
     }
     const sourceImage = /^\/api\/jobs\/[^/]+\/sprites\/source\/candidates\/([^/]+)$/.exec(path)
     if (sourceImage)
@@ -783,43 +856,92 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
           return fail(route, 503, '승인 응답 유실')
         }
         const sprite = job.sprite!
-        let affectedIds: string[] | null = []
-        if (path.endsWith('/plan')) {
-          const plans = body.assets as SpriteAssetPlan[]
-          affectedIds =
-            plans.length !== sprite.assets.length ||
-            sprite.assets.some((a) => !plans.some((p) => p.id === a.id))
-              ? null
-              : plans
-                  .filter(
-                    (p) => !sprite.assets.some((a) => JSON.stringify(a.plan) === JSON.stringify(p)),
-                  )
-                  .map((p) => p.id)
-        } else if (path.endsWith('/plan/approve')) {
-          affectedIds = sprite.assets.filter((a) => !a.frames[0]?.currentImageId).map((a) => a.id)
-        } else if (path.endsWith('/base/approve')) {
-          affectedIds = sprite.assets
-            .filter(
-              (a) =>
-                (body.assetIds as string[]).includes(a.id) &&
-                a.approvedBaseImageId !== a.frames[0]?.currentImageId,
-            )
-            .map((a) => a.id)
-        } else if (path.includes('/assets/'))
-          affectedIds = sprite.assets.filter((a) => path.includes(a.id)).map((a) => a.id)
         if (path.endsWith('/plan') && method === 'PUT') {
           const plans = body.assets as SpriteAssetPlan[]
-          job.sprite!.assets = plans.map((plan) => {
+          const grid = (body.grid ?? null) as SpriteState['grid']
+          if (
+            grid !== null &&
+            (sprite.settings.outputKind === 'layers' ||
+              !Number.isFinite(grid.cellWidth) ||
+              grid.cellWidth <= 0 ||
+              grid.cellWidth > 1)
+          )
+            return fail(
+              route,
+              400,
+              '격자는 타일 작업의 0 초과 1 이하 칸 너비여야 합니다',
+              'SPRITE_PLAN_INVALID',
+            )
+          const backmost = Math.min(...plans.map((plan) => plan.order))
+          if (
+            plans.filter((plan) => plan.role === 'backdrop').length > 1 ||
+            plans.some((plan) => plan.role === 'backdrop' && plan.order !== backmost)
+          )
+            return fail(
+              route,
+              400,
+              '배경은 최대 하나이며 가장 뒤에 있어야 합니다',
+              'SPRITE_PLAN_INVALID',
+            )
+          if (
+            plans.some((plan) =>
+              sprite.settings.outputKind === 'layers'
+                ? plan.role !== 'layer'
+                : !['tile', 'object', 'backdrop'].includes(plan.role),
+            )
+          )
+            return fail(
+              route,
+              400,
+              '결과 유형에 허용되지 않는 에셋 역할입니다',
+              'SPRITE_PLAN_INVALID',
+            )
+          if (
+            plans.some(
+              (plan) =>
+                ((plan.role === 'object' ||
+                  (plan.role === 'tile' && sprite.settings.view === 'isometric') ||
+                  (plan.role === 'layer' && plan.order !== backmost)) &&
+                  !plan.requiresTransparency) ||
+                (plan.role === 'backdrop' && plan.requiresTransparency),
+            )
+          )
+            return fail(route, 400, '에셋 역할의 투명도가 유효하지 않습니다', 'SPRITE_PLAN_INVALID')
+          const cell = cellWidthOf(grid, plans, sprite.settings)
+          const sizes = plans.map((plan) =>
+            assetOutputSize(sprite.settings, sprite.sourceCanvas, cell, plan),
+          )
+          const invalid = sizes.find((size) => 'error' in size)
+          if (invalid && 'error' in invalid)
+            return fail(route, 400, invalid.error, 'SPRITE_PLAN_INVALID')
+          sprite.grid = grid
+          job.sprite!.assets = plans.map((plan, index) => {
+            const size = sizes[index]!
+            if ('error' in size) throw new Error(size.error)
+            const anchor =
+              plan.role === 'layer' || plan.role === 'backdrop'
+                ? { x: 0, y: 0 }
+                : { x: size.canvas.width / 2, y: size.canvas.height / 2 }
             const existing = job!.sprite!.assets.find((a) => a.id === plan.id)
             if (existing) {
-              if (JSON.stringify(existing.plan) === JSON.stringify(plan)) return existing
+              if (
+                JSON.stringify(existing.plan) === JSON.stringify(plan) &&
+                JSON.stringify(existing.canvas) === JSON.stringify(size.canvas)
+              ) {
+                existing.scale = size.scale
+                return existing
+              }
               const generationChanged =
+                JSON.stringify(existing.canvas) !== JSON.stringify(size.canvas) ||
                 (existing.plan.loop && existing.plan.frameCount !== plan.frameCount) ||
-                ['sourceBounds', 'requiresTransparency', 'loop', 'motionNotes'].some(
+                ['role', 'sourceBounds', 'requiresTransparency', 'loop', 'motionNotes'].some(
                   (key) =>
                     JSON.stringify(existing.plan[key as keyof SpriteAssetPlan]) !==
                     JSON.stringify(plan[key as keyof SpriteAssetPlan]),
                 )
+              existing.canvas = size.canvas
+              existing.scale = size.scale
+              existing.anchor = anchor
               existing.plan = plan
               existing.approval = null
               if (generationChanged) {
@@ -837,13 +959,8 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
               id: plan.id,
               plan,
               planRevision: 1,
-              anchor:
-                job!.sprite!.settings.outputKind === 'layers'
-                  ? { x: 0, y: 0 }
-                  : {
-                      x: job!.sprite!.outputCanvas.width / 2,
-                      y: job!.sprite!.outputCanvas.height / 2,
-                    },
+              ...size,
+              anchor,
               approvedBaseImageId: null,
               approval: null,
               frames: [{ index: 0, currentTaskId: null, currentImageId: null }],
@@ -871,8 +988,9 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
         }
         if (!path.endsWith('/exports') && !path.includes('/sprites/source/')) {
           sprite.exports.forEach((e) => {
-            if (affectedIds === null || e.includedAssetIds.some((id) => affectedIds?.includes(id)))
-              e.isCurrent = false
+            e.isCurrent =
+              e.isCurrent &&
+              exportInputs.get(e.id) === exportFingerprint(sprite, e.includedAssetIds)
           })
           const activeFrames = sprite.assets
             .flatMap((a) => a.frames)
