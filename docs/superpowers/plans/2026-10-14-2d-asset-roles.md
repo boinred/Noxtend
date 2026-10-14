@@ -15,6 +15,7 @@
 - 역할: `Layer`, `Tile`, `Backdrop`, `Object`(JSON `layer`·`tile`·`backdrop`·`object`). 레이어 작업은 `Layer`만, 타일 작업은 `Tile`·`Backdrop`·`Object`만. `Backdrop`은 최대 1개이며 가장 작은 `Order`.
 - 역할별 투명도: `Tile`은 아이소메트릭이면 필수, `Object`는 항상 필수, `Backdrop`은 금지(불투명), `Layer`는 기존 규칙(가장 뒤 제외 필수).
 - 역할이 없는(`null`) 기존 계획은 유형 기본값(`Layers`→`Layer`, `Tiles`→`Tile`)으로 읽는다. 비교·검증은 항상 유효 역할(`SpriteRules.RoleOf`)로 한다.
+- 도메인에 들어가는 계획(계획 수정·분석 반영)은 `SpriteRules.NormalizeRole`로 기본 역할을 null로 바꾼다. fingerprint도 같은 함수를 쓴다. `ReplaceSpritePlan`의 record 동등성 비교가 명시적 기본 역할과 null을 다르게 보아 승인을 해제하지 않게 하기 위함이다.
 - 격자 `cellWidth`는 원본 너비 대비 비율, `0 < cellWidth <= 1`. 없으면 `Tile` 에셋 `SourceBounds.W` 중앙값, `Tile`이 없으면 `Object`·`Backdrop`이 있는 계획은 "격자 칸 너비가 필요합니다"로 거부.
 - 월드 축척 `s = tileWidth / (cellWidth × source.Width)`. `Object` 출력 = `round(bounds px × s)`, 한 변 1~1024가 아니면 계획 거부. `Backdrop` 출력 = `round(source × s)`, 긴 변 1024 초과면 1024로 맞추고 `Scale = 1024 / 긴 변(px × s)`. 나머지 `Scale = 1`. 반올림은 `MidpointRounding.AwayFromZero`.
 - `Tile`·`Layer` 에셋 캔버스는 작업 단위 `OutputCanvas`·`GenerationCanvas`·`Transform`과 같다. `Object`·`Backdrop`의 생성 캔버스는 `SpriteRules.GenerationCanvas(output, 지원 크기)`, transform은 `SpriteRules.Transform`.
@@ -24,12 +25,14 @@
 - 출력 캔버스가 같은 에셋은 저장된 생성 캔버스·transform을 재사용한다. 지원 크기 조회는 출력 캔버스가 새로 생기거나 바뀐 `Object`·`Backdrop`이 있을 때만 한다.
 - 계획 수정 fingerprint는 작업의 불변 OutputKind를 읽은 뒤 정규화 본문으로 계산한다. 정규화는 기본 역할을 null로 두고, grid는 생략과 null을 같게 보며, 에셋을 ID 순으로 정렬한다. 기존 receipt 비교·반환은 revision·취소·모델 상태 검사보다 우선한다. 레이어 작업의 grid 값은 `SpritePlanInvalid`.
 - hash는 하나만 계산한다. 직렬화에서 null `Role`만 생략하고, body는 grid가 null이면 기존 에셋 배열, 값이 있으면 `{ plans, grid }`로 둔다. 그러면 기본값 요청은 배포 전과 같은 바이트가 되므로 구형 계산 분기를 두지 않는다. 다른 명령의 계산 방식은 바꾸지 않는다.
-- 내보내기 공정의 현재 판정에 격자를 더한다. v2 입력은 `Grid`가 현재 유효 격자와 같아야 하고, v1 입력은 저장 격자가 null일 때만 현재다. 이 판정이 있어야 `CompletedExportId` 해제가 실패한 옛 내보내기를 다시 처리하지 않는다.
+- 설계의 불변식 I1(현재 ZIP)·I2(승인)·I3(역할 정규화)에서 벗어나는 예외 규칙을 구현 중에 추가하지 않는다. 새 경계 사례는 불변식으로 판정하고, 판정이 안 되면 설계부터 고친다.
+- 내보내기 현재 판정은 기존 비교에 v2만 입력 `Grid` = 현재 유효 격자를 더한다(I1). v1은 기존 판정이다. 격자를 되돌려 옛 공정이 다시 현재가 되는 것은 허용한다. `CompletedExportId`는 해제하지 않고, 응답 `completedExportId`는 그 export가 현재일 때만 낸다.
 - 생성 명령의 사용 가능 검사는 대상 에셋 생성 캔버스(`SpriteAssetCanvasOf(...).Generation`)를 지원 크기에서 확인한다. 대상은 계획 승인이면 전체, 기준 승인이면 요청 ID, 재생성이면 해당 에셋이다. 작업 단위 생성 캔버스 검사를 이것으로 대체한다.
 - 다이아몬드 clip·`Diamond` layout은 아이소메트릭 `Tile`에만.
 - 새 오류 코드를 만들지 않는다. 계획 위반은 `SpritePlanInvalid` 메시지로 구분한다.
 - 시드: 기존 seed·migration 수정 금지. 개정은 슬롯 비활성화 후 `ISNULL(MAX([Version]),0)+1`, Down은 새 행 삭제 후 최고 버전 재활성화.
 - 모든 새 DB 열은 nullable. 기존 JSON(계획·승인·내보내기 입력)은 새 필드 없이 읽혀야 한다.
+- 승인 snapshot(`SpriteApprovedAsset`)에는 새 필드를 두지 않는다. 내보내기 접수가 현재 에셋 상태에서 역할·캔버스·Scale·SourceBounds를 읽어 v2 입력의 `SpriteExportAsset` 목록에 둔다(I2). 구형 승인 보완 규칙은 없다. `SameExportInput`은 새 필드까지 엄격히 비교한다.
 - 저장 envelope는 v1을 유지하고 내보내기 입력·manifest의 v1/v2를 별도 검증한다. 신규 내보내기 v2 활성화는 writer·저장 검증과 함께 Task 5에서 수행한다.
 - 격자 변경은 계획 목록 변경과 별도로 저장·revision에 반영한다. 캔버스가 같은 에셋의 이미지·승인은 유지하고, 작업 수준 격자가 바뀐 기존 ZIP은 모두 이전 결과로 표시한다.
 - 생성 결과 검증 오류는 기존 `Fail(ProviderBadResponse)` 유지. 분석 schema 오류의 Retry와 구분하고 자동 이미지 재호출을 추가하지 않는다.
@@ -38,7 +41,7 @@
 
 ## Review Focus
 
-1. 기존 작업 호환: 구형 행·승인을 읽고 새 내보내기는 v2로 보완하되 이미지·승인값은 유지한다. 접수된 v1 공정은 고정 입력·기존 manifest 형태를 유지한다 → Task 2 영속성, Task 5 두 내보내기 경로·v2 manifest 재조회, Task 7 구형 응답 파서.
+1. 기존 작업 호환: 구형 행·승인을 읽고, 새 내보내기는 현재 에셋 상태로 v2를 만들되 이미지·승인값은 유지한다. 접수된 v1 공정은 고정 입력·기존 manifest 형태를 유지한다 → Task 2 영속성, Task 5 두 내보내기 경로·v2 manifest 재조회, Task 7 구형 응답 파서.
 2. 기존 작업 역할 변경: 격자 없는 기존 타일 작업에서 한 에셋을 `Object`로 바꾸면 중앙값 격자로 캔버스가 계산되고 그 에셋만 무효화된다. 모든 에셋을 `Object`로 바꾸면 격자 필요 오류다 → Task 1·2 테스트.
 3. 격자 수정으로 오브젝트가 1024px를 넘으면 계획이 거부되고 화면 해당 행에 오류가 보인다 → Task 1 테스트, Task 8 e2e.
 4. 분석 결과 반영 중 지원 크기 조회 실패: 공정은 재시도로 분류되고 계획이 기본 크기로 저장되지 않는다 → Task 2 조회 조건·Task 3 혼합 분석 테스트.
@@ -55,7 +58,9 @@
 | 구형 승인 → 새 v2, 접수 v1 유지, v2 활성화 시점 | Task 5 및 Task 2 준비 계약 |
 | 투명도 불량의 기존 즉시 실패 유지 | Task 4 오류 분류·공급자 호출 수 |
 | 실제 서버 JSON → 실제 Frontend reader | Task 6 fixture 생성, Task 7 연결 검사 |
-| 격자 변경 후 옛 내보내기 공정 비현재·실패 재처리 방지 | Task 2 Step 1b(v1), Task 5 Step 1b(v2) |
+| 현재 ZIP 불변식(v2 Grid 비교), `CompletedExportId` 미해제·응답 현재 export만 | Task 2 Step 1b, Task 5 Step 1b, Task 6 Step 1 |
+| 승인 불변식으로 구형 승인 보완 제거, 현재 에셋 상태로 v2 에셋별 정보 | Task 2 Interfaces, Task 5 Step 1a·Step 2 |
+| 역할 정규화로 명시적 기본 역할의 승인 해제 방지 | Task 1 `NormalizeRole`, Task 2 Step 1a |
 | 생성 명령의 대상 에셋 생성 캔버스 확인 | Task 2 Step 2·Step 4 |
 | 구형 호환 hash를 단일 정규화 hash로 대체 | Task 2 Step 2c |
 
@@ -95,6 +100,8 @@ public sealed record SpriteAssetPlan(Guid Id, string Name, int Order, Bounds Sou
     string MotionNotes = "", SpriteAssetRole? Role = null);
 
 SpriteRules.RoleOf(SpriteSettings settings, SpriteAssetPlan plan) : SpriteAssetRole
+SpriteRules.NormalizeRole(SpriteSettings settings, SpriteAssetPlan plan) : SpriteAssetPlan
+    // 기본 역할이면 Role = null, 그 외 그대로
 SpriteRules.CellWidth(SpriteGrid? grid, IReadOnlyList<SpriteAssetPlan> plans, SpriteSettings settings) : double?
     // grid 값 → Tile W 중앙값 → null
 SpriteRules.AssetOutput(SpriteSettings settings, SpriteCanvas source, double? cellWidth, SpriteAssetPlan plan)
@@ -118,9 +125,9 @@ SpriteRules.Anchor(SpriteAssetRole role, SpriteCanvas output) : SpriteAnchor
 
 **Files:**
 
-- Modify: `apps/backend/Noxtend.Domain/Sprites/SpritePipelineState.cs` — `SpritePipelineState.Grid`·`ReplaceGrid`, `SpriteAsset.Canvas`·`UpdateCanvas`, 기존 에셋 앵커 갱신과 격자 변경 시 ZIP 이전 표시
-- Modify: `apps/backend/Noxtend.Domain/Sprites/SpriteInputs.cs` — `SpriteApprovedAsset`에 `Role`·`Canvas`·`Scale`·`SourceBounds`(기본값 있는 뒤쪽 매개변수), `SpriteExportInput`에 `Grid`·`TileWidth`(기본값)
-- Modify: `apps/backend/Noxtend.Domain/Job/PipelineJob.Sprites.cs` — `ReplaceSpritePlan` 서명(출력 캔버스가 같으면 저장 생성 캔버스 재사용, 지원 크기는 필요할 때만 사용), `GenerationChanged`(유효 역할), 캔버스 변경을 affected로, 격자 포함 변경 없음 판정, 신규·기존 앵커 갱신, `SpriteInput`·`MatchesSpriteInput`(에셋 캔버스), `SpriteApproval`(역할·캔버스·Scale·SourceBounds, `Diamond`는 아이소메트릭 `Tile`만), `SameApprovedAsset`·`SameExportInput`(새 필드 포함), 내보내기 공정 `IsCurrentTask`에 격자 비교(v1은 저장 격자 null일 때만 현재, v2는 입력 `Grid` = 현재 유효 격자). `CaptureSpriteExport`의 신규 v2 접수는 Task 5까지 보류
+- Modify: `apps/backend/Noxtend.Domain/Sprites/SpritePipelineState.cs` — `SpritePipelineState.Grid`·`ReplaceGrid`, `SpriteAsset.Canvas`·`UpdateCanvas`(캔버스 변경 시 프레임·승인 해제, I2), 기존 에셋 앵커 갱신과 격자 변경 시 `Touch(null)`
+- Modify: `apps/backend/Noxtend.Domain/Sprites/SpriteInputs.cs` — `SpriteExportAsset` 추가, `SpriteExportInput`에 `Grid`·`TileWidth`·`AssetDetails`(기본값 null, v1은 null). `SpriteApprovedAsset`은 변경 없음
+- Modify: `apps/backend/Noxtend.Domain/Job/PipelineJob.Sprites.cs` — `ReplaceSpritePlan` 서명(출력 캔버스가 같으면 저장 생성 캔버스 재사용, 지원 크기는 필요할 때만 사용), `GenerationChanged`(유효 역할), 캔버스 변경을 affected로, 격자 포함 변경 없음 판정, 신규·기존 앵커 갱신, `SpriteInput`·`MatchesSpriteInput`(에셋 캔버스), `SpriteApproval`(`Diamond`는 아이소메트릭 `Tile`만, 나머지 필드는 기존), `SameExportInput`(Grid·TileWidth·AssetDetails 엄격 비교), 진입 계획 `NormalizeRole`. `SameApprovedAsset`·v1 `IsCurrentTask`는 변경 없음. `CaptureSpriteExport`의 신규 v2 접수와 v2 Grid 현재 판정은 Task 5
 - Create: `apps/backend/Noxtend.Application/Sprites/SpriteGenerationSizes.cs`
 - Modify: `apps/backend/Noxtend.Application/Sprites/SpriteCommandsHandler.cs` — `UpdatePlanAsync(context, plans, grid, ct)`와 생성 명령 capability 확인이 `SpriteGenerationSizes` 사용(생성 명령은 대상 에셋 생성 캔버스 확인), fingerprint 본문은 정규화한 plans(기본 역할 null·null `Role` 생략, ID 정렬)이고 grid 값이 있을 때만 `{ plans, grid }`, 작업 조회 후 정규화·receipt 비교를 revision/취소 검사 앞에 배치, 경합 후 승자도 같은 hash로 비교, 지원 크기 조회는 `SpritePlanNeedsGenerationSizes`로 필요 시에만
 - Modify: `apps/backend/Noxtend.Application/Sprites/RunSpriteAnalysisTaskHandler.cs` — 파싱·전체 계획 검증 → `SpritePlanNeedsGenerationSizes` → 필요할 때만 크기 조회 → `ReplaceSpritePlan` 순서(grid는 Task 3까지 null). 불필요하면 빈 목록 전달, 필요한 조회 실패는 `ProviderCallFailedException`(transient)로 재시도
@@ -147,13 +154,14 @@ PipelineJob.ReplaceSpritePlan(IReadOnlyList<SpriteAssetPlan> plans, SpriteGrid? 
 PipelineJob.SpriteAssetCanvasOf(SpriteAsset asset) : SpriteAssetCanvas   // Canvas ?? 작업 단위 값
 PipelineJob.SpritePlanNeedsGenerationSizes(IReadOnlyList<SpriteAssetPlan> plans, SpriteGrid? grid) : bool
     // 전체 계획 검증 통과 후 호출, 신규·크기 변경 Object·Backdrop 존재 여부
-public sealed record SpriteApprovedAsset(Guid Id, string Name, int Order, int Fps, bool Loop, SpriteAnchor Anchor,
-    SpriteRepeat Repeat, SpriteTileLayout Layout, Guid BaseImageId, IReadOnlyList<Guid> ImageIds,
-    SpriteAssetRole? Role = null, SpriteCanvas? Canvas = null, double Scale = 1, Bounds? SourceBounds = null);
+// SpriteApprovedAsset는 기존 그대로(승인 snapshot에 새 필드 없음)
+public sealed record SpriteExportAsset(Guid Id, SpriteAssetRole Role, SpriteCanvas Canvas, double Scale,
+    Bounds SourceBounds);                                     // 접수 시 현재 에셋 상태(I2)
 public sealed record SpriteExportInput(int SchemaVersion, Guid ExportId, int ReviewRevision, SpriteView View,
     SpriteOutputKind OutputKind, SpriteCanvas SourceCanvas, SpriteCanvas OutputCanvas,
     IReadOnlyList<SpriteApprovedAsset> Assets, IReadOnlyList<Guid> ExcludedAssetIds,
-    SpriteGrid? Grid = null, int? TileWidth = null);
+    SpriteGrid? Grid = null, int? TileWidth = null, IReadOnlyList<SpriteExportAsset>? AssetDetails = null);
+    // v1: 새 필드 모두 null. v2: AssetDetails는 Assets와 같은 ID 집합
 public static class SpriteGenerationSizes
 {
     // 활성 공급자·모델의 투명 지원과 양수 크기 확인
@@ -164,15 +172,15 @@ SpriteCommandsHandler.UpdatePlanAsync(SpriteCommandContext context, IReadOnlyLis
     SpriteGrid? grid, CancellationToken ct)
 ```
 
-- [ ] **Step 1: 실패 테스트(도메인)** — 계획 확정이 `Object`·`Backdrop` 에셋에 `Canvas`를 저장하고 `Tile`은 작업 단위와 같은 값; `Object` 생성 입력(`SpriteFrameInput.Canvas`·`GenerationCanvas`·`Transform`)이 에셋 캔버스; 역할만 `Tile`→`Object`로 바꾸면 그 에셋만 `PlanRevision` 증가·이미지 무효화·`PlanReview`; 격자 변경은 `Object`·`Backdrop`만 무효화하고 `Tile` 이미지 유지; 이름만 바꾸면 무효화 없음(기존 단정 유지); 신규·기존 `Object` 앵커가 캔버스 중심, `Backdrop` 전환 시 (0,0); 승인 스냅숏에 역할·캔버스·Scale·SourceBounds, 아이소메트릭 `Object`의 `Layout`은 `Square`; `CaptureSpriteExport`는 Task 5 전까지 SchemaVersion 1 유지; 격자 없는 기존 타일 작업(Review Focus 2) 역할 변경 시 중앙값 격자 사용, 모든 에셋 `Object`면 격자 필요 오류.
-- [ ] **Step 1a: 격자·앵커 회귀** — plans가 같고 grid만 다른 경우 저장·`ReviewRevision` 증가; 타일만 있으면 이미지·승인·`PlanRevision` 유지, 새 생성 공정 없음, 모든 기존 ZIP은 이전 표시. 같은 plans·grid·유효 캔버스 재저장은 no-op. 캔버스가 달라진 대상만 프레임·승인을 지우고 `PlanRevision` 증가·`PlanReview` 전이. 기존 Tile→Object, Object 크기 변경, Object→Backdrop 각각 저장 앵커와 승인 snapshot 앵커 확인. 계산·검증 실패 시 격자·계획·캔버스 모두 미변경.
-- [ ] **Step 1b: 생성 캔버스 재사용·완료 상태** — 출력 캔버스가 같은 `Object`는 지원 크기 목록이 바뀐 상태로 재저장해도 생성 캔버스·이미지·`PlanRevision` 유지. 격자만 바뀐 `Completed` 작업은 모든 ZIP 이전 표시·`CompletedExportId` null·`ExportReady`·`PendingReview`. 캔버스가 바뀌는 `Object`가 생성 중이면 `SPRITE_BUSY`이고 격자·계획·캔버스 미변경. 승인 snapshot 앵커 = 저장 앵커 불변식을 역할 전환 시나리오 전체에 단정. 내보내기 공정 현재 판정(v1)은 다음을 확인한다: 진행 중 v1 내보내기 뒤 격자만 바꾸면 ZIP이 이전 결과로 붙고 작업이 완료되지 않음; 실패 처리된 v1 내보내기 뒤 격자만 바꾸고 `ReconcileFromTasks`를 실행해도 `PendingReview`이고 옛 `FailureReason`이 없음; 같은 공정의 수동 재시도 거부; 저장 격자가 null인 동안은 기존 판정과 같음.
+- [ ] **Step 1: 실패 테스트(도메인)** — 계획 확정이 `Object`·`Backdrop` 에셋에 `Canvas`를 저장하고 `Tile`은 작업 단위와 같은 값; `Object` 생성 입력(`SpriteFrameInput.Canvas`·`GenerationCanvas`·`Transform`)이 에셋 캔버스; 역할만 `Tile`→`Object`로 바꾸면 그 에셋만 `PlanRevision` 증가·이미지 무효화·`PlanReview`; 격자 변경은 `Object`·`Backdrop`만 무효화하고 `Tile` 이미지 유지; 이름만 바꾸면 무효화 없음(기존 단정 유지); 신규·기존 `Object` 앵커가 캔버스 중심, `Backdrop` 전환 시 (0,0); 승인 스냅숏 필드는 기존과 같고 아이소메트릭 `Object`의 `Layout`은 `Square`; 출력 캔버스가 바뀐 에셋은 계획이 같아도 승인 해제(I2), 상한에 걸려 `Scale`만 바뀐 `Backdrop`은 저장 Scale만 갱신하고 이미지·승인 유지; `CaptureSpriteExport`는 Task 5 전까지 SchemaVersion 1 유지; 격자 없는 기존 타일 작업(Review Focus 2) 역할 변경 시 중앙값 격자 사용, 모든 에셋 `Object`면 격자 필요 오류.
+- [ ] **Step 1a: 격자·앵커 회귀** — plans가 같고 grid만 다른 경우 저장·`ReviewRevision` 증가; 타일만 있으면 이미지·승인·`PlanRevision` 유지, 새 생성 공정 없음, 모든 기존 ZIP은 이전 표시. 같은 plans·grid·유효 캔버스 재저장은 no-op. 캔버스가 달라진 대상만 프레임·승인을 지우고 `PlanRevision` 증가·`PlanReview` 전이. 기존 Tile→Object, Object 크기 변경, Object→Backdrop 각각 저장 앵커와 승인 snapshot 앵커 확인. 계산·검증 실패 시 격자·계획·캔버스 모두 미변경. 역할 정규화: `Role` null인 기존 승인 행에 같은 계획을 명시적 기본 역할로 저장하면 no-op(revision·승인·ZIP 현재 표시 유지)이고, 명시적 기본 역할에 격자만 바꾼 저장은 승인·이미지 유지. 분석 반영도 같은 정규화로 기본 역할을 null로 저장.
+- [ ] **Step 1b: 생성 캔버스 재사용·완료 상태** — 출력 캔버스가 같은 `Object`는 지원 크기 목록이 바뀐 상태로 재저장해도 생성 캔버스·이미지·`PlanRevision` 유지. 격자만 바뀐 `Completed` 작업은 모든 ZIP 이전 표시·`ExportReady`·`PendingReview`이고 `CompletedExportId` 값은 유지(응답 null은 Task 6). 캔버스가 바뀌는 `Object`가 생성 중이면 `SPRITE_BUSY`이고 격자·계획·캔버스 미변경. 승인 snapshot 앵커 = 저장 앵커 불변식을 역할 전환 시나리오 전체에 단정. 실패 처리된 v1 내보내기 뒤 격자만 바꾸고 `ReconcileFromTasks`를 실행해도 `PendingReview`이고 옛 `FailureReason`이 다시 쓰이지 않음(`CompletedExportId` 유지로 재처리 없음). v1 공정 현재 판정은 격자 변경과 무관하게 기존과 같음. 대상 밖 에셋 수정은 부분 내보내기 현재 판정을 유지.
 - [ ] **Step 2: 실패 테스트(Application)** — 크기 조회가 필요한 새 Object 계획의 `UpdatePlanAsync`가 지원 크기를 조회해 전달하고, 공급자 비활성·모델 없음·크기 없음이면 `JobImageModelUnavailable` 계열로 실패하고 계획이 바뀌지 않음. 생성 명령: 지원 목록에서 빠진 생성 캔버스를 가진 `Object`의 재생성·기준 승인·계획 승인은 `JobImageModelUnavailable`이고 공정 없음·revision 불변이다. 같은 작업의 `Tile` 재생성은 통과하고, 레이어·타일만 있는 작업의 기존 검사 결과도 그대로다. 혼합 분석의 조회 실패 검증은 Task 3에서 수행(Review Focus 4·Step 2d).
 - [ ] **Step 2a: 요청 중복·경합 회귀** — 동일 requestId·정렬 순서만 다른 plans·같은 grid는 같은 receipt, grid만 다르면 `SPRITE_REQUEST_CONFLICT`; null과 생략 grid는 동일. 접수 후 revision·모델 상태가 바뀌어도 같은 요청 재전송은 기존 receipt이며 capability 재조회 없음. SQL 경합에서도 다른 grid의 같은 requestId가 성공으로 합쳐지지 않음.
 - [ ] **Step 2b: 조회 조건·정규화** — 이름·FPS만 바꾼 `Object` 계획은 공급자 비활성이어도 저장되고 capability 조회 호출 0회. 새 `Object` 추가·`Object` 크기 변경은 조회 1회, 조회 실패 시 미변경. 생략한 role과 명시적 기본 role로 같은 requestId를 재전송하면 같은 receipt.
 - [ ] **Step 2c: 접수 순서·단일 hash 호환 회귀** — Layers와 Tiles 각각 역할 생략·명시적 기본값의 신규 접수/재전송 비교. 변경 전 코드로 계산한 고정 hash 상수와 receipt를 SQL에 저장·재조회한다(Layers·Tiles 한 건씩). 원래 본문과 명시적 기본 역할 재전송은 같은 receipt이고, 비기본 역할·값 있는 grid·이름 등 기존 필드 변경은 `SPRITE_REQUEST_CONFLICT`다. 같은 상수가 새 정규화 함수의 결과와 일치하는지 직접 단정해 바이트 호환을 고정한다. 다른 grid는 항상 충돌이다. 현재 revision 변경·취소·공급자 비활성 후 재전송은 receipt 우선·capability 조회 0회·신규 반영 없음. 다른 JobId/Kind 요청과 SQL 경합 후 승자 비교도 검사한다. 고정 hash 상수를 새 구현 함수로 생성해 기대값을 자기 검증하지 않는다.
 - [ ] **Step 2d: 분석 조회 조건** — Task 2에서는 기존 레이어/타일만 분석이 조회 0회·빈 지원 목록으로 계획 저장됨을 검증한다. Task 3에서 신규 Object·Backdrop 혼합 계획의 조회 1회와 실패 시 Retry·계획 미저장을 추가한다. 잘못된 분석 계획은 조회 0회·`SpritePlanInvalid` Retry다. 기존 이미지 모델이 비활성이어도 크기 조회가 불필요한 분석은 완료한다(실제 이미지 생성 명령의 사용 가능 검사는 유지).
-- [ ] **Step 3: 실패 테스트(영속성)** — 역할·격자·에셋 캔버스·v2 승인·내보내기 입력 왕복; 새 열이 null인 기존 행과 `Role`·`Canvas` 없는 기존 `PlanJson`·`ApprovalJson`·내보내기 입력 JSON을 읽으면 `Role` null·`Canvas` null·`Scale` 1(Review Focus 1).
+- [ ] **Step 3: 실패 테스트(영속성)** — 역할·격자·에셋 캔버스·v2 내보내기 입력(`Grid`·`TileWidth`·`AssetDetails`) 왕복; 새 열이 null인 기존 행과 `Role`·`Canvas` 없는 기존 `PlanJson`, 기존 `ApprovalJson`, 새 필드 없는 v1 내보내기 입력 JSON을 읽으면 `Role` null·`Canvas` null·v1 새 필드 null(Review Focus 1).
 - [ ] **Step 3a: 저장 검증 회귀** — Tile·Object·Backdrop을 포함한 계획·캔버스·승인을 실제 SQL에 저장하고 새 DbContext로 재조회. 개별 계획의 잘못된 enum·영역·프레임 값은 저장 경계에서 거부, 레이어 작업의 Object 등 전체 규칙은 실제 설정의 도메인 검증에서 거부. envelope v1 안의 v1/v2 내보내기 입력을 읽고 지원하지 않는 payload 버전은 거부.
 - [ ] **Step 4: 구현** — Files 전체. `SpriteGenerationSizes`는 `SpriteCommandsHandler`의 기존 capability 조건(활성 공급자, `SupportsTransparency`, 양수 크기)을 옮긴다. 생성 명령의 "작업 생성 캔버스가 지원 크기에 있음" 확인은 명령 대상 에셋 생성 캔버스 확인으로 바꾸고 도메인 반영 전에 수행한다(`Tile`·`Layer`는 작업 값과 같아 기존 결과 유지). migration 생성 후 `has-pending-model-changes`가 변경 없음.
 - [ ] **Step 5: 검증** — `SpriteLifecycleTests`·`SpriteRulesTests`·`SpriteCommandTests`·`SpriteAnalysisTests`·`SpriteGenerationTests`·`SpritePersistenceTests`·`SpriteRequestConcurrencyTests`·`SpriteApiTests` 통과, `dotnet build` 오류 0.
@@ -227,19 +235,19 @@ SeedPrompts.AnalyzeSpritesV3() : (string System, string User, string Schema, str
 
 **Files:**
 
-- Modify: `apps/backend/Noxtend.Application/Sprites/SpritePackageWriter.cs` — 에셋 캔버스(`asset.Canvas ?? input.OutputCanvas`)로 크기 검사·시트 분할, 경로 `tiles/`·`objects/`·`backdrop/`·`layers/`(유효 역할), manifest `SchemaVersion`은 `input.SchemaVersion`
+- Modify: `apps/backend/Noxtend.Application/Sprites/SpritePackageWriter.cs` — v2는 `AssetDetails`의 캔버스로 크기 검사·시트 분할하고 역할로 경로 `tiles/`·`objects/`·`backdrop/`·`layers/`를 정한다. v1은 기존대로 `input.OutputCanvas`·작업 유형 경로를 쓴다. manifest `SchemaVersion`은 `input.SchemaVersion`
 - Modify: `apps/backend/Noxtend.Application/Sprites/RunSpritePackTaskHandler.cs`(필요 시)
-- Modify: `apps/backend/Noxtend.Domain/Job/PipelineJob.Sprites.cs` — `CaptureSpriteExport`의 신규 v2 접수·구형 승인 보완
+- Modify: `apps/backend/Noxtend.Domain/Job/PipelineJob.Sprites.cs` — `CaptureSpriteExport`의 신규 v2 접수(현재 에셋 상태로 `AssetDetails`, 저장값 또는 중앙값 `Grid`, 설정 `TileWidth`), 내보내기 공정 `IsCurrentTask`에 v2만 `input.Grid` = 현재 유효 격자 비교 추가. `SameExportInput`의 엄격한 값 비교는 유지
 - Modify: `apps/backend/Noxtend.Infrastructure/Persistence/SpriteJsonSerializer.cs` — v1/v2 입력·manifest 검증과 버전 일치, 새 v2 필수값 확인
 - Test: `Infrastructure/SpritePackageTests.cs`, `Infrastructure/SpritePersistenceTests.cs`, `Application/SpriteCommandTests.cs`, `Domain/SpriteLifecycleTests.cs`
 - Modify: `docs/xHuman/backend.md`
 
-**Interfaces:** Consumes Task 2 `SpriteApprovedAsset.Role/Canvas/Scale/SourceBounds`, `SpriteExportInput.Grid/TileWidth`. Produces: 새 `CaptureSpriteExport`는 v2; 기존 `task.SpriteExportInput`은 버전과 고정 입력을 유지.
+**Interfaces:** Consumes Task 2 `SpriteExportAsset`, `SpriteExportInput.Grid/TileWidth/AssetDetails`, `SpriteAssetCanvasOf`, Task 1 `RoleOf`·`CellWidth`. Produces: 새 `CaptureSpriteExport`는 v2; 기존 `task.SpriteExportInput`은 버전과 고정 입력을 유지.
 
 - [ ] **Step 1: 실패 테스트** — 혼합 작업(타일 128×64, 오브젝트 307×256, 원경 1024×683) ZIP: 역할별 기본 경로, 시트 셀 크기가 에셋 캔버스, manifest에 역할·캔버스·scale·sourceBounds·grid·tileWidth, schemaVersion 2; 오브젝트 이미지 크기가 캔버스와 다르면 거부(Review Focus 5); SchemaVersion 1 기존 입력은 이전과 같은 경로(`layers/`·`tiles/`)와 manifest(Review Focus 1). 기존 `Zip_ContainsManifestBasesFramesAndSheets` 단정 유지.
-- [ ] **Step 1a: 구형 승인 호환** — 새 필드 없는 승인 JSON을 SQL에서 읽고 재생성·재승인 없이 새 내보내기. 역할 기본값·작업 캔버스·Scale 1·같은 승인 revision의 계획 SourceBounds로 v2 필드를 채우고 승인된 이미지 ID·이름·순서·FPS 유지. 타일 Grid는 저장값 또는 중앙값, TileWidth는 설정값; 레이어 둘 다 null. 접수된 v1 재시도는 계획 변경 후에도 고정 입력·v1 경로·기존 manifest 필드 구성 유지(새 필드 미출력).
-- [ ] **Step 1b: 저장·연결 회귀** — 완성된 v2 manifest·입력·ZIP 참조를 SQL에 저장하고 새 DbContext로 읽어 버전·역할·캔버스·Scale·SourceBounds·Grid·TileWidth·앵커 비교. manifest/input 버전 불일치와 v2 필수값 누락 거부. 격자만 수정한 승인 작업은 기존 ZIP 이전 표시 후 승인·이미지 유지 상태로 새 v2 ZIP 생성. v2 공정의 현재 판정: 입력 `Grid`가 현재 유효 격자(저장값 또는 중앙값)와 같을 때만 현재다. 진행 중 v2 내보내기 뒤 격자만 바꾸면 이전 결과로 붙고, 실패한 v2 공정은 격자 변경 후 재처리·수동 재시도되지 않는다.
-- [ ] **Step 2: 구현** — Files. writer의 버전 허용·버전별 manifest 출력과 저장 검증을 마련한 뒤 같은 Task에서 `CaptureSpriteExport`를 v2로 전환. 구형 snapshot 보완은 새 접수에만 적용하고 저장된 v1 작업 입력은 수정하지 않는다.
+- [ ] **Step 1a: 구형 승인 호환** — 새 필드 없는 승인 JSON을 SQL에서 읽고 재생성·재승인 없이 새 내보내기. `AssetDetails`는 현재 에셋 상태(유효 역할·작업 캔버스·Scale 1·현재 SourceBounds), 승인 snapshot은 저장값 그대로이며 이미지 ID·이름·순서·FPS 유지. 타일 Grid는 저장값 또는 중앙값, TileWidth는 설정값; 레이어 둘 다 null. 새 v2 공정의 `IsCurrentTask == true` → ZIP 첨부(`IsCurrent == true`) → 전체 `Succeeded`/일부 `PartiallySucceeded` 완료까지 검사하고 SQL 재조회 뒤에도 동일함을 확인한다. 저장 승인 JSON은 불변. 접수된 v1 재시도는 계획 변경 후에도 고정 입력·v1 경로·기존 manifest 필드 구성 유지(새 필드 미출력).
+- [ ] **Step 1b: 저장·연결 회귀** — 완성된 v2 manifest·입력·ZIP 참조를 SQL에 저장하고 새 DbContext로 읽어 버전·`AssetDetails`·Grid·TileWidth·앵커 비교. manifest/input 버전 불일치·새 필드 값 차이·v2 필수값 누락(`AssetDetails`와 `Assets`의 ID 집합 불일치 포함)을 거부한다. 격자만 수정한 승인 작업은 기존 ZIP 이전 표시 후 승인·이미지 유지 상태로 새 v2 ZIP 생성. v2 현재 판정(I1): 진행 중 v2 내보내기 뒤 격자만 바꾸면 이전 결과로 붙고 작업 미완료; 격자 변경 후 옛 v2 실패 공정의 수동 재시도 거부; `A → B → A` 뒤 옛 v2 공정은 현재; 격자 변경 후 새 접수는 정상 완료.
+- [ ] **Step 2: 구현** — Files. writer의 버전 허용·버전별 manifest 출력과 저장 검증을 마련한 뒤 같은 Task에서 `CaptureSpriteExport`를 v2로 전환. 접수는 현재 에셋 상태로 `AssetDetails`를 만들며 승인 snapshot은 바꾸지 않는다. 저장된 v1 작업 입력은 수정하지 않는다.
 - [ ] **Step 3: 검증** — `SpritePackageTests`, `SpriteCommandTests`, `SpriteLifecycleTests`, `SpritePersistenceTests` 통과.
 - [ ] **Step 4: Commit** — `feat(sprites): export role-aware sprite manifest v2`
 
@@ -247,7 +255,7 @@ SeedPrompts.AnalyzeSpritesV3() : (string System, string User, string Schema, str
 
 **Files:**
 
-- Modify: `apps/backend/Noxtend.Api/Contracts/SpriteContracts.cs` — `SpriteAssetPlanRequest.Role`(선택, camelCase 문자열), `SpritePlanRequest.Grid`(선택), `SpriteResponse.Grid`, `SpriteAssetResponse.Canvas`·`Scale`, `SpriteApprovedAssetResponse` 역할·캔버스·scale
+- Modify: `apps/backend/Noxtend.Api/Contracts/SpriteContracts.cs` — `SpriteAssetPlanRequest.Role`(선택, camelCase 문자열), `SpritePlanRequest.Grid`(선택), `SpriteResponse.Grid`, `SpriteAssetResponse.Canvas`·`Scale`, `SpriteResponse.From`의 `CompletedExportId`는 해당 export가 `IsCurrent`일 때만(승인 snapshot 응답은 변경 없음)
 - Modify: `apps/backend/Noxtend.Api/Controllers/SpriteJobsController.cs` — 계획 수정에 grid 전달, 잘못된 역할 400
 - Test: `Api/SpriteApiTests.cs` — 실제 DTO·서버 JSON 설정을 사용하는 연결 fixture 생성/재생성 검사
 - Create: `apps/frontend/src/infra/api/fixtures/sprite-roles.server.json` — 서버 테스트에서 생성하는 새 혼합 작업·구형 작업·구형 승인·grid null 응답 fixture
@@ -258,9 +266,9 @@ SeedPrompts.AnalyzeSpritesV3() : (string System, string User, string Schema, str
 **Interfaces:**
 
 - Consumes: Task 2 `UpdatePlanAsync(context, plans, grid, ct)`.
-- Produces(JSON): plan asset `role?: 'layer'|'tile'|'backdrop'|'object'`(응답은 항상 유효 역할), plan 요청 `grid?: { cellWidth: number } | null`, sprite 응답 `grid: { cellWidth } | null`, asset 응답 `canvas: { width, height }`·`scale: number`, approval snapshot `role`·`canvas`·`scale`.
+- Produces(JSON): plan asset `role?: 'layer'|'tile'|'backdrop'|'object'`(응답은 항상 유효 역할), plan 요청 `grid?: { cellWidth: number } | null`, sprite 응답 `grid: { cellWidth } | null`, asset 응답 `canvas: { width, height }`·`scale: number`, `completedExportId`는 현재 export일 때만 값.
 
-- [ ] **Step 1: 실패 테스트** — 새 필드 직렬화; 요청 `role` 생략 시 유형 기본값으로 저장; `role: "unknown"` 400; 레이어 작업에 `object` 400(`SPRITE_PLAN_INVALID`); 기존 작업 응답의 `role`이 기본값·`canvas`가 작업 단위 값·`scale` 1; 알 수 없는 필드는 기존처럼 400.
+- [ ] **Step 1: 실패 테스트** — 새 필드 직렬화; 요청 `role` 생략 시 유형 기본값으로 저장; `role: "unknown"` 400; 레이어 작업에 `object` 400(`SPRITE_PLAN_INVALID`); 기존 작업 응답의 `role`이 기본값·`canvas`가 작업 단위 값·`scale` 1; 알 수 없는 필드는 기존처럼 400. 완료 작업에서 격자만 바꾼 뒤와 이름만 바꾼 뒤 `completedExportId`가 null이고, 새 내보내기 완료 후 새 ID. 기존 `FailedConsumedExportId_DoesNotAdvertiseStoredZip` 유지.
 - [ ] **Step 1a: 서버 연결 fixture** — 실제 `SpriteResponse.From`을 포함한 작업 응답 DTO 매핑과 서버 JSON 설정으로 네 시나리오를 직렬화한다. 고정 ID·시간을 사용하고 생성 결과와 저장 fixture의 구조·값 일치를 검사한다. 구형 DB 행의 새 서버 응답과 과거 필드 생략 응답은 구분한다. 생성 명령·기준 revision을 인접 문서에 기록한다.
 - [ ] **Step 1b: 요청 fixture 바인딩** — `sprite-roles.request.json`의 명시적 필드가 있는 두 요청을 실제 API(`JsonUnmappedMemberHandling.Disallow`)로 보내 성공하고 저장된 역할·grid가 요청과 같음. 별도 호환 테스트에서는 role·grid를 생략한 본문을 보내 작업 기본 역할·grid null로 처리되는지 확인한다. 생략형은 Frontend 요청 비교 fixture에 넣지 않는다. fixture 경로는 `apps/backend/Noxtend.slnx`에서 저장소 루트를 찾아 계산하고, 응답 fixture 갱신은 문서에 적은 환경 변수를 켠 실행으로만 한다.
 - [ ] **Step 2: 구현** — Files.
@@ -271,12 +279,12 @@ SeedPrompts.AnalyzeSpritesV3() : (string System, string User, string Schema, str
 
 **Files:**
 
-- Modify: `apps/frontend/src/domain/sprites/types.ts` — `SpriteAssetRole`, `SpriteGrid`, `SpriteAssetPlan.role`, `SpriteAsset.canvas`·`scale`, `SpriteState.grid`, `SpriteApprovedAsset` 역할·캔버스·scale, `readPlan`·`readState`·`readApprovedAsset`
+- Modify: `apps/frontend/src/domain/sprites/types.ts` — `SpriteAssetRole`, `SpriteGrid`, `SpriteAssetPlan.role`, `SpriteAsset.canvas`·`scale`, `SpriteState.grid`, `readPlan`·`readState`(승인 snapshot reader는 변경 없음)
 - Modify: `apps/frontend/src/domain/sprites/rules.ts` — `assetRole(settings, plan)`, `cellWidthOf(grid, plans)`, `assetOutputSize(settings, source, cellWidth, plan)`(서버와 같은 반올림·1024 규칙, 결과 또는 오류 문구)
 - Modify: `apps/frontend/src/domain/sprites/labels.ts` — `spriteRoleLabel`: `tile`=반복 타일, `object`=오브젝트, `backdrop`=원경 배경, `layer`=배경 레이어
 - Modify: `apps/frontend/src/infra/api/spriteApi.ts` — `updateSpritePlan` 본문에 `role`·`grid`
 - Modify: `apps/frontend/src/app/queries/useSprites.ts`(입력 타입 전달만)
-- Modify: `apps/frontend/tests/e2e/spriteFakeApi.ts` — 역할별 투명도·캔버스·앵커·경로·manifest v2, 타일 작업 seed에 세 역할
+- Modify: `apps/frontend/tests/e2e/spriteFakeApi.ts` — 역할별 투명도·캔버스·앵커·경로·manifest v2, 타일 작업 seed에 세 역할, `completedExportId`는 현재 export일 때만
 - Create: `apps/frontend/src/infra/api/spriteContract.test.ts` — Task 6의 서버 생성 fixture를 실제 작업 응답 reader로 검증
 - Modify: `apps/frontend/src/domain/job/backendParity.test.ts` — `SpriteAssetRole` enum parity 추가
 - Test: `src/domain/sprites/rules.test.ts`, `src/domain/sprites/labels.test.ts`, `src/infra/api/spriteApi.test.ts`, `src/app/queries/useSprites.test.ts`
@@ -339,3 +347,9 @@ export function spriteRoleLabel(role: SpriteAssetRole): string
 - 문서 검증: 두 문서 대상 `pnpm docs:check`와 `git diff --check` 통과. 설계·Task·검증 사례의 대응과 실제 reader 경로를 재확인했다. 애플리케이션 테스트·DB migration 적용·실제 AI 호출은 미실행.
 - 2026-10-14 추가 리뷰 4건: 작업 설정 조회 후 정규화·receipt 우선 비교, 제한된 구형 fingerprint 호환, 명시형 요청 fixture와 서버 생략형 검사 분리, 분석의 조건부 지원 크기 조회를 반영. 문서만 보완하며 애플리케이션 구현은 미착수.
 - 2026-10-14 코드 대조 리뷰 4건을 반영했다. 첫째, 내보내기 공정 현재 판정에 격자를 더했다(현재 `IsCurrentTask`는 승인 snapshot만 비교해 격자 변경 후에도 옛 공정이 현재로 남음). 둘째, 이 판정을 전제로 `CompletedExportId` 해제가 실패한 내보내기를 다시 처리하지 않게 했다. 셋째, 생성 명령이 대상 에셋 생성 캔버스를 확인하게 했다. 넷째, 구형 hash 이중 비교를 바이트 호환 단일 정규화 hash로 대체했다. 문서만 보완하며 애플리케이션 구현은 미착수.
+- 2026-10-14 추가 리뷰 2건 반영: 마지막 격자 변경 revision으로 같은 유효 값·원래 값 복원 시 옛 내보내기 재활성화를 차단하고, 구형 승인 보완을 v2 접수·현재성 비교에 일관되게 적용하도록 설계·Task 2·Task 5·SQL/완료 경계 검증을 보완했다. 애플리케이션 구현은 미착수.
+- 2026-10-14 전체 재검토: 설계에 불변식 I1(현재 ZIP)·I2(승인)·I3(역할 정규화)를 두고 규칙을 그로부터 다시 정리했다. 바로 위 기록의 격자 변경 revision과 구형 승인 보완은 다음으로 대체했다.
+  - v2 Grid 현재 판정과 `CompletedExportId` 미해제. 응답은 현재 export만 낸다.
+  - 승인 snapshot은 바꾸지 않고, 접수 때 현재 에셋 상태로 `AssetDetails`를 만든다.
+  - 역할 정규화(`NormalizeRole`)를 추가했다. 정규화가 없으면 명시적 기본 역할 저장이 기존 승인을 해제한다(`ReplaceSpritePlan` record 비교·`UpdatePlan` 승인 해제 확인).
+  - 문서만 보완했으며 애플리케이션 구현은 미착수.

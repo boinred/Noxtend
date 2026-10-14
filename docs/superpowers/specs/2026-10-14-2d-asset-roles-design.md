@@ -44,13 +44,26 @@
 | 투명도 | 역할이 결정, 화면 체크박스는 읽기 전용 | 모델·사용자 값과 규칙의 불일치 방지 |
 | 기존 작업 | 역할 없음 → 유형 기본값(`layers`→`layer`, `tiles`→`tile`) | 호환 |
 
+알려진 제약:
+
+- v2 분석으로 만든 기존 타일 작업은 `tile` 영역이 한 칸이라는 보장이 없어 중앙값 격자가 부정확할 수 있다. 계획 검수의 자리표시(`자동 Npx`)로 확인하고 고친다.
+- 분석의 투명도는 역할에서 정해지지만 값을 조용히 고치지 않는 결정을 유지하므로, 불일치는 재질의 비용이 든다.
+
+## 불변식
+
+새 경계 사례는 아래 불변식으로 판정한다. 시나리오별 예외 규칙을 추가하지 않는다.
+
+- **I1 현재 ZIP**: 현재로 판정된 내보내기 공정·ZIP의 내용은 지금 같은 대상을 내보낸 결과와 같다. 판정은 기존 비교(에셋 집합, 선택 대상 승인 snapshot)에 v2만 입력 `Grid` = 현재 유효 격자를 더한다. v1 ZIP에는 격자 정보가 없으므로 기존 판정 그대로다.
+- **I2 승인**: 승인이 남아 있는 에셋은 승인 이후 계획(역할 포함)과 출력 캔버스가 바뀌지 않았다. `scale`은 격자에서 계산되는 값이라 예외다. 상한에 걸린 `backdrop`은 출력 캔버스가 같아도 `scale`만 바뀔 수 있으며, 이 변화는 격자 변경이므로 I1의 Grid 비교가 옛 ZIP을 비현재로 만든다. 계획 변경은 `UpdatePlan`이 승인을 해제하고(현재 구현), 캔버스 변경은 새 캔버스 갱신이 승인을 해제한다. 그래서 내보내기를 접수할 때 현재 에셋의 역할·캔버스·scale·원본 영역은 곧 승인 당시 값이다.
+- **I3 역할 정규화**: 도메인 계획의 `role`은 작업 기본 역할이면 null이다. 같은 의미의 계획은 record로도 같다.
+
 ## 확인한 현재 구현
 
 - `SpriteAssetPlan`(`apps/backend/Noxtend.Domain/Sprites/SpriteTypes.cs`)에 역할·크기 필드가 없다. 에셋별 시각 속성은 `RequiresTransparency`뿐이다.
 - 캔버스는 작업 단위(`SpritePipelineState`의 `SourceCanvas`·`GenerationCanvas`·`OutputCanvas`·`Transform`)다. `SpriteRules.OutputCanvas`는 타일이면 `tileWidth × (아이소메트릭이면 절반)`이다.
 - 투명도 규칙·새 에셋 앵커·다이아몬드 layout·미리보기·내보내기 경로가 모두 작업 `OutputKind`로 분기한다(`SpriteRules.Validate`, `PipelineJob.Sprites.cs`의 `ReplaceSpritePlan`·`SpriteApproval`, `RunSpriteGenerationTaskHandler`, `SpritePackageWriter`, `SpritePreview.tsx`).
 - `SpritePlanParser`는 `view`·`outputKind`가 작업 설정과 같아야 하며 에셋 키 집합을 고정한다. 분석 프롬프트 변수는 `settings`·`sourceCanvas`, 생성 프롬프트 변수는 `settings`·`asset`·`frame`·`sourceCanvas`·`outputCanvas`(`PromptTemplate`)다.
-- 계획 검수는 `PUT plan`으로 에셋 목록 전체를 바꾼다. `GenerationChanged`는 영역·투명도·루프·프레임 수·동작 메모 변경만 이미지 무효화로 본다.
+- 계획 검수는 `PUT plan`으로 에셋 목록 전체를 바꾼다. `GenerationChanged`는 영역·투명도·루프·프레임 수·동작 메모 변경만 이미지 무효화로 본다. 다만 `SpriteAsset.UpdatePlan`은 이름 같은 메타데이터만 바뀌어도 승인을 해제하므로, 승인이 남아 있는 에셋은 승인 이후 계획이 바뀌지 않았다. `ReplaceSpritePlan`은 계획을 record 동등성으로 비교한다.
 - 3D 배경 분해에는 면을 덮는 표면 파츠와 낱개 오브젝트를 나누는 선례(`BackgroundSurfaceRule`)가 있다.
 
 ## 데이터 모델
@@ -60,6 +73,7 @@
 - `SpriteAssetRole`: `layer`, `tile`, `backdrop`, `object`.
 - 레이어 작업은 `layer`만, 타일 작업은 `tile`·`backdrop`·`object`만 허용한다. `backdrop`은 최대 1개이며 순서가 가장 뒤다.
 - 역할별 투명도: `tile`은 아이소메트릭이면 투명(기존 규칙), `object`는 항상 투명, `backdrop`은 불투명, `layer`는 기존 규칙(가장 뒤 제외 투명).
+- 도메인에 들어가는 계획은 역할을 정규화한다. 작업 기본 역할이면 null로 바꾸고, 그 외에는 그대로 둔다. 적용 지점은 계획 수정과 분석 결과 반영이며, `SpriteRules.NormalizeRole(settings, plan)` 한 함수를 fingerprint 정규화와 함께 쓴다. `ReplaceSpritePlan`의 변경 없음 판정·변경 대상 선정·`asset.Plan != plan`은 record 동등성으로 비교한다. 그런데 `UpdatePlan`은 생성 입력이 같아도 승인을 해제한다. 그래서 정규화 없이 역할이 null인 기존 행에 명시적 `tile`을 보내면, 같은 계획인데도 revision이 오르고 모든 승인이 해제된다. 저장 계획에는 기본값이 아닌 역할만 남고, 응답은 `RoleOf`로 항상 유효 역할을 낸다.
 
 격자:
 
@@ -122,11 +136,12 @@
 
 ## 상태 전이와 오류
 
-- `GenerationChanged`에 유효 `role`과 계산된 에셋 캔버스를 추가한다. 역할 변경, 또는 격자 변경으로 `object`·`backdrop` 캔버스가 바뀌면 해당 에셋의 이미지·승인을 무효화하고 계획 검수로 돌아간다. 역할만 바뀐 경우 내보내기는 해당 에셋을 포함한 ZIP만 이전 결과로 표시한다. `tile` 캔버스는 격자 영향을 받지 않는다.
+- `GenerationChanged`에 유효 `role`과 계산된 출력 캔버스를 추가한다. 역할 변경, 또는 격자 변경으로 `object`·`backdrop` 출력 캔버스가 바뀌면 해당 에셋의 이미지·승인을 무효화하고 계획 검수로 돌아간다. 출력 캔버스가 같고 `scale`만 바뀐 `backdrop`은 저장 `scale`만 갱신하고 이미지·승인을 유지한다. 역할만 바뀐 경우 내보내기는 해당 에셋을 포함한 ZIP만 이전 결과로 표시한다. `tile` 캔버스는 격자 영향을 받지 않는다.
 - 변경 없음 판정은 계획 목록·저장 격자·유효 에셋 캔버스를 함께 비교한다. 격자만 달라도 저장과 `ReviewRevision` 증가가 필요하다. 캔버스가 그대로인 에셋은 `PlanRevision`·이미지·승인을 유지하고 새 생성 공정을 만들지 않는다. 변경된 캔버스의 대상은 계획 목록이 같아도 무효화 대상에 포함한다.
-- 격자는 manifest의 작업 수준 메타데이터이므로 저장 격자가 바뀌면 모든 기존 ZIP을 이전 결과로 표시한다(파일은 보존). 이미지 변경 없이 최종 승인된 대상은 재승인 없이 새로 내보낼 수 있으며, 완료 상태가 기존 ZIP을 현재 결과로 계속 표시하지 않게 한다.
-- 내보내기 공정의 현재 판정(`IsCurrentTask`)은 지금의 에셋 집합·승인 snapshot 비교에 격자를 더한다. v2 입력은 `Grid`가 현재 유효 격자(저장값 또는 중앙값)와 같아야 하고, v1 입력은 격자가 없던 때 접수됐으므로 저장 격자가 null일 때만 현재다. 승인만 보면 격자만 바뀐 뒤에도 옛 공정이 현재로 남기 때문이다. 그래서 진행 중이던 내보내기는 끝나도 이전 결과로 붙어 작업을 완료시키지 않고, 실패한 옛 공정의 수동 재시도도 거부된다. 내보내기 진행 중 격자 수정은 막지 않는다.
-- 격자만 바뀌어 모든 ZIP이 이전 결과가 되면 `CompletedExportId`도 해제한다. 이 값은 실패한 내보내기를 처리했다는 표시(`ConsumeFailedExport`)이기도 하다. 위 판정으로 옛 공정이 현재가 아니게 되므로 해제해도 실패를 다시 처리하지 않으며, 옛 실패 사유로 `PartiallySucceeded`가 되지 않는다. 모든 에셋이 승인 상태면 단계는 `ExportReady`, 작업 상태는 `PendingReview`다(기존 `UpdateSpriteState` 경로). 캔버스가 바뀌는 대상이 생성 중이면 `SPRITE_BUSY`로 거부하고 격자·계획·캔버스를 모두 그대로 둔다.
+- 격자는 manifest의 작업 수준 메타데이터이므로 저장 격자가 바뀌면 `Touch(null)`로 모든 기존 ZIP을 이전 결과로 표시한다(파일은 보존). 캔버스가 그대로인 에셋은 승인이 유지되므로 재승인 없이 새로 내보낼 수 있다.
+- 내보내기 공정의 현재 판정(`IsCurrentTask`)은 I1을 따른다. 기존 비교에 v2만 입력 `Grid` = 현재 유효 격자(저장값 또는 중앙값)를 더한다. 그래서 진행 중이던 v2 내보내기는 격자가 바뀌면 이전 결과로 붙어 작업을 완료시키지 않고, 옛 v2 실패 공정의 수동 재시도도 거부된다. 격자를 원래 값으로 되돌려 옛 공정이 다시 현재가 되는 경우는 내용이 현재 상태와 같으므로 허용한다. v1 공정은 격자와 무관하게 기존 판정을 쓴다. 내보내기 진행 중 격자 수정은 막지 않는다. 전체 `ReviewRevision` 일치는 요구하지 않으며, 대상 밖 에셋 수정은 기존처럼 부분 내보내기를 무효화하지 않는다.
+- `CompletedExportId`는 해제하지 않는다. 이 값은 실패한 내보내기를 처리했다는 표시(`ConsumeFailedExport`)이기도 해서, 해제하면 다시 현재가 된 실패 공정이 옛 실패 사유로 작업을 `PartiallySucceeded`로 되돌릴 수 있다. 화면이 이전 ZIP을 완료 결과로 보지 않도록 응답의 `completedExportId`는 그 export가 현재일 때만 값을 낸다. 이 규칙은 이름 수정 등으로 ZIP이 이전 결과가 된 기존 경우에도 같이 적용된다. Frontend는 이 값을 읽기만 하고 화면에 쓰지 않는다.
+- 격자만 바뀐 완료 작업은 기존 `UpdateSpriteState` 경로로 단계 `ExportReady`(모든 에셋 승인 시), 작업 상태 `PendingReview`가 된다. 캔버스가 바뀌는 대상이 생성 중이면 `SPRITE_BUSY`로 거부하고 격자·계획·캔버스를 모두 그대로 둔다.
 - 생성 중 에셋 변경은 기존 `SPRITE_BUSY`, revision 충돌은 409다. 새 오류 코드 없이 계획 검증 실패 메시지를 추가한다: 원경 1개 초과, 오브젝트 크기 초과, 유형에 없는 역할, 역할과 투명도 불일치, 격자 범위.
 - 이미지 모델 지원 크기 조회 실패는 계획 확정 실패로 알리고 재시도하게 한다. 기본 크기로 대체하지 않는다.
 
@@ -138,7 +153,8 @@
 - fingerprint는 정규화한 본문으로 만든다. 에셋은 ID 순으로 정렬한다. `role`은 작업 기본 역할이면 null로 정규화하므로 생략한 값과 명시적 기본값이 같아진다. `grid`는 생략과 `null`을 같게 본다. 같은 의미의 재전송은 같은 receipt다.
 - 정규화 본문은 기본값 요청일 때 배포 전 계산과 같은 바이트가 된다. 직렬화에서 null `Role`만 생략하고, 다른 null 필드(`assetId`·`index` 등)는 기존대로 직렬화한다. body는 `grid`가 null이면 기존과 같은 에셋 배열이고, 값이 있을 때만 `{ plans, grid }`다. 그래서 배포 전 접수와 기본값 재전송은 hash 하나로 같은 receipt가 되고, 비기본 역할이나 값 있는 grid는 hash가 달라 요청 충돌이 된다. 구형 계산을 따로 두거나 두 hash를 비교하지 않으며, Fingerprint 열·64자 SHA-256 표현도 바꾸지 않는다. 동시 저장 경합 뒤 승자 receipt도 같은 hash로 비교한다.
 - 계획 수정 처리 순서는 요청 ID 등 형식 확인 → 기존 접수 조회 → 작업 조회 → 접수 재확인 → 작업 존재·2D 모드 확인 → 불변 `Settings.OutputKind`로 역할 정규화·fingerprint 계산 → 접수 기록 비교·receipt 반환 → 신규 요청만 revision·취소·전체 계획 검증 → 필요할 때만 지원 크기 조회 → 도메인 반영이다. 접수 조회와 비교를 구분하며, 작업 조회 전에 생략 역할의 기본값을 추측하지 않는다. 접수 기록의 JobId·Kind가 다르면 즉시 요청 충돌이다. 다른 명령의 기존 fingerprint·처리 순서는 변경하지 않는다.
-- `SpriteAssetResponse`에 `canvas`(출력)와 `scale` 추가.
+- `SpriteAssetResponse`에 `canvas`(출력)와 `scale` 추가. 승인 snapshot 응답은 바꾸지 않는다.
+- `SpriteResponse.completedExportId`는 해당 export가 현재일 때만 값을 내고 아니면 null이다("상태 전이와 오류" 절).
 - Frontend `readPlan`·`readState`는 새 필드를 엄격히 읽고, 역할이 없는 구형 응답은 유형 기본값으로 읽는다. `spriteApi.ts`의 요청 직렬화에 `role`·`grid`를 넣는다.
 
 ## 화면
@@ -156,7 +172,8 @@
 - manifest `schemaVersion` 2. 기본 이미지 경로를 역할별 `tiles/`·`objects/`·`backdrop/`·`layers/`로 나눈다.
 - 에셋마다 `role`·`canvas`·`scale`·`sourceBounds`, 작업 수준에 `grid`·`tileWidth`를 추가한다. 시트 분할은 에셋 캔버스 기준이다.
 - 이미 만든 ZIP은 그대로 두고 새로 내보내면 v2가 된다.
-- 기존 승인 snapshot에 새 필드가 없으면 새 내보내기를 접수할 때 유효 역할·작업 단위 캔버스·`scale: 1`과 승인 revision이 일치하는 계획의 `sourceBounds`로 v2 snapshot을 만든다. 승인된 이미지 ID·이름·순서·FPS 등 기존 승인값은 유지하고 재생성·재승인을 요구하지 않는다. 타일 작업의 내보내기 격자는 저장값 또는 중앙값으로 확정하고, 레이어 작업의 `grid`·`tileWidth`는 null이다.
+- 새 내보내기를 접수할 때 에셋별 `role`(유효 역할)·`canvas`·`scale`·`sourceBounds`는 현재 에셋 상태에서 읽어 v2 입력의 에셋별 정보(`SpriteExportAsset`)로 둔다. I2에 따라 이 값은 승인 당시 값과 같다. 승인 snapshot(`SpriteApprovedAsset`)에는 새 필드를 두지 않는다. 그래서 구형 승인도 보완 규칙 없이 같은 경로로 v2를 내보내고, 재생성·재승인이 필요 없다. 타일 작업의 내보내기 격자는 저장값 또는 중앙값으로 확정하고, 레이어 작업의 `grid`·`tileWidth`는 null이다.
+- 고정 입력 무결성 비교(`SameExportInput`)는 v2의 에셋별 정보·`grid`·`tileWidth`까지 엄격히 비교한다. v2 입력·manifest의 필수값 누락을 정상값으로 채우지 않는다.
 - 이미 접수된 v1 내보내기 공정은 저장된 입력만 사용해 v1으로 재시도한다. 현재 계획으로 재구성하거나 v2로 승격하지 않으며, ZIP 경로와 manifest의 기존 필드 구성을 유지한다. 새 v2 필드가 v1 manifest에 추가되지 않도록 버전별 출력 형태를 검증한다.
 - v2 신규 접수는 writer·입력/manifest 저장 검증이 함께 준비된 구현 계획 Task 5에서 활성화한다. 그 전 Task의 기존 v1 회귀를 유지한다.
 
@@ -178,8 +195,8 @@ Fake 공급자 기준이며 유료 smoke는 제외한다.
 
 - 실제 SQL에 `tile`·`object`·`backdrop` 계획·캔버스·승인을 저장하고 새 DbContext로 재조회한다. 잘못된 enum·영역 등 개별 값과 잘못된 작업별 역할은 각각 거부한다.
 - 동일 요청 재전송, 격자만 다른 requestId 충돌, 격자만 수정한 타일 작업의 revision 증가·이미지/승인 유지·ZIP 이전 표시, 역할·캔버스 변경 후 앵커 일치를 검증한다.
-- 구형 승인 작업의 새 v2 내보내기, 접수된 v1의 고정 입력 재시도, 완성된 v2 manifest의 SQL 저장·재조회를 분리해 검증한다.
-- 격자 변경과 내보내기 공정의 관계는 세 경우로 나눠 검증한다. 첫째, 내보내기 진행 중 격자만 바꾸면 그 ZIP은 이전 결과로 붙고 작업은 완료되지 않는다(`ExportReady`). 둘째, 실패를 처리한 옛 내보내기 뒤 격자만 바꾸면 상태 정리 후에도 `PendingReview`가 유지되고 옛 실패 사유가 다시 쓰이지 않으며, 옛 공정의 수동 재시도는 거부된다. 셋째, v1 공정은 저장 격자가 null인 동안에만 현재다.
+- 구형 승인 작업의 새 v2 내보내기는 SQL 재조회 → 접수 → `IsCurrentTask == true` → 결과 첨부 → `Succeeded` 또는 선택 범위에 따른 `PartiallySucceeded`까지 검사하고, 저장 승인 JSON이 바뀌지 않았는지 확인한다. 접수된 v1의 고정 입력 재시도와 완성된 v2 manifest SQL 왕복은 별도로 검증하며, 입력/manifest 새 필드 불일치·필수값 누락은 거부한다.
+- 격자 변경과 내보내기 공정은 I1 기준으로 검증한다. 진행 중 v2 내보내기 뒤 격자만 바꾸면 이전 결과로 붙고 작업은 완료되지 않는다(`ExportReady`). 실패를 처리한 옛 내보내기 뒤 격자만 바꾸고 상태 정리를 실행해도 `PendingReview`가 유지되고 옛 실패 사유가 다시 쓰이지 않는다. 격자 변경 후 옛 v2 실패 공정의 수동 재시도는 거부된다. `A → B → A` 뒤 옛 v2 공정은 내용이 같으므로 현재다. v1 공정은 격자 변경과 무관하게 기존 판정이다. 무관한 에셋 수정만으로 부분 내보내기가 무효화되지 않는다. 격자 변경이나 이름 수정 뒤 응답의 `completedExportId`는 null이다.
 - 생성 명령은 대상 `object`의 저장 생성 캔버스가 지원 목록에서 빠지면 `JobImageModelUnavailable`로 거부하고 공정을 만들지 않는다. 대상이 아닌 에셋의 크기 때문에 다른 에셋의 재생성이 막히지 않는다.
 - 실제 서버 DTO 매핑·서버 JSON 설정으로 생성한 응답을 Frontend의 실제 reader로 읽는다. 새 혼합 작업·구형 작업·구형 승인 snapshot·`grid: null`을 포함하고, 추가로 과거 필드 생략 응답도 읽는다. fixture를 쓰면 서버 생성 방법·기준 revision을 기록한다. 손으로 작성한 Fake 응답은 이 연결 검사를 대신하지 않는다.
 - 계약은 양방향으로 검사한다. 응답은 서버 테스트가 실제 DTO·JSON 설정으로 fixture를 만들어 저장본과 비교하고(다르면 실패, 갱신은 환경 변수를 켠 실행으로만), Frontend 테스트가 같은 파일을 실제 reader로 읽는다. 요청은 Frontend `updateSpritePlan`이 만든 본문이 요청 fixture와 같아야 하고, 서버 API 테스트가 같은 요청 fixture를 실제 바인딩(`JsonUnmappedMemberHandling.Disallow`)으로 보내 성공해야 한다. 한쪽만 필드를 바꾸면 다른 쪽 테스트가 실패한다.
