@@ -24,6 +24,64 @@ namespace Noxtend.Tests.Application;
 
 public sealed class SpriteGenerationTests
 {
+    [Theory]
+    [InlineData(SpriteAssetRole.Object, ImageBackground.Transparent)]
+    [InlineData(SpriteAssetRole.Backdrop, ImageBackground.Opaque)]
+    [InlineData(SpriteAssetRole.Tile, ImageBackground.Transparent)]
+    public async Task IsometricGeneration_UsesAssetRoleCanvasAndAnchor(SpriteAssetRole role, ImageBackground background)
+    {
+        var provider = new CapturingProvider();
+        var f = new PipelineFixture(imageProvider: provider);
+        var job = await PrepareRole(f, role);
+        var asset = job.Sprites!.Assets.Single();
+        var task = Assert.Single(job.PlanSpriteFrames(job.ApproveSpritePlan(job.Sprites.ReviewRevision).Value!, Guid.NewGuid()));
+        Assert.Equal(RunTaskOutcome.Succeeded, await f.RunSpriteGeneration.HandleAsync(task.Id, default));
+        var request = Assert.Single(provider.Requests);
+        Assert.Equal(background, request.Background);
+        Assert.Equal($"{task.SpriteInput!.GenerationCanvas.Width}x{task.SpriteInput.GenerationCanvas.Height}", request.Size);
+        var lines = request.Prompt.Split('\n');
+        using var plan = JsonDocument.Parse(lines[2]);
+        Assert.Equal(role.ToString().ToLowerInvariant(), plan.RootElement.GetProperty("role").GetString());
+        using var frame = JsonDocument.Parse(lines[3]);
+        Assert.Equal(asset.Anchor.X, frame.RootElement.GetProperty("anchor").GetProperty("x").GetDouble());
+        Assert.Equal(asset.Anchor.Y, frame.RootElement.GetProperty("anchor").GetProperty("y").GetDouble());
+        using var canvas = JsonDocument.Parse(lines[5]);
+        Assert.Equal(task.SpriteInput.Canvas.Width, canvas.RootElement.GetProperty("width").GetInt32());
+        Assert.Equal(task.SpriteInput.Canvas.Height, canvas.RootElement.GetProperty("height").GetInt32());
+        await using var output = await f.Blobs.OpenReadAsync(Assert.Single(job.Sprites.Images).BlobKey, default);
+        using var bitmap = SKBitmap.Decode(output);
+        Assert.Equal(role == SpriteAssetRole.Tile ? 0 : 255, bitmap.GetPixel(0, 0).Alpha);
+    }
+
+    [Fact]
+    public async Task ObjectWithoutAlpha_FailsAfterOneProviderCall()
+    {
+        var provider = new CapturingProvider(opaque: true);
+        var f = new PipelineFixture(imageProvider: provider);
+        var job = await PrepareRole(f, SpriteAssetRole.Object);
+        var task = Assert.Single(job.PlanSpriteFrames(job.ApproveSpritePlan(job.Sprites!.ReviewRevision).Value!, Guid.NewGuid()));
+        Assert.Equal(RunTaskOutcome.Failed, await f.RunSpriteGeneration.HandleAsync(task.Id, default));
+        Assert.Equal(TaskStatus.Failed, task.Status);
+        Assert.Equal(Noxtend.Domain.Common.ErrorCode.ProviderBadResponse.ToString(), task.FailureReason);
+        Assert.Equal(1, task.AttemptCount);
+        Assert.Single(provider.Requests);
+        Assert.Empty(job.Sprites.Images);
+    }
+
+    private static async Task<PipelineJob> PrepareRole(PipelineFixture f, SpriteAssetRole role)
+    {
+        var command = await SpriteAnalysisTests.Prepare(f);
+        var job = PipelineJob.CreateSprites(command.UploadId!.Value, command.ImageProviderConfigId, command.ImageModel,
+            new(SpriteView.Isometric, SpriteOutputKind.Tiles, 128), new(24, 16), new(256, 128), f.Clock.Now).Value!;
+        var id = Guid.NewGuid();
+        var initial = new SpriteAssetPlan(id, "대상", 0, new(0, 0, .5, .5), true, Role: SpriteAssetRole.Object);
+        Assert.True(job.ReplaceSpritePlan([initial], new(.5), [new(256, 171)], 0).IsSuccess);
+        var plan = initial with { Role = role, SourceBounds = new(0, 0, 1, 1), RequiresTransparency = role != SpriteAssetRole.Backdrop };
+        Assert.True(job.ReplaceSpritePlan([plan], new(.5), [new(256, 171)], job.Sprites!.ReviewRevision).IsSuccess);
+        await f.Jobs.AddAsync(job, default);
+        return job;
+    }
+
     [Fact]
     public async Task BaseGeneration_DoesNotStartLoopFramesBeforeApproval()
     {
@@ -204,13 +262,20 @@ public sealed class SpriteGenerationTests
         return data.ToArray();
     }
 
-    private sealed class CapturingProvider : IImageProvider
+    private sealed class CapturingProvider(bool opaque = false) : IImageProvider
     {
         public List<ImageRequest> Requests { get; } = [];
         public Task<ImageResult> GenerateAsync(ImageRequest request, CancellationToken ct)
         {
             Requests.Add(request);
-            return FakeImageProvider.Succeeding().GenerateAsync(request, ct);
+            var dimensions = request.Size!.Split('x').Select(int.Parse).ToArray();
+            using var bitmap = new SKBitmap(dimensions[0], dimensions[1], SKColorType.Rgba8888, SKAlphaType.Premul);
+            bitmap.Erase(SKColors.Red);
+            if (!opaque && request.Background == ImageBackground.Transparent)
+                bitmap.SetPixel(bitmap.Width / 2, bitmap.Height / 2, SKColors.Transparent);
+            using var image = SKImage.FromBitmap(bitmap);
+            using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+            return Task.FromResult(new ImageResult(data.ToArray(), "image/png", 1));
         }
     }
     private sealed class Recorder : ILlmCallRecorder

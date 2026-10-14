@@ -32,7 +32,9 @@
 
 `EnhanceSpriteSource`(TaskKind=10, LlmOperationKind=8)는 Background 전용 텍스트 프롬프트이며 변수는 `{{description}}`·`{{settings}}`, 출력 schema는 `{ "prompt": string }`이다. `SeedPrompts.EnhanceSpriteSource()`와 `SeedSpriteSourceEnhancePrompt` migration은 `IF NOT EXISTS`로 v1을 심어 기존 운영자 슬롯을 보존한다. `RunSpriteSourceEnhanceTaskHandler`는 공정 고정 입력의 설명(`SourceInput.Description`)과 작업 설정을 렌더하고 응답이 1~4000자 `prompt` 문자열이 아니면 재시도 분류하며, 반영은 commit 클로저의 `TryApplySourcePrompt`만 한다. `TaskKind.GenerateSpriteSource`(11)는 `RunSpriteSourceGenerationTaskHandler`가 고정 프롬프트 snapshot·설정을 렌더하고 작업의 이미지 공급자·모델, 잠정 `SourceCanvas` 크기, 참조 없는 Opaque 요청으로 한 장을 만든다. 장수가 1이 아니거나 이미지가 아니거나 선택 단계 상한(`SpriteSourceInspector.MaxBytes`, 12 MiB)을 넘으면 재시도 없이 실패하고, 검사한 MIME·크기로 `IBlobStorage.SaveAsync` 키를 후보로 반영하며, 공개되지 않은 Blob은 finally에서 `CancellationToken.None`으로 다시 조회해 지운다. 생성 크기 선택은 `SpriteSourceSizes.Pick`이다. 확인: `SpriteSourceTaskTests`, `SpriteSourcePromptMigrationTests`, `SeedPromptVariableTests`. `FakeLlmProvider`는 `{"prompt":"..."}`를 반환하고 `FakeImageProvider`는 `GenerateSpriteSource` 요청 크기에 맞는 PNG를 만든다.
 
-`RunSpriteGenerationTaskHandler`는 `LlmOperationKind.GenerateSprite=6`·Background 전용 활성 프롬프트를 사용한다. `SeedPrompts.GenerateSprite()`와 `SeedSpriteGeneratePrompt` migration은 기존 운영자 슬롯을 보존한다. 허용 변수는 settings·asset·frame·sourceCanvas·outputCanvas이며, asset은 `SpriteFrameInput.Plan` snapshot이다. frame JSON에는 index·count·phase·BaseImageId와 고정 GenerationCanvas·anchor·transform을 전달한다. 이름·FPS를 나중에 편집해도 접수한 입력은 바뀌지 않는다. `ViewDirection`은 사용하지 않는다.
+`RunSpriteGenerationTaskHandler`는 `LlmOperationKind.GenerateSprite=6`·Background 전용 활성 프롬프트를 사용한다. `SeedPrompts.GenerateSprite()`와 `SeedSpriteGeneratePrompt` migration은 기존 운영자 슬롯을 보존한다. 허용 변수는 settings·asset·frame·sourceCanvas·outputCanvas이며, asset은 `SpriteFrameInput.Plan` snapshot이며 `role`은 `SpriteRules.RoleOf` 유효 역할을 명시한다(저장 기본 역할 null도 layer/tile로 전달). frame JSON에는 index·count·phase·BaseImageId와 에셋별 고정 GenerationCanvas·`SpriteRules.Anchor(role, input.Canvas)`·transform을 전달하며 outputCanvas도 고정 에셋 출력 크기다. 이름·FPS를 나중에 편집해도 접수한 입력은 바뀌지 않는다. `ViewDirection`은 사용하지 않는다.
+
+`SeedPrompts.GenerateSpriteV2()`와 `ReviseSpriteGeneratePrompt` migration은 GenerateSprite/Background 슬롯을 비활성화하고 `MAX(Version)+1`로 역할별 프롬프트를 활성화한다. 기존 시드와 migration은 유지하며 Down은 신규 행 삭제 후 기존 최고 버전을 복구한다. tile은 반복 축·아이소메트릭 다이아몬드, backdrop은 불투명 원경(전경 물체 제외), object는 투명 배경 위 한 물체(잘림 없이 원본 시점·조명 유지), layer는 기존 분리 규칙이다. Diamond 정규화는 아이소메트릭 Tile만 적용하며 Object·Backdrop은 Square로 모서리를 보존한다. 요청 투명도는 계획의 RequiresTransparency를 사용한다. 검증: `SpriteGenerationTests`, `SpritePixelTests`, `SeedPromptVariableTests`, `SpriteGeneratePromptMigrationTests`(Fake·격리 SQL, 실 모델 품질 미확인).
 
 모든 sprite 요청은 Background를 opaque 또는 transparent로 명시하고 기존 Factory·Recording·RateLimitGate를 통과한다. raw 응답은 실제 PNG와 image/png 및 고정 GenerationCanvas 크기가 일치해야 하며, 디코딩·크기·알파 오류는 재시도하지 않는다. 기존 입력 MIME은 원본 참조에 유지하고 출력은 픽셀 검증 후 PNG로 정규화한다. FakeImageProvider의 기본 성공·지연 응답은 GenerateSprite와 SourceGenerationId가 있는 원본 생성의 요청 크기에 맞는 RGBA PNG를 만들며 명시적인 Returning 오류 fixture는 변환하지 않는다.
 
@@ -113,6 +115,8 @@
 - 권장 테스트 위치: `apps/backend/Noxtend.Tests/Application/`의 handler·provider 테스트, `Noxtend.Tests/Infrastructure/`의 seed·migration·저장소 테스트. 정확한 실행 명령과 Docker·smoke 조건은 [검증 절차](../../.agents/skills/noxtend-workflow/references/verification.md)를 따른다.
 
 ## 확인 기준과 미확인
+
+- 역할별 2D 생성 확인: 2026-10-14, Task 4 기준 `20bc033` 후속 변경. 유효 role·에셋별 고정 캔버스·공통 anchor·Tile 전용 Diamond 및 GenerateSpriteV2 migration의 슬롯/운영자 버전/Down 복구를 focused Backend 146건(건너뜀 0)으로 검증했다. 전체 스택 통합 회귀는 후속 Task 9 대상이며 실 공급자는 호출하지 않았다.
 
 - 2D 원본 준비 프롬프트 확인: 2026-10-13, 기준 `0385d0e`. `EnhanceSpriteSource`·`GenerateSpriteSource`·`AnalyzeSprites` V2 시드·변수·migration을 코드·테스트와 대조했고 Backend 전체 회귀(1872 통과, 건너뜀 0)에 포함됐다. 실제 모델 출력 품질은 확인하지 않았다(Fake만 사용).
 - Anthropic 스키마 정리 확인: 2026-10-13. `AnthropicJsonSchemaTests`가 2D 분석 시드 스키마와 이름 보존·중첩 정리 사례를 검증하고, 제거 대상 제약을 쓰는 시드 스키마별 파서·도메인 검증 위치를 대조했다. 실제 Anthropic 호출은 하지 않았으므로 실 API 수락 여부는 미확인이다.
