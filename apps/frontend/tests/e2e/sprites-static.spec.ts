@@ -1360,3 +1360,17 @@ test('mixed Fake roles keep approval on same canvas and old ZIP stays stale afte
   expect(result.restored.exports[0].isCurrent).toBe(false)
   expect(result.restored.completedExportId).toBeNull()
 })
+
+test('added target save synchronizes the draft without reloading', async ({ page }) => {
+  await installFakeApi(page, { sprites: {} })
+  await start(page)
+  await page.getByRole('button', { name: '대상 추가', exact: true }).click()
+  await expect(page.getByLabel('대상 이름 3', { exact: true })).toHaveValue('대상 3')
+  await page.getByRole('button', { name: '계획 저장', exact: true }).click()
+  await expect(page.getByRole('button', { name: '계획 저장', exact: true })).toBeDisabled()
+  await expect(
+    page.getByRole('button', { name: '계획 승인 · 기준 이미지 생성', exact: true }),
+  ).toBeEnabled()
+  await expect(page.getByRole('button', { name: '대상 추가', exact: true })).toBeEnabled()
+  await expect(page.getByLabel('대상 이름 3', { exact: true })).toHaveValue('대상 3')
+})

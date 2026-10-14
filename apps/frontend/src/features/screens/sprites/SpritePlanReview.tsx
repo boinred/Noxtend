@@ -255,7 +255,6 @@ export function SpritePlanReview({
                 ...plans,
                 {
                   id: crypto.randomUUID(),
-                  role: sprite.settings.outputKind === 'layers' ? 'layer' : 'tile',
                   name: `대상 ${plans.length + 1}`,
                   order: Math.max(...plans.map((p) => p.order)) + 1,
                   sourceBounds: { x: 0, y: 0, w: 1, h: 1 },
@@ -264,6 +263,7 @@ export function SpritePlanReview({
                   frameCount: 8,
                   fps: 8,
                   motionNotes: '',
+                  role: sprite.settings.outputKind === 'layers' ? 'layer' : 'tile',
                 },
               ])
             }
