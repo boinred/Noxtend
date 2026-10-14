@@ -54,6 +54,8 @@ export interface SpriteFakeOptions {
   frameStates?: boolean
   runningBase?: boolean
   partialBases?: boolean
+  tileOnly?: boolean
+  reorderedPlans?: boolean
   settings?: SpriteSettings
 }
 
@@ -329,11 +331,13 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
       const role =
         settings.outputKind === 'layers'
           ? 'layer'
-          : order === 0
-            ? 'backdrop'
-            : order === 1
-              ? 'tile'
-              : 'object'
+          : options.tileOnly
+            ? 'tile'
+            : order === 0
+              ? 'backdrop'
+              : order === 1
+                ? 'tile'
+                : 'object'
       const plan: SpriteAssetPlan = {
         id: guid(6),
         name: order === 2 ? '오브젝트 바위' : order ? '전경 나무' : '후경 지면',
@@ -746,6 +750,14 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
             ...job,
             sprite: {
               ...job.sprite!,
+              assets: options.reorderedPlans
+                ? [...job.sprite!.assets].reverse().map((asset) => ({
+                    ...asset,
+                    plan: Object.fromEntries(
+                      Object.entries(asset.plan).reverse(),
+                    ) as SpriteAssetPlan,
+                  }))
+                : job.sprite!.assets,
               completedExportId: job.sprite!.exports.some(
                 (item) => item.id === job!.sprite!.completedExportId && item.isCurrent,
               )

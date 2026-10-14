@@ -255,10 +255,12 @@ for (const view of ['sideView', 'topDown', 'isometric'])
       expect(actual.opaque).toBeGreaterThan(0)
       if (kind === 'layers' || view === 'isometric') expect(actual.clear).toBeGreaterThan(0)
       if (kind === 'layers') await page.getByLabel('전경 나무 표시', { exact: true }).uncheck()
-      else
+      else {
+        await chooseSetting(page, '미리볼 타일', '전경 나무')
         await expect(
           page.getByRole('img', { name: '반복 경계 검수' }).locator('image'),
         ).toHaveCount(9)
+      }
       await approveBases(page)
       if (kind === 'tiles') {
         await page.getByLabel('오브젝트 바위 기준 승인 선택', { exact: true }).check()

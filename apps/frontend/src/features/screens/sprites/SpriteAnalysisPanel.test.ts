@@ -75,4 +75,16 @@ describe('spriteAnalysisSummary', () => {
     expect(props.fields[1]!.value).toBe('반복 타일 · 128px · 격자 Y축')
     expect(props.fields[3]!.value).toBe('0개 · 총 0프레임')
   })
+  it('counts each tile asset role', () => {
+    const state = sprite()
+    state.settings.outputKind = 'tiles'
+    state.assets = ['tile', 'object', 'backdrop'].map((role, index) => ({
+      ...state.assets[0]!,
+      id: String(index),
+      plan: { ...state.assets[0]!.plan, role: role as SpriteAssetPlan['role'] },
+    }))
+    expect(spriteAnalysisSummary(state).fields[3]!.value).toContain(
+      '반복 타일 1 · 오브젝트 1 · 원경 배경 1',
+    )
+  })
 })

@@ -10,7 +10,7 @@ import { useParams } from 'react-router-dom'
 import { spriteImageUrl } from '@/app/queries/media'
 import { Button } from '@/components/ui/button'
 import { frameAt } from '@/domain/sprites/playback'
-import { tileOffsets } from '@/domain/sprites/rules'
+import { assetRole, tileOffsets } from '@/domain/sprites/rules'
 import type { SpriteState } from '@/domain/sprites/types'
 import { checkerboard, spriteStyles as styles } from './spriteStyles'
 
@@ -27,10 +27,12 @@ export function SpritePreview({
   const [hidden, setHidden] = useState<string[]>([])
   const [tileId, setTileId] = useState<string | null>(null)
   const assets = [...sprite.assets].sort((a, b) => a.plan.order - b.plan.order)
-  const width = sprite.outputCanvas.width
-  const height = sprite.outputCanvas.height
   const tiles = sprite.settings.outputKind === 'tiles'
   const tile = assets.find((a) => a.id === tileId) ?? assets[0]
+  const repeatTile = tiles && tile !== undefined && assetRole(sprite.settings, tile.plan) === 'tile'
+  const canvas = tiles && tile ? tile.canvas : sprite.outputCanvas
+  const width = canvas.width
+  const height = canvas.height
   const hasLoop = assets.some((a) => a.plan.loop)
   const [elapsed, setElapsed] = useState(timeMs)
   const position = useRef(timeMs)
@@ -54,11 +56,15 @@ export function SpritePreview({
   }, [isPlaying, hasLoop])
   return (
     <section className={styles.panel} aria-label="배경 미리보기">
-      <h2 className={styles.title}>{tiles ? '타일 반복 미리보기' : '레이어 합성 미리보기'}</h2>
+      <h2 className={styles.title}>
+        {tiles ? (repeatTile ? '타일 반복 미리보기' : '에셋 미리보기') : '레이어 합성 미리보기'}
+      </h2>
       <p className={styles.hint}>
-        고정 캔버스 {width}×{height}px ·{' '}
+        출력 캔버스 {width}×{height}px ·{' '}
         {tiles
-          ? `셀 중심 앵커 · 3×3 격자 · 검수할 반복축: ${sprite.settings.repeat === 'both' ? 'X·Y' : sprite.settings.repeat.toUpperCase()}${sprite.settings.view === 'isometric' ? ' (다이아몬드 격자 축)' : ''}`
+          ? repeatTile
+            ? `셀 중심 앵커 · 3×3 격자 · 검수할 반복축: ${sprite.settings.repeat === 'both' ? 'X·Y' : sprite.settings.repeat.toUpperCase()}${sprite.settings.view === 'isometric' ? ' (다이아몬드 격자 축)' : ''}`
+            : '단일 이미지 · 에셋별 캔버스'
           : '왼쪽 위 앵커 (0, 0) · 뒤에서 앞으로 합성'}
       </p>
       {tiles ? (
@@ -132,12 +138,12 @@ export function SpritePreview({
         className={styles.preview}
         style={{ ...checkerboard, maxHeight: 420 }}
         viewBox={
-          tiles
+          repeatTile
             ? `${-width * 1.5} ${-height * 1.5} ${width * 3} ${height * 3}`
             : `0 0 ${width} ${height}`
         }
         role="img"
-        aria-label={tiles ? '반복 경계 검수' : '레이어 합성 검수'}
+        aria-label={tiles ? (repeatTile ? '반복 경계 검수' : '단일 에셋 검수') : '레이어 합성 검수'}
       >
         {(tiles ? (tile ? [tile] : []) : assets.filter((a) => !hidden.includes(a.id))).map(
           (asset) => {
@@ -148,7 +154,7 @@ export function SpritePreview({
             )
             const id = asset.frames.find((f) => f.index === frameIndex)?.currentImageId
             if (!id || !jobId) return null
-            const offsets = tiles
+            const offsets = repeatTile
               ? tileOffsets(
                   width,
                   height,
@@ -162,8 +168,8 @@ export function SpritePreview({
                 data-asset-id={asset.id}
                 data-frame-index={frameIndex}
                 href={spriteImageUrl(jobId, id)}
-                x={offset.x - (tiles ? asset.anchor.x : 0)}
-                y={offset.y - (tiles ? asset.anchor.y : 0)}
+                x={offset.x - (repeatTile ? asset.anchor.x : 0)}
+                y={offset.y - (repeatTile ? asset.anchor.y : 0)}
                 width={width}
                 height={height}
               />

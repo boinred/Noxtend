@@ -1,3 +1,5 @@
+import { assetRole } from '@/domain/sprites/rules'
+import { spriteRoleLabel } from '@/domain/sprites/labels'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { spriteImageUrl } from '@/app/queries/media'
@@ -66,6 +68,9 @@ export function SpriteFrameReview({
           return (
             <article key={a.id} className={styles.asset}>
               <h3 className="font-semibold break-words">{a.plan.name}</h3>
+              <span className={styles.hint}>
+                {spriteRoleLabel(assetRole(sprite.settings, a.plan))}
+              </span>
               {imageId ? (
                 <>
                   <img
