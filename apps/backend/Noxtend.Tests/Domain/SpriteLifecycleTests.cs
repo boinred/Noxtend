@@ -575,6 +575,25 @@ public sealed class SpriteLifecycleTests
         Assert.Equal(input.Canvas, job.Sprites.Assets[0].Canvas!.Output);
     }
 
+    [Fact]
+    public void ObjectToTileWithSameOutput_UsesJobGenerationCanvasAndTransform()
+    {
+        var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "fake",
+            new(SpriteView.SideView, SpriteOutputKind.Tiles), new(800, 800), new(1024, 1024), Now).Value!;
+        var obj = Plan() with { Role = SpriteAssetRole.Object, RequiresTransparency = true,
+            SourceBounds = new(0, 0, .25, .25) };
+        Assert.True(job.ReplaceSpritePlan([obj], new(.25), [new(1536, 1024)], 0).IsSuccess);
+        var asset = job.Sprites!.Assets[0];
+        Assert.Equal(job.Sprites.OutputCanvas, asset.Canvas!.Output);
+        Assert.Equal(new SpriteCanvas(1536, 1024), asset.Canvas.Generation);
+        Assert.True(job.ReplaceSpritePlan([obj with { Role = SpriteAssetRole.Tile }], new(.25), [], Revision(job)).IsSuccess);
+        Assert.Equal(job.Sprites.GenerationCanvas, asset.Canvas.Generation);
+        Assert.Equal(job.Sprites.Transform, asset.Canvas.Transform);
+        var input = Assert.Single(job.ApproveSpritePlan(Revision(job)).Value!);
+        Assert.Equal(job.Sprites.GenerationCanvas, input.GenerationCanvas);
+        Assert.Equal(job.Sprites.Transform, input.Transform);
+    }
+
     private static (PipelineJob Job, SpriteAssetPlan First, SpriteAssetPlan Second) ApprovedPair()
     {
         var (job, first) = Planned();

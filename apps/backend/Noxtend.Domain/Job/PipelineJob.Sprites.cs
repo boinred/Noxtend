@@ -175,7 +175,8 @@ public sealed partial class PipelineJob
         {
             var output = SpriteRules.AssetOutput(state.Settings, state.SourceCanvas, cellWidth, p).Value;
             var existing = state.Assets.FirstOrDefault(a => a.Id == p.Id);
-            return existing is not null && SpriteAssetCanvasOf(existing).Output == output.Canvas
+            return SpriteRules.RoleOf(state.Settings, p) is SpriteAssetRole.Object or SpriteAssetRole.Backdrop
+                && existing is not null && SpriteAssetCanvasOf(existing).Output == output.Canvas
                 ? SpriteAssetCanvasOf(existing) with { Scale = output.Scale }
                 : SpriteRules.AssetCanvas(state.Settings, state.SourceCanvas, state.GenerationCanvas, cellWidth, p, generationSizes).Value!;
         });

@@ -33,7 +33,7 @@ LLM·이미지 공급자 선택, 프롬프트 조회, 호출 기록, 가격 계�
 
 ## 2D 배경 도메인 기반
 
-2026-10-14 역할별 캔버스 저장 경로: `SpritePipelineState.Grid`·`SpriteAsset.Canvas`는 nullable JSON 열(`Jobs.SpriteGridJson`, `SpriteAssets.CanvasJson`, `AddSpriteAssetRoles`)이다. 계획 진입에서 `SpriteRules.NormalizeRole`로 유형 기본 역할을 null로 저장한다. `ReplaceSpritePlan(plans, grid, generationSizes, revision)`은 모든 계획·출력 계산을 먼저 검증하고 Object·Backdrop 출력이 새로 생기거나 바뀔 때만 지원 크기를 요구한다. 출력이 같으면 저장 생성 캔버스·transform을 재사용하며 Scale만 바뀌면 프레임·승인을 유지한다. 출력·유효 역할 변화는 해당 에셋의 프레임·승인과 앵커를 갱신한다. 격자만 바뀌면 검수 revision과 모든 ZIP 현재 표시가 바뀌고, 캔버스가 같은 에셋의 이미지·승인은 유지한다.
+2026-10-14 역할별 캔버스 저장 경로: `SpritePipelineState.Grid`·`SpriteAsset.Canvas`는 nullable JSON 열(`Jobs.SpriteGridJson`, `SpriteAssets.CanvasJson`, `AddSpriteAssetRoles`)이다. 계획 진입에서 `SpriteRules.NormalizeRole`로 유형 기본 역할을 null로 저장한다. `ReplaceSpritePlan(plans, grid, generationSizes, revision)`은 모든 계획·출력 계산을 먼저 검증하고 Object·Backdrop 출력이 새로 생기거나 바뀔 때만 지원 크기를 요구한다. Object·Backdrop은 출력이 같으면 저장 생성 캔버스·transform을 재사용하며 Scale만 바뀌면 프레임·승인을 유지한다. Tile·Layer는 항상 작업 생성 캔버스·transform을 사용한다. 출력·유효 역할 변화는 해당 에셋의 프레임·승인과 앵커를 갱신한다. 격자만 바뀌면 검수 revision과 모든 ZIP 현재 표시가 바뀌고, 캔버스가 같은 에셋의 이미지·승인은 유지한다.
 
 `Application/Sprites/SpriteGenerationSizes.cs`가 공급자 활성·투명 지원·양수 생성 크기를 확인한다. 생성 명령은 작업 캔버스 대신 대상 에셋의 생성 캔버스를 확인한다. 계획 수정 receipt hash는 ID 정렬·기본 역할 null 정규화 후 null Role만 생략하며 grid가 null이면 기존 배열 본문 바이트를 유지한다. receipt는 revision·취소·capability 검사보다 먼저 반환한다. 검증은 `SpriteLifecycleTests`, `SpriteCommandTests`, `SpritePersistenceTests.PreRoleFingerprint_SqlReceiptRemainsByteCompatible`, `SpriteRequestConcurrencyTests.SameRequestIdDifferentGrid_ReturnsConflictAfterSqlRace`에 있다. 저장 envelope는 v1을 유지하며 `SpriteExportInput` v2의 Grid·TileWidth·AssetDetails 왕복만 준비한다. 신규 내보내기 접수는 아직 v1이며 승인 snapshot 필드는 기존 그대로다.
 
