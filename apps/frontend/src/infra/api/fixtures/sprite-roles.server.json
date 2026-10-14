@@ -1,0 +1,455 @@
+{
+  "mixedJob": {
+    "data": {
+      "id": "10000000-0000-4000-8000-000000000001",
+      "category": "background",
+      "status": "pendingReview",
+      "sourceImageId": "10000000-0000-4000-8000-000000000100",
+      "scene": null,
+      "models": {
+        "text": null,
+        "image": {
+          "providerConfigId": "10000000-0000-4000-8000-000000000101",
+          "model": "fixture-model"
+        },
+        "mesh": null
+      },
+      "tasks": [],
+      "parts": [],
+      "failureReason": null,
+      "createdAt": "2026-10-14T00:00:00+00:00",
+      "completedAt": null,
+      "gender": null,
+      "partHints": [],
+      "productionMode": "twoD",
+      "sprite": {
+        "settings": {
+          "view": "sideView",
+          "outputKind": "tiles",
+          "tileWidth": 128,
+          "repeat": "both"
+        },
+        "sourceCanvas": {
+          "width": 800,
+          "height": 600
+        },
+        "generationCanvas": {
+          "width": 1024,
+          "height": 1024
+        },
+        "outputCanvas": {
+          "width": 128,
+          "height": 128
+        },
+        "transform": {
+          "scale": 0.125,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        "phase": "planReview",
+        "reviewRevision": 1,
+        "completedExportId": null,
+        "assets": [
+          {
+            "id": "10000000-0000-4000-8000-000000000011",
+            "plan": {
+              "id": "10000000-0000-4000-8000-000000000011",
+              "name": "배경",
+              "order": 0,
+              "sourceBounds": {
+                "x": 0,
+                "y": 0,
+                "w": 1,
+                "h": 1
+              },
+              "requiresTransparency": false,
+              "loop": false,
+              "frameCount": 8,
+              "fps": 8,
+              "motionNotes": "",
+              "role": "backdrop"
+            },
+            "planRevision": 1,
+            "anchor": {
+              "x": 0,
+              "y": 0
+            },
+            "approvedBaseImageId": null,
+            "approval": null,
+            "frames": [
+              {
+                "index": 0,
+                "currentTaskId": null,
+                "currentImageId": null
+              }
+            ],
+            "canvas": {
+              "width": 1024,
+              "height": 768
+            },
+            "scale": 0.8
+          },
+          {
+            "id": "10000000-0000-4000-8000-000000000012",
+            "plan": {
+              "id": "10000000-0000-4000-8000-000000000012",
+              "name": "타일",
+              "order": 1,
+              "sourceBounds": {
+                "x": 0,
+                "y": 0,
+                "w": 0.25,
+                "h": 0.25
+              },
+              "requiresTransparency": true,
+              "loop": false,
+              "frameCount": 8,
+              "fps": 8,
+              "motionNotes": "",
+              "role": "tile"
+            },
+            "planRevision": 1,
+            "anchor": {
+              "x": 64,
+              "y": 64
+            },
+            "approvedBaseImageId": null,
+            "approval": null,
+            "frames": [
+              {
+                "index": 0,
+                "currentTaskId": null,
+                "currentImageId": null
+              }
+            ],
+            "canvas": {
+              "width": 128,
+              "height": 128
+            },
+            "scale": 1
+          },
+          {
+            "id": "10000000-0000-4000-8000-000000000013",
+            "plan": {
+              "id": "10000000-0000-4000-8000-000000000013",
+              "name": "오브젝트",
+              "order": 2,
+              "sourceBounds": {
+                "x": 0,
+                "y": 0,
+                "w": 0.125,
+                "h": 0.25
+              },
+              "requiresTransparency": true,
+              "loop": false,
+              "frameCount": 8,
+              "fps": 8,
+              "motionNotes": "",
+              "role": "object"
+            },
+            "planRevision": 1,
+            "anchor": {
+              "x": 80,
+              "y": 120
+            },
+            "approvedBaseImageId": null,
+            "approval": null,
+            "frames": [
+              {
+                "index": 0,
+                "currentTaskId": null,
+                "currentImageId": null
+              }
+            ],
+            "canvas": {
+              "width": 160,
+              "height": 240
+            },
+            "scale": 1
+          }
+        ],
+        "images": [],
+        "exports": [],
+        "source": null,
+        "grid": {
+          "cellWidth": 0.1
+        }
+      }
+    },
+    "error": null
+  },
+  "legacyJob": {
+    "data": {
+      "id": "10000000-0000-4000-8000-000000000002",
+      "category": "background",
+      "status": "pendingReview",
+      "sourceImageId": "10000000-0000-4000-8000-000000000100",
+      "scene": null,
+      "models": {
+        "text": null,
+        "image": {
+          "providerConfigId": "10000000-0000-4000-8000-000000000101",
+          "model": "fixture-model"
+        },
+        "mesh": null
+      },
+      "tasks": [],
+      "parts": [],
+      "failureReason": null,
+      "createdAt": "2026-10-14T00:00:00+00:00",
+      "completedAt": null,
+      "gender": null,
+      "partHints": [],
+      "productionMode": "twoD",
+      "sprite": {
+        "settings": {
+          "view": "sideView",
+          "outputKind": "layers",
+          "tileWidth": 128,
+          "repeat": "both"
+        },
+        "sourceCanvas": {
+          "width": 800,
+          "height": 600
+        },
+        "generationCanvas": {
+          "width": 1024,
+          "height": 1024
+        },
+        "outputCanvas": {
+          "width": 800,
+          "height": 600
+        },
+        "transform": {
+          "scale": 0.5859375,
+          "offsetX": 100,
+          "offsetY": 0
+        },
+        "phase": "planReview",
+        "reviewRevision": 1,
+        "completedExportId": null,
+        "assets": [
+          {
+            "id": "10000000-0000-4000-8000-000000000021",
+            "plan": {
+              "id": "10000000-0000-4000-8000-000000000021",
+              "name": "구형 레이어",
+              "order": 0,
+              "sourceBounds": {
+                "x": 0,
+                "y": 0,
+                "w": 1,
+                "h": 1
+              },
+              "requiresTransparency": false,
+              "loop": false,
+              "frameCount": 8,
+              "fps": 8,
+              "motionNotes": "",
+              "role": "layer"
+            },
+            "planRevision": 1,
+            "anchor": {
+              "x": 0,
+              "y": 0
+            },
+            "approvedBaseImageId": null,
+            "approval": null,
+            "frames": [
+              {
+                "index": 0,
+                "currentTaskId": null,
+                "currentImageId": null
+              }
+            ],
+            "canvas": {
+              "width": 800,
+              "height": 600
+            },
+            "scale": 1
+          }
+        ],
+        "images": [],
+        "exports": [],
+        "source": null,
+        "grid": null
+      }
+    },
+    "error": null
+  },
+  "legacyApproval": {
+    "data": {
+      "id": "10000000-0000-4000-8000-000000000003",
+      "category": "background",
+      "status": "pendingReview",
+      "sourceImageId": "10000000-0000-4000-8000-000000000100",
+      "scene": null,
+      "models": {
+        "text": null,
+        "image": {
+          "providerConfigId": "10000000-0000-4000-8000-000000000101",
+          "model": "fixture-model"
+        },
+        "mesh": null
+      },
+      "tasks": [],
+      "parts": [],
+      "failureReason": null,
+      "createdAt": "2026-10-14T00:00:00+00:00",
+      "completedAt": null,
+      "gender": null,
+      "partHints": [],
+      "productionMode": "twoD",
+      "sprite": {
+        "settings": {
+          "view": "sideView",
+          "outputKind": "tiles",
+          "tileWidth": 128,
+          "repeat": "both"
+        },
+        "sourceCanvas": {
+          "width": 800,
+          "height": 600
+        },
+        "generationCanvas": {
+          "width": 1024,
+          "height": 1024
+        },
+        "outputCanvas": {
+          "width": 128,
+          "height": 128
+        },
+        "transform": {
+          "scale": 0.125,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        "phase": "planReview",
+        "reviewRevision": 1,
+        "completedExportId": null,
+        "assets": [
+          {
+            "id": "10000000-0000-4000-8000-000000000031",
+            "plan": {
+              "id": "10000000-0000-4000-8000-000000000031",
+              "name": "구형 타일",
+              "order": 0,
+              "sourceBounds": {
+                "x": 0,
+                "y": 0,
+                "w": 0.25,
+                "h": 0.25
+              },
+              "requiresTransparency": false,
+              "loop": false,
+              "frameCount": 8,
+              "fps": 8,
+              "motionNotes": "",
+              "role": "tile"
+            },
+            "planRevision": 1,
+            "anchor": {
+              "x": 64,
+              "y": 64
+            },
+            "approvedBaseImageId": "10000000-0000-4000-8000-000000000032",
+            "approval": {
+              "planRevision": 1,
+              "snapshot": {
+                "id": "10000000-0000-4000-8000-000000000031",
+                "name": "구형 타일",
+                "order": 0,
+                "fps": 8,
+                "loop": false,
+                "anchor": {
+                  "x": 64,
+                  "y": 64
+                },
+                "repeat": "both",
+                "layout": "square",
+                "baseImageId": "10000000-0000-4000-8000-000000000032",
+                "imageIds": ["10000000-0000-4000-8000-000000000032"]
+              }
+            },
+            "frames": [
+              {
+                "index": 0,
+                "currentTaskId": null,
+                "currentImageId": "10000000-0000-4000-8000-000000000032"
+              }
+            ],
+            "canvas": {
+              "width": 128,
+              "height": 128
+            },
+            "scale": 1
+          }
+        ],
+        "images": [],
+        "exports": [],
+        "source": null,
+        "grid": null
+      }
+    },
+    "error": null
+  },
+  "gridNull": {
+    "data": {
+      "id": "10000000-0000-4000-8000-000000000004",
+      "category": "background",
+      "status": "pending",
+      "sourceImageId": "10000000-0000-4000-8000-000000000100",
+      "scene": null,
+      "models": {
+        "text": null,
+        "image": {
+          "providerConfigId": "10000000-0000-4000-8000-000000000101",
+          "model": "fixture-model"
+        },
+        "mesh": null
+      },
+      "tasks": [],
+      "parts": [],
+      "failureReason": null,
+      "createdAt": "2026-10-14T00:00:00+00:00",
+      "completedAt": null,
+      "gender": null,
+      "partHints": [],
+      "productionMode": "twoD",
+      "sprite": {
+        "settings": {
+          "view": "sideView",
+          "outputKind": "tiles",
+          "tileWidth": 128,
+          "repeat": "both"
+        },
+        "sourceCanvas": {
+          "width": 800,
+          "height": 600
+        },
+        "generationCanvas": {
+          "width": 1024,
+          "height": 1024
+        },
+        "outputCanvas": {
+          "width": 128,
+          "height": 128
+        },
+        "transform": {
+          "scale": 0.125,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        "phase": "analyzing",
+        "reviewRevision": 0,
+        "completedExportId": null,
+        "assets": [],
+        "images": [],
+        "exports": [],
+        "source": null,
+        "grid": null
+      }
+    },
+    "error": null
+  }
+}

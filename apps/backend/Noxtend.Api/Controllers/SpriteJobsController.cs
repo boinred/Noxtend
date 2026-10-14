@@ -61,9 +61,10 @@ public sealed class SpriteJobsController(StartSpriteJobHandler start, SpriteComm
     public async Task<IActionResult> UpdatePlanAsync(Guid id, [FromBody] SpritePlanRequest request, CancellationToken ct)
     {
         var plans = request.Assets?.Select(asset => asset?.ToDomain()).ToArray();
-        // fingerprint 직렬화 전 유한 ROI·중첩 null 차단
-        if (plans is null || plans.Any(plan => plan is null)) return Invalid(ErrorCode.SpritePlanInvalid);
-        return Accepted(await commands.UpdatePlanAsync(new(id, request.RequestId, request.ExpectedRevision), plans!, null, ct));
+        // fingerprint 직렬화 전 유한 ROI·격자·중첩 null 차단
+        if (plans is null || plans.Any(plan => plan is null)
+            || request.Grid is { } inputGrid && !double.IsFinite(inputGrid.CellWidth)) return Invalid(ErrorCode.SpritePlanInvalid);
+        return Accepted(await commands.UpdatePlanAsync(new(id, request.RequestId, request.ExpectedRevision), plans!, request.Grid is { } grid ? new SpriteGrid(grid.CellWidth) : null, ct));
     }
 
     [HttpPost("{id:guid}/sprites/plan/approve")]
