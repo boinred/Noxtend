@@ -361,7 +361,7 @@ export function spriteRoleLabel(role: SpriteAssetRole): string
 
 ### 2026-10-14 구현과 검증 결과
 
-실행 방식은 작업별 구현·독립 리뷰(Subagent-driven)다. 기존 `claude/2d-asset-roles` checkout을 재사용했으며 기준은 `568aeb6`이다. Tasks 1–8 구현·각 작업 리뷰는 완료했다. Task 9는 문서 정리와 이미 실행한 전체 회귀 근거 확인이며 애플리케이션·의존성·검사 설정을 변경하지 않았다. **전체 변경에 대한 마지막 독립 리뷰와 아래 보강 검사는 아직 남아 있다.** 위 체크는 작업별 실행 근거를 뜻하며 최종 전체 리뷰 완료를 뜻하지 않는다.
+실행 방식은 작업별 구현·독립 리뷰(Subagent-driven)다. 기존 `claude/2d-asset-roles` checkout을 재사용했으며 기준은 `568aeb6`이다. Tasks 1–8 구현·각 작업 리뷰는 완료했다. Task 9는 문서 정리와 이미 실행한 전체 회귀 근거 확인이며 애플리케이션·의존성·검사 설정을 변경하지 않았다. **이 2026-10-14 기록 당시에는 전체 변경의 마지막 독립 리뷰와 아래 보강 검사가 남아 있었다.** 이후 최종 리뷰·수정·재리뷰 상태는 아래 2026-10-15 기록을 따른다. 위 체크는 당시 작업별 실행 근거다.
 
 | Task | 최종 커밋 | 구현·작업별 검증 근거 |
 | --- | --- | --- |
@@ -401,7 +401,7 @@ Task 8 E2E의 실행 당시 임시 설정은 기존 Playwright config를 import�
 
 #### 남은 검증과 제약
 
-- 전체 변경의 마지막 독립 리뷰는 미완료다. Task 1 Layers 잘못된 역할 테스트에서 grid 선검사가 가리는 사례, Task 6 유한 grid 범위 API 테스트에서 빈 에셋이 가리는 사례, Task 8 Object 자기 캔버스 단일 미리보기 명시 단정은 추가 보강 대상으로 남는다.
+- 2026-10-14 당시 전체 변경의 마지막 독립 리뷰와 Task 1 Layers 역할 검사의 grid 선검사 제거, Task 6 유한 grid API 검사의 유효 에셋 입력, Task 8 Object 자기 캔버스 단정이 남아 있었다. 해당 항목의 수정·최종 검증은 아래 2026-10-15 기록에 보존한다.
 - v1 frozen retry와 실제 v1 ZIP writer 회귀는 각각 통과했다. 실제 SQL의 실패한 v1 공정→writer 재시도를 하나로 연결한 신규 통합 사례는 추가하지 않았다.
 - 1440px·390px 역할/격자 화면 PNG를 확인했고 390px `document.scrollWidth <= 390` E2E 단정은 통과했다. PNG는 앱 내부 스크롤의 현재 viewport이며 전체 패널 높이 캡처가 아니다.
 - 실제 AI·유료 smoke·운영 DB migration 적용·실 HTTP 호출·push·merge·배포는 수행하지 않았다. Fake 검증은 실제 공급자의 역할별 생성 품질을 보장하지 않는다.
@@ -411,7 +411,7 @@ Task 9 문서 검증: `pnpm docs:check`와 `git diff --check` 통과. 문서 검
 
 ### 2026-10-15 최종 리뷰 보완
 
-최초 전체 리뷰에서 P2 1건과 P3 3건을 확인했다. 새 격자 B의 export가 먼저 완료하면 `TaskExecution`의 종료 작업 가드가 격자 A의 실행 중 ZIP을 버리는 문제가 있었고, Layers 잘못된 역할 검사는 grid 선검사에, 유한 grid API 검사는 빈 assets·Layers 입력에 가려졌다. Object 미리보기는 명시적인 자기 캔버스 단정이 부족했다. 아래는 수정·검증 기록이며 수정 후 독립 재리뷰 완료를 뜻하지 않는다.
+최초 전체 리뷰에서 P2 1건과 P3 3건을 확인했다. 새 격자 B의 export가 먼저 완료하면 `TaskExecution`의 종료 작업 가드가 격자 A의 실행 중 ZIP을 버리는 문제가 있었고, Layers 잘못된 역할 검사는 grid 선검사에, 유한 grid API 검사는 빈 assets·Layers 입력에 가려졌다. Object 미리보기는 명시적인 자기 캔버스 단정이 부족했다. 아래는 수정·검증 기록이며 독립 재리뷰 결과는 이 절의 마지막에 별도로 기록한다.
 
 - 공통 lease 갱신·최종 반영에서 소유권이 유지되는 실행 중 v2 grid-only pack에 한해 성공·부분 성공 종료를 허용한다. 실패·취소 종료, 다른 공정, 최초 claim 현재성, attempt·rowversion·lease, 승인·대상 목록 검사는 유지한다. 새 export의 작업 상태와 `CompletedExportId`를 유지한다.
 - 실제 `ExportAsync`·`RunSpritePackTaskHandler`로 B를 완료한 뒤 A를 마무리하는 즉시 반영(0ms)과 lease 갱신(1200ms) 회귀를 추가했다. A는 과거·B는 현재이며 두 Blob을 유지한다. 기존 취소·attempt 변경·승인 metadata 변경 거부 사례도 유지한다.
@@ -428,6 +428,13 @@ Task 9 문서 검증: `pnpm docs:check`와 `git diff --check` 통과. 문서 검
 | `dotnet build apps/backend/Noxtend.slnx` | 성공, 오류 0·기존 NU1903 경고 4 | `final-fix-build.log` |
 | `pnpm --filter @nextend/frontend test:e2e tests/e2e/sprites-roles.spec.ts --config playwright.finalfix.config.ts` | 3 통과, 13.8초. 기존 config 기반 fresh build·전용 4195·`reuseExistingServer:false`, testDir/project/assertion 유지. 임시 config는 실행 후 제거 | `final-fix-e2e.log` |
 | `pnpm lint` / `pnpm typecheck` | 모두 통과 | `final-fix-lint.log`·`final-fix-typecheck.log` |
-| `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName!~TripoSmokeTests&FullyQualifiedName!~SimilaritySmokeTests'` | 실행 중. 아직 전체 회귀 통과로 계산하지 않음 | `final-fix-full.log` |
+| `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName!~TripoSmokeTests&FullyQualifiedName!~SimilaritySmokeTests'` | 1973 통과·0 실패·0 건너뜀, 11분2초. 격리 SQL Server·Redis 포함, exit 0 | `final-fix-full.log` |
 
-첫 GREEN 로그의 xUnit 실패 시각은 55초·69초이지만 최종 경과는 46분19초다. 장시간 지연 원인·호스트 잠자기는 확인되지 않았으며 환경 원인으로 단정하지 않는다. 동일 소스의 실패 2건 재실행은 통과했다. 검사 중 애플리케이션·테스트 소스 변경은 없었다. Frontend 전체 526 단위·368 E2E는 앞선 동일 애플리케이션 검증 기록을 유지하고 이번에는 역할 E2E만 다시 실행했다. 실제 AI·유료 smoke·push·merge·배포와 수정 후 독립 재리뷰는 이번 실행자가 수행하지 않았다.
+첫 GREEN 로그의 xUnit 실패 시각은 55초·69초이지만 최종 경과는 46분19초다. 장시간 지연 원인·호스트 잠자기는 확인되지 않았으며 환경 원인으로 단정하지 않는다. 동일 소스의 실패 2건 재실행은 통과했다. 검사 중 애플리케이션·테스트 소스 변경은 없었다. Frontend 전체 526 단위·368 E2E는 앞선 동일 애플리케이션 검증 기록을 유지하고 이번에는 역할 E2E만 다시 실행했다. 실제 AI·유료 smoke·push·merge·배포는 수행하지 않았다. 수정 실행자는 독립 재리뷰를 수행하지 않았으며 아래 별도 리뷰어의 결과를 구분한다.
+
+
+#### 최종 상태 — 2026-10-15
+
+최초 전체 리뷰 → P2 1건·P3 3건 수정 → 별도 `roles_final_rereview`의 수정 범위 재리뷰를 완료했다. 재리뷰는 네 지적 모두 ADDRESSED, 신규 Critical/Important 없음, code quality approved로 보고했다. 수정·지도 커밋은 `916e1b5`이며 이 코드의 전체 Backend 회귀 1973건과 관련 Frontend 역할 E2E 3건·lint·typecheck·fresh build가 통과했다. 검사 실행 중 애플리케이션·테스트 소스는 바꾸지 않았다. `pnpm docs:check`, `git diff --check`, 경로 지정 stage의 비밀값 패턴 점검과 커밋 훅도 통과했다.
+
+Tasks 1–9 구현·전체 리뷰 지적 보완·수정 범위 독립 재리뷰·필수 로컬 검증은 완료했다. 10월 14일의 검증과 최초 실패 기록은 당시 근거로 보존한다. 실제 AI 품질·유료 smoke·운영 DB migration·실 HTTP 호출·push·merge·배포는 미수행이며, v1 실패 공정 SQL→writer 재시도를 하나로 연결한 신규 통합 사례도 추가하지 않았다. 기존 NU1903·Skia/xUnit·Vite chunk 경고는 별도 제약으로 남는다.
