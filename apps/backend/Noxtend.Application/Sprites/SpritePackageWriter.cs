@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using Noxtend.Domain.Job;
 using Noxtend.Domain.Ports;
 using Noxtend.Domain.Sprites;
@@ -18,15 +19,25 @@ public sealed class SpritePackageWriter(IImageTranscoder transcoder)
         Validate(jobId, input);
         using var bounded = new BoundedWriteStream(output, ct);
         var assets = new List<SpriteManifestAsset>();
-        var manifest = new SpriteManifest(1, jobId, ProductionMode.TwoD, input, "topLeft", "pixels", assets);
+        var manifest = new SpriteManifest(input.SchemaVersion, jobId, ProductionMode.TwoD, input, "topLeft", "pixels", assets);
         using (var zip = new ZipArchive(bounded, ZipArchiveMode.Create, true))
         {
             foreach (var asset in input.Assets.OrderBy(a => a.Order))
             {
                 ct.ThrowIfCancellationRequested();
-                var basePath = $"{(input.OutputKind == SpriteOutputKind.Layers ? "layers" : "tiles")}/asset-{asset.Id}.png";
-                await WriteImageAsync(zip, basePath, asset.BaseImageId, input.OutputCanvas, openFrame, ct);
-                var pages = SpriteRules.SheetPages(input.OutputCanvas, asset.ImageIds);
+                var detail = input.SchemaVersion == 2 ? input.AssetDetails!.Single(a => a.Id == asset.Id) : null;
+                var canvas = detail?.Canvas ?? input.OutputCanvas;
+                var directory = detail?.Role switch
+                {
+                    SpriteAssetRole.Layer => "layers",
+                    SpriteAssetRole.Tile => "tiles",
+                    SpriteAssetRole.Object => "objects",
+                    SpriteAssetRole.Backdrop => "backdrop",
+                    _ => input.OutputKind == SpriteOutputKind.Layers ? "layers" : "tiles",
+                };
+                var basePath = $"{directory}/asset-{asset.Id}.png";
+                await WriteImageAsync(zip, basePath, asset.BaseImageId, canvas, openFrame, ct);
+                var pages = SpriteRules.SheetPages(canvas, asset.ImageIds);
                 var frames = new List<SpriteManifestFrame>();
                 foreach (var page in pages)
                 {
@@ -34,7 +45,7 @@ public sealed class SpritePackageWriter(IImageTranscoder transcoder)
                     foreach (var cell in page.Cells)
                     {
                         var path = $"frames/asset-{asset.Id}/frame-{cell.FrameIndex:000}.png";
-                        await WriteImageAsync(zip, path, cell.ImageId, input.OutputCanvas, openFrame, ct);
+                        await WriteImageAsync(zip, path, cell.ImageId, canvas, openFrame, ct);
                         frames.Add(new(cell.ImageId, cell.FrameIndex, path, sheetPath, page.Page, cell.Rect));
                     }
                     await using var sheetOutput = zip.CreateEntry(sheetPath, CompressionLevel.NoCompression).Open();
@@ -43,8 +54,15 @@ public sealed class SpritePackageWriter(IImageTranscoder transcoder)
                 assets.Add(new(asset, basePath, frames));
             }
             await using var json = zip.CreateEntry("manifest.json", CompressionLevel.Optimal).Open();
+            var resolver = new DefaultJsonTypeInfoResolver();
+            resolver.Modifiers.Add(type =>
+            {
+                if (type.Type != typeof(SpriteExportInput)) return;
+                foreach (var property in type.Properties.Where(p => p.Name is "grid" or "tileWidth" or "assetDetails"))
+                    property.ShouldSerialize = (value, _) => ((SpriteExportInput)value).SchemaVersion == 2;
+            });
             await JsonSerializer.SerializeAsync(json, manifest, new JsonSerializerOptions(JsonSerializerDefaults.Web)
-            { Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) } }, ct);
+            { TypeInfoResolver = resolver, Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) } }, ct);
         }
         // ZIP 중앙 디렉터리까지 상한 검증 후 성공 반환
         ct.ThrowIfCancellationRequested();
@@ -82,7 +100,7 @@ public sealed class SpritePackageWriter(IImageTranscoder transcoder)
 
     private static void Validate(Guid jobId, SpriteExportInput input)
     {
-        if (jobId == Guid.Empty || input is null || input.SchemaVersion != 1 || input.ExportId == Guid.Empty
+        if (jobId == Guid.Empty || input is null || input.SchemaVersion is not (1 or 2) || input.ExportId == Guid.Empty
             || input.ReviewRevision < 0 || !Enum.IsDefined(input.View) || !Enum.IsDefined(input.OutputKind)
             || input.OutputCanvas is null || input.OutputCanvas.Width is < 1 or > 1024
             || input.OutputCanvas.Height is < 1 or > 1024 || input.SourceCanvas is null
@@ -96,6 +114,22 @@ public sealed class SpritePackageWriter(IImageTranscoder transcoder)
             || input.ExcludedAssetIds.Distinct().Count() != input.ExcludedAssetIds.Count
             || input.Assets.Any(a => input.ExcludedAssetIds.Contains(a.Id)))
             throw new ArgumentException("포함·제외 대상이 유효하지 않습니다", nameof(input));
+        if (input.SchemaVersion == 1 ? input.Grid is not null || input.TileWidth is not null || input.AssetDetails is not null
+            : input.AssetDetails is null || input.AssetDetails.Count != input.Assets.Count || input.AssetDetails.Any(a => a is null)
+                || input.AssetDetails.Select(a => a.Id).Distinct().Count() != input.Assets.Count
+                || !input.AssetDetails.Select(a => a.Id).ToHashSet().SetEquals(input.Assets.Select(a => a.Id))
+                || input.AssetDetails.Any(a => a is null || !Enum.IsDefined(a.Role) || a.Canvas is null
+                    || a.Canvas.Width is < 1 or > 1024 || a.Canvas.Height is < 1 or > 1024
+                    || !double.IsFinite(a.Scale) || a.Scale is <= 0 or > 1
+                    || a.SourceBounds is null || !double.IsFinite(a.SourceBounds.X) || !double.IsFinite(a.SourceBounds.Y)
+                    || !double.IsFinite(a.SourceBounds.W) || !double.IsFinite(a.SourceBounds.H)
+                    || a.SourceBounds.X < 0 || a.SourceBounds.Y < 0 || a.SourceBounds.W <= 0 || a.SourceBounds.H <= 0
+                    || a.SourceBounds.X + a.SourceBounds.W > 1 || a.SourceBounds.Y + a.SourceBounds.H > 1
+                    || (input.OutputKind == SpriteOutputKind.Layers ? a.Role != SpriteAssetRole.Layer : a.Role == SpriteAssetRole.Layer))
+                || (input.OutputKind == SpriteOutputKind.Layers ? input.Grid is not null || input.TileWidth is not null
+                    : input.Grid is null || !double.IsFinite(input.Grid.CellWidth) || input.Grid.CellWidth is <= 0 or > 1
+                        || input.TileWidth is not (64 or 128 or 256)))
+            throw new ArgumentException("버전별 내보내기 메타데이터가 유효하지 않습니다", nameof(input));
         foreach (var asset in input.Assets)
         {
             if (asset.Id == Guid.Empty || string.IsNullOrWhiteSpace(asset.Name) || asset.Fps is < 1 or > 30

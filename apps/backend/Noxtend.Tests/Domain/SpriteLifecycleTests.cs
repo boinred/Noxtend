@@ -20,7 +20,7 @@ public sealed class SpriteLifecycleTests
         var task = job.PlanTask(TaskKind.Synthesize, job.Tasks.Count);
         task.BindSpriteExport(input);
         task.Claim(Now, TimeSpan.FromMinutes(2));
-        var manifest = new SpriteManifest(1, job.Id, ProductionMode.TwoD, input, "topLeft", "pixels", []);
+        var manifest = new SpriteManifest(input.SchemaVersion, job.Id, ProductionMode.TwoD, input, "topLeft", "pixels", []);
         Assert.True(job.TryAttachSpriteExport(SpriteExport.Create(task.Id, input, manifest, "exports/result.zip", Now)));
         task.Succeed(Now);
         job.ReconcileFromTasks(Now);
@@ -163,7 +163,7 @@ public sealed class SpriteLifecycleTests
         task.Claim(Now, TimeSpan.FromMinutes(2));
         Assert.True(job.ReplaceSpritePlan([plan with { Fps = 10 }], Revision(job)).IsSuccess);
         task.Succeed(Now);
-        var manifest = new SpriteManifest(1, job.Id, ProductionMode.TwoD, input, "topLeft", "pixels", []);
+        var manifest = new SpriteManifest(input.SchemaVersion, job.Id, ProductionMode.TwoD, input, "topLeft", "pixels", []);
         Assert.False(job.TryAttachSpriteExport(SpriteExport.Create(task.Id, input, manifest, "old.zip", Now)));
         Assert.False(Assert.Single(job.Sprites!.Exports).IsCurrent);
         job.ReconcileFromTasks(Now);
@@ -293,7 +293,7 @@ public sealed class SpriteLifecycleTests
         Assert.NotNull(job.Sprites!.Assets[0].Approval);
         var copy = System.Text.Json.JsonSerializer.Deserialize<SpriteExportInput>(System.Text.Json.JsonSerializer.Serialize(captured))!;
         Assert.NotSame(captured.Assets, copy.Assets);
-        var manifest = new SpriteManifest(1, job.Id, ProductionMode.TwoD, copy, "topLeft", "pixels", []);
+        var manifest = new SpriteManifest(copy.SchemaVersion, job.Id, ProductionMode.TwoD, copy, "topLeft", "pixels", []);
         task.Succeed(Now);
         Assert.True(job.TryAttachSpriteExport(SpriteExport.Create(task.Id, copy, manifest, "subset.zip", Now)));
         job.ReconcileFromTasks(Now);
@@ -313,7 +313,7 @@ public sealed class SpriteLifecycleTests
         var task = job.PlanTask(TaskKind.Synthesize, job.Tasks.Count);
         task.BindSpriteExport(input);
         task.Claim(Now, TimeSpan.FromMinutes(2));
-        var manifest = new SpriteManifest(1, job.Id, ProductionMode.TwoD, input, "topLeft", "pixels", []);
+        var manifest = new SpriteManifest(input.SchemaVersion, job.Id, ProductionMode.TwoD, input, "topLeft", "pixels", []);
         Assert.True(job.TryAttachSpriteExport(SpriteExport.Create(task.Id, input, manifest, "subset.zip", Now)));
         task.Succeed(Now);
         Assert.True(job.ReplaceSpritePlan([first], Revision(job)).IsSuccess);
@@ -357,7 +357,7 @@ public sealed class SpriteLifecycleTests
         if (generationEdit) Assert.Equal(SpritePhase.PlanReview, job.Sprites!.Phase);
         else Assert.True(job.ApproveSpriteAsset(second.Id, Revision(job)).IsSuccess);
         Assert.True(job.IsCurrentTask(task));
-        var manifest = new SpriteManifest(1, job.Id, ProductionMode.TwoD, input, "topLeft", "pixels", []);
+        var manifest = new SpriteManifest(input.SchemaVersion, job.Id, ProductionMode.TwoD, input, "topLeft", "pixels", []);
         task.Succeed(Now);
         Assert.True(job.TryAttachSpriteExport(SpriteExport.Create(task.Id, input, manifest, "subset.zip", Now)));
         job.ReconcileFromTasks(Now);
@@ -414,7 +414,7 @@ public sealed class SpriteLifecycleTests
         var pack = job.PlanTask(TaskKind.Synthesize, job.Tasks.Count);
         pack.BindSpriteExport(input);
         pack.Claim(Now, TimeSpan.FromMinutes(2));
-        var manifest = new SpriteManifest(1, job.Id, ProductionMode.TwoD, input, "topLeft", "pixels", []);
+        var manifest = new SpriteManifest(input.SchemaVersion, job.Id, ProductionMode.TwoD, input, "topLeft", "pixels", []);
         pack.Succeed(Now);
         Assert.True(job.TryAttachSpriteExport(SpriteExport.Create(pack.Id, input, manifest, "completed.zip", Now)));
         job.ReconcileFromTasks(Now);
@@ -445,7 +445,7 @@ public sealed class SpriteLifecycleTests
         nextTask.BindSpriteExport(next);
         nextTask.Claim(Now, TimeSpan.FromMinutes(2));
         nextTask.Succeed(Now);
-        var nextManifest = new SpriteManifest(1, job.Id, ProductionMode.TwoD, next, "topLeft", "pixels", []);
+        var nextManifest = new SpriteManifest(next.SchemaVersion, job.Id, ProductionMode.TwoD, next, "topLeft", "pixels", []);
         Assert.True(job.TryAttachSpriteExport(SpriteExport.Create(nextTask.Id, next, nextManifest, "next.zip", Now)));
         job.ReconcileFromTasks(Now);
         Assert.NotEqual(input.ExportId, next.ExportId);
@@ -499,7 +499,7 @@ public sealed class SpriteLifecycleTests
         {
             task.Succeed(Now);
             Assert.True(job.TryAttachSpriteExport(SpriteExport.Create(task.Id, input,
-                new(1, job.Id, ProductionMode.TwoD, input, "topLeft", "pixels", []), "export.zip", Now)));
+                new(input.SchemaVersion, job.Id, ProductionMode.TwoD, input, "topLeft", "pixels", []), "export.zip", Now)));
         }
         job.ReconcileFromTasks(Now);
         var revision = Revision(job);
@@ -510,12 +510,109 @@ public sealed class SpriteLifecycleTests
         Assert.Equal(approval, job.Sprites.Assets[0].Approval);
         Assert.Equal(1, job.Sprites.Assets[0].PlanRevision);
         if (!failed) Assert.False(job.Sprites.Exports[0].IsCurrent);
-        Assert.True(job.IsCurrentTask(task));
+        Assert.False(job.IsCurrentTask(task));
         Assert.Equal(input.ExportId, job.Sprites.CompletedExportId);
         Assert.Equal(SpritePhase.ExportReady, job.Sprites.Phase);
         job.ReconcileFromTasks(Now);
         Assert.Equal(JobStatus.PendingReview, job.Status);
         Assert.Null(job.FailureReason);
+    }
+
+    [Fact]
+    public void V1_RetryPreservesFrozenInputAfterGridChange()
+    {
+        var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "fake",
+            new(SpriteView.Isometric, SpriteOutputKind.Tiles), new(800, 600), new(1024, 1024), Now).Value!;
+        var plan = Plan() with { RequiresTransparency = true };
+        job.ReplaceSpritePlan([plan], 0);
+        Complete(job, job.ApproveSpritePlan(Revision(job)).Value![0]);
+        job.ApproveSpriteBases([plan.Id], Revision(job));
+        var input = job.CaptureSpriteExport([plan.Id], Revision(job)).Value! with
+            { SchemaVersion = 1, Grid = null, TileWidth = null, AssetDetails = null };
+        var task = job.PlanTask(TaskKind.PackSprites, job.Tasks.Count);
+        task.BindSpriteExport(input);
+        task.Claim(Now, TimeSpan.FromMinutes(2));
+        task.Fail(ErrorCode.ProviderBadResponse, Now);
+        job.ReconcileFromTasks(Now);
+        job.ReplaceSpritePlan([plan], new(.5), [], Revision(job));
+        Assert.True(job.IsCurrentTask(task));
+        Assert.True(job.RetryOutputTask(task.Id));
+        Assert.Same(input, task.SpriteExportInput);
+        Assert.Equal(1, task.SpriteExportInput!.SchemaVersion);
+        Assert.Null(task.SpriteExportInput.AssetDetails);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void V2_RejectsChangedFrozenMetadata(int field)
+    {
+        var (job, plan) = Planned();
+        Complete(job, job.ApproveSpritePlan(Revision(job)).Value![0]);
+        job.ApproveSpriteBases([plan.Id], Revision(job));
+        var input = job.CaptureSpriteExport([plan.Id], Revision(job)).Value!;
+        var task = job.PlanTask(TaskKind.PackSprites, job.Tasks.Count);
+        task.BindSpriteExport(input);
+        task.Claim(Now, TimeSpan.FromMinutes(2));
+        var detail = input.AssetDetails![0];
+        var changed = field switch
+        {
+            0 => input with { Grid = new(.5) },
+            1 => input with { TileWidth = 256 },
+            2 => input with { AssetDetails = [detail with { Scale = .5 }] },
+            _ => input with { AssetDetails = [detail with { Canvas = new(1, 1) }] },
+        };
+        Assert.False(job.TryAttachSpriteExport(SpriteExport.Create(task.Id, input,
+            new(2, job.Id, ProductionMode.TwoD, changed, "topLeft", "pixels", []), "bad.zip", Now)));
+        Assert.Empty(job.Sprites!.Exports);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void V2_GridCurrentnessUsesValueAndRejectsStaleRetry(bool failed)
+    {
+        var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "fake",
+            new(SpriteView.Isometric, SpriteOutputKind.Tiles), new(800, 600), new(1024, 1024), Now).Value!;
+        var plan = Plan() with { RequiresTransparency = true };
+        job.ReplaceSpritePlan([plan], new(.25), [], 0);
+        Complete(job, job.ApproveSpritePlan(Revision(job)).Value![0]);
+        job.ApproveSpriteBases([plan.Id], Revision(job));
+        var input = job.CaptureSpriteExport([plan.Id], Revision(job)).Value!;
+        Assert.Equal(2, input.SchemaVersion);
+        Assert.Equal(new SpriteGrid(.25), input.Grid);
+        var task = job.PlanTask(TaskKind.PackSprites, job.Tasks.Count);
+        task.BindSpriteExport(input);
+        task.Claim(Now, TimeSpan.FromMinutes(2));
+        if (failed) task.Fail(ErrorCode.ProviderBadResponse, Now);
+        job.ReplaceSpritePlan([plan], new(.5), [], Revision(job));
+        Assert.False(job.IsCurrentTask(task));
+        if (failed) Assert.False(job.RetryOutputTask(task.Id));
+        job.ReplaceSpritePlan([plan], new(.25), [], Revision(job));
+        Assert.True(job.IsCurrentTask(task));
+        job.ReplaceSpritePlan([plan], new(.5), [], Revision(job));
+        if (!failed)
+        {
+            var stale = SpriteExport.Create(task.Id, input,
+                new(2, job.Id, ProductionMode.TwoD, input, "topLeft", "pixels", []), "old.zip", Now);
+            Assert.False(job.TryAttachSpriteExport(stale));
+            Assert.False(Assert.Single(job.Sprites!.Exports).IsCurrent);
+            task.Succeed(Now);
+        }
+        job.ReconcileFromTasks(Now);
+        Assert.NotEqual(JobStatus.Succeeded, job.Status);
+        var next = job.CaptureSpriteExport([plan.Id], Revision(job)).Value!;
+        Assert.Equal(new SpriteGrid(.5), next.Grid);
+        var pack = job.PlanTask(TaskKind.PackSprites, job.Tasks.Count);
+        pack.BindSpriteExport(next);
+        pack.Claim(Now, TimeSpan.FromMinutes(2));
+        Assert.True(job.TryAttachSpriteExport(SpriteExport.Create(pack.Id, next,
+            new(2, job.Id, ProductionMode.TwoD, next, "topLeft", "pixels", []), "new.zip", Now)));
+        pack.Succeed(Now);
+        job.ReconcileFromTasks(Now);
+        Assert.Equal(JobStatus.Succeeded, job.Status);
     }
 
     [Fact]

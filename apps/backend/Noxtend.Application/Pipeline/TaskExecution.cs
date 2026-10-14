@@ -112,7 +112,8 @@ public sealed class TaskExecution(
             if (current?.Status == JobStatus.Canceled || owned?.Status == Domain.Job.TaskStatus.Canceled)
                 return RunTaskOutcome.Canceled;
             if (current is null || current.IsTerminal || owned is null
-                || !owned.IsOwnedBy(attempt, clock.Now, ownershipVersion) || !current.IsCurrentTask(owned))
+                || !owned.IsOwnedBy(attempt, clock.Now, ownershipVersion)
+                || (!current.IsCurrentTask(owned) && !(failure is null && !canceled && current.CanPreserveSpriteExportTask(owned))))
                 return RunTaskOutcome.Skipped;
             TimeSpan? retryDelay = null;
             try
@@ -230,7 +231,8 @@ public sealed class TaskExecution(
                 var current = await jobs.ReloadAsync(jobId, CancellationToken.None);
                 var task = current?.Tasks.FirstOrDefault(t => t.Id == taskId);
                 if (current is null || current.IsTerminal || task is null
-                    || !task.IsOwnedBy(attempt, clock.Now, ownershipVersion) || !current.IsCurrentTask(task))
+                    || !task.IsOwnedBy(attempt, clock.Now, ownershipVersion)
+                    || (!current.IsCurrentTask(task) && !current.CanPreserveSpriteExportTask(task)))
                 {
                     await cts.CancelAsync();
                     return ownershipVersion;

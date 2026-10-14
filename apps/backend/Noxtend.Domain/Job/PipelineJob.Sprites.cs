@@ -350,13 +350,25 @@ public sealed partial class PipelineJob
                 && asset.Frames[input.FrameIndex].CurrentTaskId == task.Id;
         }
         if (task.SpriteExportInput is { } export)
-            return export.Assets.Select(a => a.Id).Concat(export.ExcludedAssetIds).ToHashSet()
-                    .SetEquals(Sprites.Assets.Select(a => a.Plan.Id))
-                && export.Assets.All(a => Sprites.Assets.Any(current => current.Plan.Id == a.Id && current.Approval is not null && SameApprovedAsset(current.Approval.Snapshot, a)));
+            return (export.SchemaVersion == 1 || export.Grid == EffectiveSpriteExportGrid())
+                && SpriteExportAssetsCurrent(export);
         return task.Kind != TaskKind.AnalyzeSprites
             || (Sprites.Phase == SpritePhase.Analyzing && Sprites.Assets.Count == 0
                 && task.Id == _tasks.Where(t => t.Kind == TaskKind.AnalyzeSprites).MaxBy(t => t.Ordinal)?.Id);
     }
+
+    public bool CanPreserveSpriteExportTask(PipelineTask task)
+        => ProductionMode == ProductionMode.TwoD && Sprites is not null && Status != JobStatus.Canceled
+            && task.JobId == Id && _tasks.Any(t => t.Id == task.Id) && task.Kind == TaskKind.PackSprites
+            && task.Status == TaskStatus.Running
+            && task.SpriteExportInput is { SchemaVersion: 2 } input
+            && input.Grid != EffectiveSpriteExportGrid() && SpriteExportAssetsCurrent(input);
+
+    private bool SpriteExportAssetsCurrent(SpriteExportInput input)
+        => input.Assets.Select(a => a.Id).Concat(input.ExcludedAssetIds).ToHashSet()
+                .SetEquals(Sprites!.Assets.Select(a => a.Plan.Id))
+            && input.Assets.All(a => Sprites.Assets.Any(current => current.Plan.Id == a.Id
+                && current.Approval is not null && SameApprovedAsset(current.Approval.Snapshot, a)));
 
     public bool TryAttachSpriteImage(SpriteImage image)
     {
@@ -393,11 +405,19 @@ public sealed partial class PipelineJob
         OpenSpriteReview();
         Sprites.SetPhase(SpritePhase.Packaging);
         Status = reopening ? JobStatus.Pending : JobStatus.Running;
-        return Result<SpriteExportInput>.Ok(new(1, Guid.NewGuid(), Sprites.ReviewRevision,
+        return Result<SpriteExportInput>.Ok(new(2, Guid.NewGuid(), Sprites.ReviewRevision,
             Sprites.Settings.View, Sprites.Settings.OutputKind, Sprites.SourceCanvas, Sprites.OutputCanvas,
             Array.AsReadOnly(selected.Value!.OrderBy(a => a.Plan.Order).Select(a => a.Approval!.Snapshot).ToArray()),
-            Array.AsReadOnly(Sprites.Assets.Where(a => !assetIds.Contains(a.Plan.Id)).Select(a => a.Plan.Id).ToArray())));
+            Array.AsReadOnly(Sprites.Assets.Where(a => !assetIds.Contains(a.Plan.Id)).Select(a => a.Plan.Id).ToArray()),
+            EffectiveSpriteExportGrid(), Sprites.Settings.OutputKind == SpriteOutputKind.Tiles ? Sprites.Settings.TileWidth : null,
+            Array.AsReadOnly(selected.Value!.OrderBy(a => a.Plan.Order).Select(a => new SpriteExportAsset(a.Id,
+                SpriteRules.RoleOf(Sprites.Settings, a.Plan), SpriteAssetCanvasOf(a).Output,
+                SpriteAssetCanvasOf(a).Scale, a.Plan.SourceBounds)).ToArray())));
     }
+
+    private SpriteGrid? EffectiveSpriteExportGrid()
+        => Sprites!.Settings.OutputKind == SpriteOutputKind.Layers ? null
+            : new(SpriteRules.CellWidth(Sprites.Grid, Sprites.Assets.Select(a => a.Plan).ToArray(), Sprites.Settings)!.Value);
 
     public bool TryAttachSpriteExport(SpriteExport export)
     {
@@ -405,7 +425,7 @@ public sealed partial class PipelineJob
         var task = _tasks.FirstOrDefault(t => t.Id == export.TaskId);
         if (task?.SpriteExportInput is not { } input || !CanAttachSpriteResult(task, export.CreatedAt)
             || !SameExportInput(input, export.Input) || export.Id != input.ExportId || export.Manifest.JobId != Id
-            || export.Manifest.ProductionMode != ProductionMode.TwoD || !SameExportInput(export.Manifest.Input, input)
+            || export.Manifest.ProductionMode != ProductionMode.TwoD || export.Manifest.SchemaVersion != input.SchemaVersion || !SameExportInput(export.Manifest.Input, input)
             || string.IsNullOrWhiteSpace(export.BlobKey) || Sprites.Exports.Any(e => e.Id == export.Id)) return false;
         export.SetCurrent(IsCurrentTask(task));
         Sprites.AddExport(export);
