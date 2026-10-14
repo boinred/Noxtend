@@ -53,13 +53,13 @@ public sealed class RunSpriteAnalysisTaskHandler(
         var parsed = SpritePlanParser.Parse(response.RawJson, job.Sprites.Settings, job.Sprites.SourceCanvas);
         if (!parsed.IsSuccess) throw new ProviderBadResponseException(parsed.ErrorMessage!);
         IReadOnlyList<SpriteCanvas> sizes = [];
-        if (job.SpritePlanNeedsGenerationSizes(parsed.Value!, null))
+        if (job.SpritePlanNeedsGenerationSizes(parsed.Value!.Assets, parsed.Value.Grid))
         {
             var resolved = await SpriteGenerationSizes.ResolveAsync(job, providers, catalog, ct);
             if (!resolved.IsSuccess) throw new ProviderCallFailedException(resolved.ErrorMessage!, isTransient: true);
             sizes = resolved.Value!;
         }
-        return current => current.ReplaceSpritePlan(parsed.Value!, null, sizes, current.Sprites!.ReviewRevision);
+        return current => current.ReplaceSpritePlan(parsed.Value!.Assets, parsed.Value.Grid, sizes, current.Sprites!.ReviewRevision);
     }
 
     private static TaskFailure? Classify(Exception exception) => exception switch

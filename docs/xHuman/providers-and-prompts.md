@@ -24,6 +24,8 @@
 
 `SeedPrompts.AnalyzeSprites()`와 `SeedSpriteAnalyzePrompt` migration은 정확한 시점·유형과 대상 schema를 등록한다. `SeedPrompts.AnalyzeSpritesV2()`와 `ReviseSpriteAnalyzePrompt` migration은 `sourceBounds` x·y·w·h를 원본 너비·높이 대비 0~1 비율(픽셀 아님)로 안내하는 개정이며 schema 구조는 V1과 같고 좌표 필드에 `description`만 더한다. Background 슬롯을 비활성화하고 `MAX(Version)+1`로 새 행을 추가하며 Down은 새 행 삭제 후 이전 최신 버전을 재활성화한다. 운영자가 만든 버전은 덮어쓰지 않지만 새 버전이 활성 행이 된다. 확인: `SpriteAnalyzePromptMigrationTests`, `SeedPromptVariableTests`. 기존 AnalyzeSprites/Background 슬롯이 있으면 운영자 내용을 보존하며 기존 3D·평가 프롬프트는 변경하지 않는다. `FakeLlmProvider`도 같은 schema를 반환하고 관리자 격자·편집·Frontend operation 라벨은 새 분석을 포함한다. 단가가 없는 모델 비용은 기존 ModelPriceBook의 null 규칙을 따른다.
 
+`AnalyzeSpritesV3()`와 `ReviseSpriteAnalyzePromptV3` migration은 기존 V1·V2를 유지하고 Background 슬롯에 역할·격자 필수 schema를 추가한다. 레이어는 `layer`·`grid: null`, 타일 작업은 `tile`·`backdrop`·`object`와 원본 너비 대비 `grid.cellWidth`를 반환한다. `SpritePlanParser`는 역할·투명도·격자·출력 크기를 검증하고 `SpriteAnalysisPlan`의 Assets·Grid를 보존한다. 분석 Handler는 유효한 계획의 새 `object`·`backdrop` 캔버스에만 지원 크기를 조회하며 실패 시 Retry하고 계획을 저장하지 않는다. Fake 타일 분석은 세 역할을 하나씩 반환한다. V3 SQL Up·Down·운영자 v9→v10·다른 슬롯 보존은 `SpriteAnalyzePromptMigrationTests`에서 격리 SQL로 검증한다. 실제 AI 출력 품질은 미확인이다.
+
 ### 2D 배경 이미지 생성
 
 `GenerateSpriteSource`는 Background 전용이며 변수 `{{prompt}}`·`{{settings}}`로 참조 없는 원본 후보 생성 프롬프트를 정의한다. `SeedPrompts.GenerateSpriteSource()`와 `SeedSpriteSourcePrompt` migration은 기존 운영자 슬롯을 보존한다. `SeedPrompts.GenerateSpriteSourceV2()`와 `ReviseSpriteSourcePrompt` migration은 설정의 시점·형식이 프롬프트 문장보다 우선한다고 명시한 개정이며 `AnalyzeSpritesV2`와 같은 방식(슬롯 비활성화 후 `MAX(Version)+1`)으로 새 활성 행을 추가한다. 설정을 렌더하는 곳은 `RunSpriteSourceGenerationTaskHandler`다. V2와 보완 프롬프트는 isometric + tiles를 2:1 다이아몬드 셀의 가장자리 맞닿음 타일로 명시한다(하류 sprite 생성이 같은 다이아몬드 셀 규약을 쓴다).

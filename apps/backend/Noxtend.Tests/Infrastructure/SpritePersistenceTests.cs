@@ -45,7 +45,7 @@ public sealed class SpritePersistenceTests(SqlServerFixture sql)
         {
             var source = PipelineJob.CreateSprites(upload.Id, command.ImageProviderConfigId, command.ImageModel,
                 command.Settings, new(24, 16), new(1536, 1024), fixture.Clock.Now).Value!;
-            source.ReplaceSpritePlan(SpritePlanParser.Parse(SpriteAnalysisTests.PlanJson, command.Settings, new(24, 16)).Value!, 0);
+            source.ReplaceSpritePlan(SpritePlanParser.Parse(SpriteAnalysisTests.PlanJson, command.Settings, new(24, 16)).Value!.Assets, 0);
             var input = source.ApproveSpritePlan(source.Sprites!.ReviewRevision).Value![0];
             var task = source.PlanTask(TaskKind.Generate, 0);
             source.BindSpriteFrame(task.Id, input);
@@ -169,7 +169,7 @@ public sealed class SpritePersistenceTests(SqlServerFixture sql)
         setup.StoredImages.Add(upload);
         var source = PipelineJob.CreateSprites(upload.Id, command.ImageProviderConfigId, command.ImageModel,
             command.Settings, new(24, 16), new(1536, 1024), fixture.Clock.Now).Value!;
-        source.ReplaceSpritePlan(SpritePlanParser.Parse(SpriteAnalysisTests.PlanJson, command.Settings, new(24, 16)).Value!, 0);
+        source.ReplaceSpritePlan(SpritePlanParser.Parse(SpriteAnalysisTests.PlanJson, command.Settings, new(24, 16)).Value!.Assets, 0);
         var input = source.ApproveSpritePlan(source.Sprites!.ReviewRevision).Value![0];
         var task = source.PlanTask(TaskKind.Generate, 0);
         source.BindSpriteFrame(task.Id, input);

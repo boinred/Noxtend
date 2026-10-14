@@ -70,6 +70,50 @@ public sealed class SpriteAnalyzePromptMigrationTests(SqlServerFixture sql)
         Assert.Equal(5, Assert.Single(await ActiveSlot(db)).Version);
     }
 
+    [Fact]
+    public async Task V3Up_ActivatesRoleAndGridPrompt()
+    {
+        await using var db = Context();
+        await db.Database.MigrateAsync("20261014064731_AddSpriteAssetRoles");
+        var untouchedIds = await OtherActiveSlotIds(db);
+
+        await db.Database.MigrateAsync(db.Database.GetMigrations().Single(m => m.EndsWith("_ReviseSpriteAnalyzePromptV3")));
+
+        var analyze = Assert.Single(await ActiveSlot(db));
+        var expected = SeedPrompts.AnalyzeSpritesV3();
+        Assert.Equal(3, analyze.Version);
+        Assert.Equal(expected.System, analyze.System);
+        Assert.Equal(expected.User, analyze.User);
+        Assert.Equal(expected.Schema, analyze.JsonSchema);
+        Assert.Equal(expected.Note, analyze.Note);
+        Assert.Equal(untouchedIds, await OtherActiveSlotIds(db));
+    }
+
+    [Fact]
+    public async Task V3Up_AllocatesAfterOperatorVersions()
+    {
+        await using var db = Context();
+        await db.Database.MigrateAsync("20261014064731_AddSpriteAssetRoles");
+        await InsertOperatorRow(db, version: 9);
+
+        await db.Database.MigrateAsync(db.Database.GetMigrations().Single(m => m.EndsWith("_ReviseSpriteAnalyzePromptV3")));
+
+        Assert.Equal(10, Assert.Single(await ActiveSlot(db)).Version);
+    }
+
+    [Fact]
+    public async Task V3Down_RestoresPreviousRow()
+    {
+        await using var db = Context();
+        await db.Database.MigrateAsync("20261014064731_AddSpriteAssetRoles");
+        await InsertOperatorRow(db, version: 5);
+        await db.Database.MigrateAsync(db.Database.GetMigrations().Single(m => m.EndsWith("_ReviseSpriteAnalyzePromptV3")));
+
+        await db.Database.MigrateAsync("20261014064731_AddSpriteAssetRoles");
+
+        Assert.Equal(5, Assert.Single(await ActiveSlot(db)).Version);
+    }
+
     // 접미사로 찾아 타임스탬프를 하드코딩하지 않는다
     private static Task<string> MigrationId(NoxtendDbContext db)
         => Task.FromResult(db.Database.GetMigrations().Single(m => m.EndsWith("_" + ThisMigration)));

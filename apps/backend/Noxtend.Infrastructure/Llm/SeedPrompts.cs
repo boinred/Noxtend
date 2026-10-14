@@ -129,6 +129,34 @@ internal static class SeedPrompts
         }
         """;
 
+    public static (string System, string User, string Schema, string Note) AnalyzeSpritesV3()
+    {
+        var schema = System.Text.Json.Nodes.JsonNode.Parse(SpriteAnalyzeSchemaV2)!;
+        schema["required"]!.AsArray().Add("grid");
+        schema["properties"]!["grid"] = System.Text.Json.Nodes.JsonNode.Parse("""
+            {"oneOf":[{"type":"null"},{"type":"object","additionalProperties":false,"required":["cellWidth"],
+            "properties":{"cellWidth":{"type":"number","exclusiveMinimum":0,"maximum":1}}}]}
+            """);
+        var asset = schema["properties"]!["assets"]!["items"]!;
+        asset["required"]!.AsArray().Add("role");
+        asset["properties"]!["role"] = System.Text.Json.Nodes.JsonNode.Parse("""
+            {"type":"string","enum":["layer","tile","backdrop","object"]}
+            """);
+        return (SpriteAnalyzeSystemV2 + "\n" + """
+            Every asset requires role. For layers use layer only and root grid: null.
+            For tiles classify each asset as tile, backdrop or object. Tile means a ground cell
+            with repeatable edges (ground, walls, water, roads); use one representative cell. A name
+            containing tile does not make a non-repeatable asset a tile. Backdrop means a continuous distant landscape (sky, mountains,
+            skyline) and is opaque, at most one, with the smallest order. Object means a standalone
+            building, tree, rock, bridge, roof, awning, tank, pole, shrub or sign on transparent background.
+            Use one representative instance and its bounds. A roof is not a tile;
+            a skyline is not a tile. Object must always require transparency; backdrop never does.
+            Root grid is required for tiles: {cellWidth: number}. cellWidth is the width of one
+            ground cell divided by original image width, not object bounds or pixels. For a
+            256px-wide ground cell in a 1024px-wide image use {cellWidth:0.25}; 0 < cellWidth <= 1.
+            """, AnalyzeSprites().User, schema.ToJsonString(), "이미지 기반 2D 배경 역할·격자 분석 v3");
+    }
+
     // 모델이 픽셀 좌표를 반환해 SpriteRules 가 거부했다 — 0~1 비율 안내를 추가한 개정
     public static (string System, string User, string Schema, string Note) AnalyzeSpritesV2()
         => (SpriteAnalyzeSystemV2, AnalyzeSprites().User, SpriteAnalyzeSchemaV2,
