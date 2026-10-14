@@ -250,6 +250,11 @@ test('current missing failed and running slots are shown without historical task
   await expect(steps.locator('[aria-current="step"]')).toContainText('프레임 생성')
   await expect(panel.getByLabel('배경 생성 성공')).toHaveText('2 / 2')
   await expect(panel.getByLabel('프레임 생성 성공')).toHaveText('11 / 14')
+  // 같은 종류 공정은 한 줄로 모으고 실패만 개별 행으로 남긴다
+  await expect(panel.getByTestId('sprite-task-summary')).toHaveText(
+    '2D 배경 생성 · 전체 15 · 실행 중 1 · 성공 13 · 실패 1',
+  )
+  await expect(panel.getByRole('button', { name: '실패 공정 재시도' })).toHaveCount(1)
   await expect(page.getByText('프레임 2 · 실패', { exact: true })).toBeVisible()
   await expect(page.getByText('프레임 3 · 생성 중', { exact: true })).toBeVisible()
   await expect(page.getByText('프레임 4 · 누락', { exact: true })).toBeVisible()

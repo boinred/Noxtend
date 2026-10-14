@@ -1223,7 +1223,9 @@ test('running source generation survives reload with progress, candidates and lo
   await page.reload()
   await expect(ui.steps.locator('[aria-current="step"]')).toContainText('원본 준비')
   await expect(ui.status.getByLabel('원본 공정', { exact: true })).toHaveText('원본 후보 생성 중')
-  await expect(ui.status.getByText('원본 후보 생성 · 실행 중', { exact: false })).toBeVisible()
+  await expect(ui.status.getByTestId('sprite-task-summary')).toHaveText(
+    '원본 후보 생성 · 전체 1 · 실행 중 1',
+  )
   await expect(ui.candidates).toHaveCount(1)
   await expect(ui.generate).toBeDisabled()
   await expect(ui.prompt).toBeDisabled()
