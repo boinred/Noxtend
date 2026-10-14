@@ -77,6 +77,7 @@
 - `layer`: 기존 작업 단위 출력 캔버스와 같다.
 - 계획 확정(분석 결과 반영·계획 수정) 시 에셋마다 출력 캔버스·생성 캔버스·transform을 계산해 `SpriteAsset`에 저장한다. 생성 캔버스는 이미지 모델 지원 크기 중 비율이 가장 가까운 값이다(`SpriteRules.GenerationCanvas` 재사용). 생성 입력(`SpriteFrameInput`)은 에셋 캔버스를 고정한다.
 - 출력 캔버스가 이전과 같은 에셋은 저장된 생성 캔버스·transform을 그대로 쓴다. 이미지 모델 지원 크기 조회는 출력 캔버스가 새로 생기거나 바뀐 `object`·`backdrop`이 있을 때만 한다. 그래서 이름·FPS 같은 메타데이터 수정은 공급자 상태와 무관하게 저장되고, 모델의 지원 크기 목록이 바뀌어도 기존 이미지가 조용히 무효화되지 않는다.
+- 이 조회 조건은 계획 수정과 분석 결과 반영에 동일하게 적용한다. 분석은 파싱·전체 계획 검증 후 `SpritePlanNeedsGenerationSizes`를 호출하고, 필요한 경우에만 지원 크기를 조회한다. 레이어만 또는 타일만 있는 분석은 조회 없이 빈 지원 크기 목록을 전달하며, 잘못된 계획은 조회 전에 거부한다. 실제 생성 명령의 기존 공급자·모델 사용 가능 검사는 별도로 유지한다.
 - 앵커는 `layer`·`backdrop`이면 `(0,0)`, `tile`·`object`이면 출력 캔버스 중심이다. 새 에셋뿐 아니라 기존 에셋의 역할·출력 크기 변경에도 재계산한다. 저장 앵커·생성 프롬프트의 `frame.anchor`·승인 snapshot·manifest가 같은 기준을 사용한다.
 - 앵커 계산은 `SpriteRules.Anchor(role, outputCanvas)` 한 곳에서 한다. 도메인 저장값과 생성 핸들러의 `frame.anchor`가 이 함수를 쓰고, 생성 핸들러의 작업 유형 분기는 없앤다. e2e Fake는 같은 규칙을 따른다.
 - 앵커는 역할 또는 출력 캔버스가 바뀔 때만 바뀐다. 둘 다 생성 입력 변경이라 이미지·승인이 함께 무효화되므로, 승인 snapshot의 앵커는 항상 저장 앵커와 같다(불변식, 테스트로 고정).
@@ -131,9 +132,11 @@
 
 - `SpriteAssetPlanRequest`(응답 `Plan` 겸용)에 `role` 추가. 요청에서 생략하면 유형 기본값, 알 수 없는 값은 400.
 - 계획 요청에 `grid`, `SpriteResponse`에 `grid`(`{ cellWidth } | null`) 추가.
-- 계획 수정 fingerprint는 ID로 정렬한 에셋 목록과 `grid`를 포함한다. 동일 requestId·동일 본문 재전송은 기존 receipt, 같은 requestId·다른 격자는 `SPRITE_REQUEST_CONFLICT`다. 기존 접수 확인은 revision·공급자·모델 조회보다 먼저 수행한다. 요청에서 생략한 `grid`와 명시적 `null`은 같은 입력으로 취급하며, 계산 시 기존 중앙값 규칙을 사용한다.
+- 계획 수정 fingerprint는 ID로 정렬한 에셋 목록과 `grid`를 포함한다. 동일 requestId·동일 본문 재전송은 기존 receipt, 같은 requestId·다른 격자는 `SPRITE_REQUEST_CONFLICT`다. 기존 접수의 비교·반환은 revision·취소·공급자·모델 상태 검사보다 먼저 수행한다. 요청에서 생략한 `grid`와 명시적 `null`은 같은 입력으로 취급하며, 계산 시 기존 중앙값 규칙을 사용한다.
 - fingerprint는 정규화한 본문으로 만든다. 각 에셋의 `role`은 유효 역할(생략과 명시적 기본값 동일), `grid`는 생략과 `null` 동일, 에셋은 ID 정렬이다. 같은 의미의 재전송은 같은 receipt다.
-- 처리 순서는 기존 접수 조회 → 작업 조회 → 접수 재확인 → 모드·revision·취소 확인 → 필요할 때만 지원 크기 조회 → 도메인 반영이다. 지원 크기 조회 조건은 데이터 모델의 생성 캔버스 재사용 규칙을 따른다.
+- 계획 수정 처리 순서는 요청 ID 등 형식 확인 → 기존 접수 조회 → 작업 조회 → 접수 재확인 → 작업 존재·2D 모드 확인 → 불변 `Settings.OutputKind`로 역할 정규화·fingerprint 계산 → 접수 기록 비교·receipt 반환 → 신규 요청만 revision·취소·전체 계획 검증 → 필요할 때만 지원 크기 조회 → 도메인 반영이다. 접수 조회와 비교를 구분하며, 작업 조회 전에 생략 역할의 기본값을 추측하지 않는다. 접수 기록의 JobId·Kind가 다르면 즉시 요청 충돌이다. 다른 명령의 기존 fingerprint·처리 순서는 변경하지 않는다.
+- 배포 전 `UpdatePlan` 접수는 현재 `SpriteCommandsHandler`의 구형 계산 방식도 비교한다. 새 hash 불일치 시 `grid == null`이고 모든 역할이 해당 작업의 기본 역할인 요청만 구형 비교 대상이다. 새 `role`을 제외한 기존 계획 필드를 기존 선언 순서·JSON 옵션·ID 정렬로 투영해 원래 에셋 배열 본문과 외부 kind·JobId·assetId·index·ExpectedRevision을 재현한다. 저장 hash와 같을 때만 기존 receipt를 반환하고, 비기본 역할·값 있는 grid·기존 필드 변경은 구형 비교로 통과시키지 않는다.
+- 신규 접수는 새 hash만 저장하며 기존 hash를 덮어쓰지 않는다. 두 계산 모두 기존 64자 SHA-256 표현을 사용해 Fingerprint 열 확장·별도 버전 열 없이 호환한다. 동시 저장 경합 후 승자 receipt 비교에도 같은 제한을 적용한다.
 - `SpriteAssetResponse`에 `canvas`(출력)와 `scale` 추가.
 - Frontend `readPlan`·`readState`는 새 필드를 엄격히 읽고, 역할이 없는 구형 응답은 유형 기본값으로 읽는다. `spriteApi.ts`의 요청 직렬화에 `role`·`grid`를 넣는다.
 
@@ -177,8 +180,11 @@ Fake 공급자 기준이며 유료 smoke는 제외한다.
 - 구형 승인 작업의 새 v2 내보내기, 접수된 v1의 고정 입력 재시도, 완성된 v2 manifest의 SQL 저장·재조회를 분리해 검증한다.
 - 실제 서버 DTO 매핑·서버 JSON 설정으로 생성한 응답을 Frontend의 실제 reader로 읽는다. 새 혼합 작업·구형 작업·구형 승인 snapshot·`grid: null`을 포함하고, 추가로 과거 필드 생략 응답도 읽는다. fixture를 쓰면 서버 생성 방법·기준 revision을 기록한다. 손으로 작성한 Fake 응답은 이 연결 검사를 대신하지 않는다.
 - 계약은 양방향으로 검사한다. 응답은 서버 테스트가 실제 DTO·JSON 설정으로 fixture를 만들어 저장본과 비교하고(다르면 실패, 갱신은 환경 변수를 켠 실행으로만), Frontend 테스트가 같은 파일을 실제 reader로 읽는다. 요청은 Frontend `updateSpritePlan`이 만든 본문이 요청 fixture와 같아야 하고, 서버 API 테스트가 같은 요청 fixture를 실제 바인딩(`JsonUnmappedMemberHandling.Disallow`)으로 보내 성공해야 한다. 한쪽만 필드를 바꾸면 다른 쪽 테스트가 실패한다.
+- 공통 요청 fixture는 실제 Frontend 출력인 명시적 역할·grid를 사용한다(레이어는 `role: "layer"`, `grid: null`). role·grid 생략형은 서버 API의 구형 요청 호환 테스트로 별도 검사하며 Frontend 출력과 깊은 비교하지 않는다.
 - fixture는 `apps/frontend/src/infra/api/fixtures/`에 두고 서버 테스트는 저장소 루트(`apps/backend/Noxtend.slnx` 기준)를 찾아 읽는다.
 - 메타데이터만 수정할 때 공급자 비활성·지원 크기 목록 변경에도 저장되고 이미지가 유지되는지, 명시적 기본 역할과 생략 역할 재전송이 같은 receipt인지, 승인 snapshot 앵커가 저장 앵커와 같은지 검증한다.
+- 배포 전 방식의 hash를 저장한 접수를 재조회해 구형 본문·명시적 기본 역할 재전송은 같은 receipt이고 비기본 역할·값 있는 grid·기존 필드 변경은 충돌인지 검사한다. 접수 후 revision 변경·취소·공급자 비활성에도 동일 재전송은 반환되며 신규 반영·capability 조회는 없어야 한다. 구형 hash 기준값은 변경 전 코드로 생성해 고정한다.
+- 분석의 레이어만·타일만 계획은 이미지 모델 조회 0회, 신규 Object·Backdrop 혼합 계획은 1회, 잘못된 계획은 0회임을 검사한다. 필요한 조회 실패만 재시도되고 계획은 저장되지 않는다.
 
 실제 AI 확인은 구현 후 사용자 승인 시 1회 별도로 한다. `300f237d`와 같은 원본으로 새 작업을 만들어 하늘선이 `backdrop`, 지붕이 `object`로 분류되는지 보고 비용·결과를 기록한다. 프롬프트 출력 비교는 `agentic-eval` 절차를 따른다.
 
