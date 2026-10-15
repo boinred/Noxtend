@@ -8,12 +8,14 @@ using Noxtend.Domain.Job;
 using Noxtend.Domain.Llm;
 using Noxtend.Domain.Ports;
 using Noxtend.Domain.Prompt;
+using Noxtend.Domain.Sprites;
 
 namespace Noxtend.Application.Sprites;
 
 public sealed class RunSpriteAnalysisTaskHandler(
     IStoredImageRepository images, IBlobStorage blobs, ILlmProviderFactory providerFactory,
-    IPromptCatalog prompts, TaskExecution execution, JobOptions options, RateLimitGate rateLimitGate) : ITaskHandler
+    IPromptCatalog prompts, TaskExecution execution, JobOptions options, RateLimitGate rateLimitGate,
+    IProviderConfigRepository providers, IModelCatalog catalog) : ITaskHandler
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     { Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) } };
@@ -50,7 +52,14 @@ public sealed class RunSpriteAnalysisTaskHandler(
             RateLimitHeaders.SumTokens(response.InputTokens, response.OutputTokens)), ct);
         var parsed = SpritePlanParser.Parse(response.RawJson, job.Sprites.Settings, job.Sprites.SourceCanvas);
         if (!parsed.IsSuccess) throw new ProviderBadResponseException(parsed.ErrorMessage!);
-        return current => current.ReplaceSpritePlan(parsed.Value!, current.Sprites!.ReviewRevision);
+        IReadOnlyList<SpriteCanvas> sizes = [];
+        if (job.SpritePlanNeedsGenerationSizes(parsed.Value!.Assets, parsed.Value.Grid))
+        {
+            var resolved = await SpriteGenerationSizes.ResolveAsync(job, providers, catalog, ct);
+            if (!resolved.IsSuccess) throw new ProviderCallFailedException(resolved.ErrorMessage!, isTransient: true);
+            sizes = resolved.Value!;
+        }
+        return current => current.ReplaceSpritePlan(parsed.Value!.Assets, parsed.Value.Grid, sizes, current.Sprites!.ReviewRevision);
     }
 
     private static TaskFailure? Classify(Exception exception) => exception switch

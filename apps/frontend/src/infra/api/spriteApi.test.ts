@@ -35,6 +35,7 @@ const input = {
   },
 }
 const plan = {
+  role: 'layer' as const,
   id: 'asset',
   name: '앞 레이어',
   order: 1,
@@ -100,6 +101,7 @@ describe('sprite API', () => {
     const fetch = success()
     const draft = {
       ...context,
+      grid: null,
       assets: [{ ...plan, selected: true, sourceBounds: { ...plan.sourceBounds, draft: true } }],
       draft: true,
     }
@@ -111,6 +113,7 @@ describe('sprite API', () => {
     expect(JSON.parse(fetch.mock.calls[0]![1].body)).toEqual({
       requestId: 'request',
       expectedRevision: 3,
+      grid: null,
       assets: [plan],
     })
   })

@@ -13,6 +13,9 @@ import { PartsOverlay } from '../background/PartsOverlay'
 import { useUpdateSpritePlan, useApproveSpritePlan } from '@/app/queries/useSprites'
 import { useModelPrices } from '@/app/queries/useTuning'
 import { apiErrorMessage, apiErrorStatus } from '@/app/queries/errors'
+import { assetRole, assetOutputSize, cellWidthOf } from '@/domain/sprites/rules'
+import { spriteRoleLabel } from '@/domain/sprites/labels'
+import type { SpriteGrid } from '@/domain/sprites/types'
 import type { SpriteState, SpriteAssetPlan } from '@/domain/sprites/types'
 import { spriteStyles as styles } from './spriteStyles'
 
@@ -33,7 +36,40 @@ export function SpritePlanReview({
 }) {
   const planning = sprite.phase === 'planReview'
   const saved = sprite.assets.map((asset) => asset.plan)
-  const [draft, setDraft] = useState({ revision: sprite.reviewRevision, plans: saved, saved })
+  const tiles = sprite.settings.outputKind === 'tiles'
+  function projection(plans: SpriteAssetPlan[], grid: SpriteGrid | null) {
+    return JSON.stringify({
+      plans: [...plans]
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .map((p) => ({
+          id: p.id,
+          role: assetRole(sprite.settings, p),
+          name: p.name,
+          order: p.order,
+          sourceBounds: {
+            x: p.sourceBounds.x,
+            y: p.sourceBounds.y,
+            w: p.sourceBounds.w,
+            h: p.sourceBounds.h,
+          },
+          requiresTransparency: p.requiresTransparency,
+          loop: p.loop,
+          frameCount: p.frameCount,
+          fps: p.fps,
+          motionNotes: p.motionNotes,
+        })),
+      grid: grid === null ? null : { cellWidth: grid.cellWidth },
+    })
+  }
+  function serverDraft() {
+    return {
+      revision: sprite.reviewRevision,
+      plans: saved,
+      grid: sprite.grid,
+      saved: projection(saved, sprite.grid),
+    }
+  }
+  const [draft, setDraft] = useState(serverDraft)
   const plans = draft.plans
   function setPlans(next: SpriteAssetPlan[] | ((current: SpriteAssetPlan[]) => SpriteAssetPlan[])) {
     setDraft((current) => ({
@@ -48,13 +84,36 @@ export function SpritePlanReview({
     .filter((p) => p.model === model && p.effectiveFrom <= new Date().toISOString())
     .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0]?.perImage
   const count = plans.reduce((sum, plan) => sum + (plan.loop ? plan.frameCount : 1), 0)
-  const dirty = JSON.stringify(plans) !== JSON.stringify(draft.saved)
+  const current = projection(plans, draft.grid)
+  const dirty = current !== draft.saved
   const stale = draft.revision !== sprite.reviewRevision
   // 미저장 draft 보존, 저장 반영 또는 변경 없는 draft만 동기화
-  if (stale && (!dirty || JSON.stringify(plans) === JSON.stringify(saved)))
-    setDraft({ revision: sprite.reviewRevision, plans: saved, saved })
+  if (stale && (!dirty || current === projection(saved, sprite.grid))) setDraft(serverDraft())
   const backmost = Math.min(...plans.map((p) => p.order))
+  const cell = cellWidthOf(draft.grid, plans, sprite.settings)
+  const outputs = plans.map((plan) =>
+    assetOutputSize(sprite.settings, sprite.sourceCanvas, cell, plan),
+  )
+  const roleErrors = plans.map((plan, index) => {
+    const role = assetRole(sprite.settings, plan)
+    const output = outputs[index]!
+    if ('error' in output) return output.error
+    if (
+      role === 'backdrop' &&
+      (plans.filter((p) => assetRole(sprite.settings, p) === 'backdrop').length > 1 ||
+        plan.order !== backmost)
+    )
+      return '원경 배경은 최대 하나이며 가장 뒤에 있어야 합니다'
+    return null
+  })
+  const gridInvalid =
+    draft.grid !== null &&
+    (!Number.isFinite(draft.grid.cellWidth) ||
+      draft.grid.cellWidth <= 0 ||
+      draft.grid.cellWidth > 1)
   const invalid =
+    roleErrors.some(Boolean) ||
+    gridInvalid ||
     plans.length < 1 ||
     plans.length > 12 ||
     count > 64 ||
@@ -62,9 +121,9 @@ export function SpritePlanReview({
     plans.some((p) => {
       const { x, y, w, h } = p.sourceBounds
       const transparent =
-        sprite.settings.outputKind === 'layers'
-          ? p.order !== backmost
-          : sprite.settings.view === 'isometric'
+        assetRole(sprite.settings, p) === 'object' ||
+        (assetRole(sprite.settings, p) === 'layer' && p.order !== backmost) ||
+        (assetRole(sprite.settings, p) === 'tile' && sprite.settings.view === 'isometric')
       return (
         !p.name.trim() ||
         !Number.isInteger(p.fps) ||
@@ -80,7 +139,8 @@ export function SpritePlanReview({
         h <= 0 ||
         x + w > 1 ||
         y + h > 1 ||
-        (transparent && !p.requiresTransparency)
+        (transparent && !p.requiresTransparency) ||
+        (assetRole(sprite.settings, p) === 'backdrop' && p.requiresTransparency)
       )
     })
   const busy = disabled || update.isPending || approve.isPending
@@ -102,12 +162,50 @@ export function SpritePlanReview({
         이름·순서·FPS 저장은 이미지를 생성하지 않습니다. 생성 입력 변경은 해당 결과와 승인을
         무효화하고 계획 재검수가 필요합니다.
       </p>
+      {tiles ? (
+        <label className={styles.field}>
+          격자 칸 너비 (원본 px)
+          <input
+            className={backgroundStyles.input}
+            type="number"
+            min="0"
+            max={sprite.sourceCanvas.width}
+            value={
+              draft.grid === null
+                ? ''
+                : Number.isFinite(draft.grid.cellWidth)
+                  ? draft.grid.cellWidth * sprite.sourceCanvas.width
+                  : ''
+            }
+            placeholder={
+              cell === null
+                ? '격자 칸 너비 필요'
+                : `자동 ${Math.round(cell * sprite.sourceCanvas.width)}px`
+            }
+            disabled={busy}
+            onChange={(e) =>
+              setDraft((current) => ({
+                ...current,
+                grid:
+                  e.target.value === ''
+                    ? null
+                    : { cellWidth: e.target.valueAsNumber / sprite.sourceCanvas.width },
+              }))
+            }
+          />
+        </label>
+      ) : null}
+      {gridInvalid ? (
+        <p role="alert" className={styles.error}>
+          격자 칸 너비는 0보다 크고 원본 너비 {sprite.sourceCanvas.width}px 이하여야 합니다.
+        </p>
+      ) : null}
       <PartsOverlay
         sourceImageId={sourceImageId}
         parts={plans.map((plan, index) => ({
           id: plan.id,
           name: plan.name,
-          label: `${index + 1}. ${plan.name}`,
+          label: `${index + 1}. ${plan.name}${tiles ? ` · ${spriteRoleLabel(assetRole(sprite.settings, plan))}` : ''}`,
           placements: [plan.sourceBounds],
         }))}
         alwaysShowBoxes
@@ -127,6 +225,44 @@ export function SpritePlanReview({
               <legend>
                 {index + 1}. {p.name}
               </legend>
+              {tiles ? (
+                <div className={styles.field}>
+                  <label htmlFor={`sprite-role-${p.id}`}>에셋 역할 {index + 1}</label>
+                  <Select
+                    value={assetRole(sprite.settings, p)}
+                    disabled={busy || active}
+                    onValueChange={(value) =>
+                      edit(p.id, {
+                        role: value as SpriteAssetPlan['role'],
+                        requiresTransparency:
+                          value === 'object' ||
+                          (value === 'tile' && sprite.settings.view === 'isometric'),
+                      })
+                    }
+                  >
+                    <SelectTrigger id={`sprite-role-${p.id}`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(['tile', 'object', 'backdrop'] as const).map((role) => (
+                        <SelectItem key={role} value={role}>
+                          {spriteRoleLabel(role)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+              {'canvas' in outputs[index]! ? (
+                <p className={styles.hint}>
+                  출력 {outputs[index]!.canvas.width}×{outputs[index]!.canvas.height}px
+                </p>
+              ) : null}
+              {roleErrors[index] ? (
+                <p role="alert" className={styles.error}>
+                  {roleErrors[index]}
+                </p>
+              ) : null}
               <div className={styles.grid}>
                 <label className={styles.field}>
                   대상 이름 {index + 1}
@@ -171,6 +307,7 @@ export function SpritePlanReview({
                 <input
                   type="checkbox"
                   checked={p.requiresTransparency}
+                  disabled={tiles}
                   onChange={(e) => edit(p.id, { requiresTransparency: e.target.checked })}
                 />
                 투명 배경 {index + 1}
@@ -262,6 +399,7 @@ export function SpritePlanReview({
                   frameCount: 8,
                   fps: 8,
                   motionNotes: '',
+                  role: sprite.settings.outputKind === 'layers' ? 'layer' : 'tile',
                 },
               ])
             }
@@ -272,7 +410,7 @@ export function SpritePlanReview({
         <Button
           variant="outline"
           disabled={busy || !dirty || invalid || stale}
-          onClick={() => update.mutate({ ...context(), assets: plans })}
+          onClick={() => update.mutate({ ...context(), assets: plans, grid: draft.grid })}
         >
           계획 저장
         </Button>
@@ -291,10 +429,7 @@ export function SpritePlanReview({
             서버 계획이 변경되었습니다. 미저장 편집을 보존했습니다. 최신 계획을 명시적으로 불러온 뒤
             다시 편집해 주세요.
           </p>
-          <Button
-            variant="outline"
-            onClick={() => setDraft({ revision: sprite.reviewRevision, plans: saved, saved })}
-          >
+          <Button variant="outline" onClick={() => setDraft(serverDraft())}>
             서버 계획으로 다시 불러오기
           </Button>
         </div>

@@ -255,15 +255,25 @@ for (const view of ['sideView', 'topDown', 'isometric'])
       expect(actual.opaque).toBeGreaterThan(0)
       if (kind === 'layers' || view === 'isometric') expect(actual.clear).toBeGreaterThan(0)
       if (kind === 'layers') await page.getByLabel('전경 나무 표시', { exact: true }).uncheck()
-      else
+      else {
+        await chooseSetting(page, '미리볼 타일', '전경 나무')
         await expect(
           page.getByRole('img', { name: '반복 경계 검수' }).locator('image'),
         ).toHaveCount(9)
+      }
       await approveBases(page)
+      if (kind === 'tiles') {
+        await page.getByLabel('오브젝트 바위 기준 승인 선택', { exact: true }).check()
+        await page.getByRole('button', { name: '선택한 기준 이미지 승인', exact: true }).click()
+      }
       await expect(page.getByRole('button', { name: '승인', exact: true })).toHaveCount(0)
       await page.getByLabel('후경 지면 내보내기 선택', { exact: false }).check()
       await page.getByLabel('전경 나무 내보내기 선택', { exact: false }).check()
-      await expect(page.getByText('포함: 2개 · 제외 대상: 없음')).toBeVisible()
+      if (kind === 'tiles')
+        await page.getByLabel('오브젝트 바위 내보내기 선택', { exact: false }).check()
+      await expect(
+        page.getByText(`포함: ${kind === 'tiles' ? 3 : 2}개 · 제외 대상: 없음`),
+      ).toBeVisible()
       await expect(page.getByRole('button', { name: '내보내기', exact: true })).toBeEnabled()
       await page.getByRole('button', { name: '내보내기', exact: true }).click()
       await expect(
@@ -277,22 +287,25 @@ for (const view of ['sideView', 'topDown', 'isometric'])
       const files = storedZip(await readFile((await zipped.path())!))
       const manifest = JSON.parse(files.get('manifest.json')!.toString())
       expect(manifest).toMatchObject({
-        schemaVersion: 1,
+        schemaVersion: 2,
         productionMode: 'twoD',
         coordinateOrigin: 'topLeft',
         coordinateUnits: 'pixels',
         input: { excludedAssetIds: [] },
       })
-      expect(manifest.assets).toHaveLength(2)
+      expect(manifest.assets).toHaveLength(kind === 'tiles' ? 3 : 2)
       for (const asset of manifest.assets) {
         expect(asset.frames).toHaveLength(1)
         expect(files.get(asset.basePath)).toEqual(files.get(asset.frames[0].path))
+        const detail = manifest.input.assetDetails.find(
+          (detail: { id: string }) => detail.id === asset.asset.id,
+        )
         const pixels = await decoded(page, files.get(asset.basePath)!)
-        expect(pixels.width).toBe(actual.width)
-        expect(pixels.height).toBe(actual.height)
+        expect(pixels.width).toBe(detail.canvas.width)
+        expect(pixels.height).toBe(detail.canvas.height)
         expect(await decoded(page, files.get(asset.frames[0].sheetPath)!)).toMatchObject({
-          width: actual.width + 4,
-          height: actual.height + 4,
+          width: detail.canvas.width + 4,
+          height: detail.canvas.height + 4,
         })
       }
       if (view === 'isometric' && kind === 'tiles') {
@@ -755,7 +768,7 @@ test('sprite analysis card names isometric tiles', async ({ page }) => {
   await installFakeApi(page, { sprites: {} })
   await start(page, 'isometric', 'tiles')
   const card = page.getByTestId('sprite-analysis-panel')
-  await expect(card.getByTestId('sprite-analysis-summary')).toHaveText('아이소메트릭 · 타일 2개')
+  await expect(card.getByTestId('sprite-analysis-summary')).toHaveText('아이소메트릭 · 타일 3개')
   await expect(card.getByTestId('sprite-analysis-output')).toHaveText('반복 타일 · 128px · 양쪽')
 })
 
@@ -1298,4 +1311,68 @@ test('canceled draft without a prompt hides the manual input hint', async ({ pag
   await expect(ui.panel.getByRole('link', { name: '새 2D 작업', exact: true })).toBeVisible()
   await expect(ui.prompt).toBeDisabled()
   await expect(ui.panel.getByText('프롬프트를 직접 입력해 생성할 수 있습니다')).toHaveCount(0)
+})
+
+test('mixed Fake roles keep approval on same canvas and old ZIP stays stale after grid revert', async ({
+  page,
+}) => {
+  await installFakeApi(page, {
+    sprites: {
+      seed: 'completed',
+      settings: { view: 'topDown', outputKind: 'tiles', tileWidth: 128, repeat: 'both' },
+    },
+  })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const result = await page.evaluate(async (id) => {
+    const url = `/api/jobs/${id}`
+    const read = async () => (await (await fetch(url)).json()).data.sprite
+    const before = await read()
+    const write = async (grid: { cellWidth: number } | null) => {
+      const sprite = await read()
+      const response = await fetch(`${url}/sprites/plan`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestId: crypto.randomUUID(),
+          expectedRevision: sprite.reviewRevision,
+          assets: sprite.assets.map((a: { plan: unknown }) => a.plan),
+          grid,
+        }),
+      })
+      return response.status
+    }
+    const invalidStatus = await write({ cellWidth: 0 })
+    const afterInvalid = await read()
+    await write({ cellWidth: 0.9999 })
+    const changed = await read()
+    await write(null)
+    const restored = await read()
+    return { before, invalidStatus, afterInvalid, changed, restored }
+  }, SPRITE_IDS.job)
+  expect(result.before.assets.map((a: { plan: { role: string } }) => a.plan.role)).toEqual([
+    'backdrop',
+    'tile',
+    'object',
+  ])
+  expect(result.invalidStatus).toBe(400)
+  expect(result.afterInvalid).toEqual(result.before)
+  expect(result.changed.assets).toEqual(result.before.assets)
+  expect(result.changed.exports[0].isCurrent).toBe(false)
+  expect(result.changed.completedExportId).toBeNull()
+  expect(result.restored.exports[0].isCurrent).toBe(false)
+  expect(result.restored.completedExportId).toBeNull()
+})
+
+test('added target save synchronizes the draft without reloading', async ({ page }) => {
+  await installFakeApi(page, { sprites: {} })
+  await start(page)
+  await page.getByRole('button', { name: '대상 추가', exact: true }).click()
+  await expect(page.getByLabel('대상 이름 3', { exact: true })).toHaveValue('대상 3')
+  await page.getByRole('button', { name: '계획 저장', exact: true }).click()
+  await expect(page.getByRole('button', { name: '계획 저장', exact: true })).toBeDisabled()
+  await expect(
+    page.getByRole('button', { name: '계획 승인 · 기준 이미지 생성', exact: true }),
+  ).toBeEnabled()
+  await expect(page.getByRole('button', { name: '대상 추가', exact: true })).toBeEnabled()
+  await expect(page.getByLabel('대상 이름 3', { exact: true })).toHaveValue('대상 3')
 })

@@ -17,7 +17,7 @@ public sealed class SpriteAnalysisTests
 {
     private static readonly CancellationToken Ct = CancellationToken.None;
     internal const string PlanJson = """
-        {"view":"sideView","outputKind":"layers","assets":[{"name":"배경","order":0,
+        {"view":"sideView","outputKind":"layers","grid":null,"assets":[{"name":"배경","role":"layer","order":0,
         "sourceBounds":{"x":0,"y":0,"w":1,"h":1},"requiresTransparency":false,
         "loop":false,"frameCount":8,"fps":8,"motionNotes":"{{sourceCanvas}}"}]}
         """;
@@ -63,7 +63,10 @@ public sealed class SpriteAnalysisTests
         Assert.Equal(new SpriteCanvas(1536, 1024), job.Sprites!.GenerationCanvas);
         Assert.Equal(new SpriteCanvas(24, 16), job.Sprites.SourceCanvas);
         Assert.Equal(7, (int)job.Tasks.Single().Kind);
+        var queries = f.Catalog.ImageQueries;
+        f.Catalog.Failure = new ProviderCallFailedException("unexpected generation sizes lookup");
         await f.RunSpriteAnalysis.HandleAsync(job.Tasks.Single().Id, Ct);
+        Assert.Equal(queries, f.Catalog.ImageQueries);
         Assert.Equal(1, calls);
         Assert.Equal(0, imageCalls);
         Assert.Equal(JobStatus.PendingReview, job.Status);
@@ -88,7 +91,10 @@ public sealed class SpriteAnalysisTests
             new() { MaxAttempts = 1 });
         var receipt = await f.StartSprites.HandleAsync(await Prepare(f), Ct);
         var job = (await f.Jobs.GetAsync(receipt.Value!.JobId, Ct))!;
+        var queries = f.Catalog.ImageQueries;
         await f.RunSpriteAnalysis.HandleAsync(job.Tasks.Single().Id, Ct);
+        Assert.Equal(queries, f.Catalog.ImageQueries);
+        Assert.Equal(ErrorCode.SpritePlanInvalid, job.Tasks.Single().FailureReason);
         Assert.Equal(JobStatus.Failed, job.Status);
         Assert.Empty(job.Sprites!.Assets);
     }
@@ -119,9 +125,84 @@ public sealed class SpriteAnalysisTests
         var first = SpritePlanParser.Parse(PlanJson, settings, new(24, 16));
         var second = SpritePlanParser.Parse(PlanJson, settings, new(24, 16));
         Assert.True(first.IsSuccess);
-        Assert.NotEqual(first.Value![0].Id, second.Value![0].Id);
+        Assert.NotEqual(first.Value!.Assets[0].Id, second.Value!.Assets[0].Id);
         Assert.False(SpritePlanParser.Parse(PlanJson.Replace("\"name\":", "\"id\":\"external\",\"name\":"), settings, new(24, 16)).IsSuccess);
         Assert.False(SpritePlanParser.Parse("{}", settings, new(24, 16)).IsSuccess);
+    }
+
+    [Theory]
+    [InlineData("\"role\":\"layer\",", "")]
+    [InlineData("\"layer\"", "\"unknown\"")]
+    [InlineData("\"layer\"", "\"tile\"")]
+    [InlineData("\"grid\":null,", "")]
+    [InlineData("\"grid\":null", "\"grid\":{\"cellWidth\":0.25}")]
+    public void Parser_RejectsInvalidV3Contract(string before, string after)
+    {
+        var result = SpritePlanParser.Parse(PlanJson.Replace(before, after),
+            new(SpriteView.SideView, SpriteOutputKind.Layers), new(24, 16));
+        Assert.Equal(ErrorCode.SpritePlanInvalid, result.ErrorCode);
+    }
+
+    private const string MixedJson = """
+        {"view":"isometric","outputKind":"tiles","grid":{"cellWidth":0.5},"assets":[
+        {"name":"sky","role":"backdrop","order":0,"sourceBounds":{"x":0,"y":0,"w":1,"h":0.5},
+        "requiresTransparency":false,"loop":false,"frameCount":8,"fps":8,"motionNotes":""},
+        {"name":"floor","role":"tile","order":1,"sourceBounds":{"x":0,"y":0,"w":0.5,"h":0.5},
+        "requiresTransparency":true,"loop":false,"frameCount":8,"fps":8,"motionNotes":""},
+        {"name":"roof","role":"object","order":2,"sourceBounds":{"x":0,"y":0,"w":0.5,"h":0.5},
+        "requiresTransparency":true,"loop":false,"frameCount":8,"fps":8,"motionNotes":""}]}
+        """;
+
+    [Theory]
+    [InlineData("\"role\":\"object\"", "\"role\":\"backdrop\"")]
+    [InlineData("\"requiresTransparency\":false", "\"requiresTransparency\":true")]
+    [InlineData("\"requiresTransparency\":true", "\"requiresTransparency\":false")]
+    [InlineData("\"grid\":{\"cellWidth\":0.5},", "")]
+    [InlineData("\"cellWidth\":0.5", "\"cellWidth\":0")]
+    public void Parser_RejectsMixedRoleViolations(string before, string after)
+    {
+        Assert.Equal(ErrorCode.SpritePlanInvalid, SpritePlanParser.Parse(MixedJson.Replace(before, after),
+            new(SpriteView.Isometric, SpriteOutputKind.Tiles), new(24, 16)).ErrorCode);
+    }
+
+    [Fact]
+    public void Parser_PreservesRolesGridAndBounds()
+    {
+        var result = SpritePlanParser.Parse(MixedJson, new(SpriteView.Isometric, SpriteOutputKind.Tiles), new(24, 16));
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+        Assert.Equal(new SpriteGrid(0.5), result.Value!.Grid);
+        Assert.Equal(new[] { SpriteAssetRole.Backdrop, SpriteAssetRole.Tile, SpriteAssetRole.Object },
+            result.Value.Assets.Select(a => a.Role!.Value));
+        Assert.Equal(new Bounds(0, 0, 0.5, 0.5), result.Value.Assets[2].SourceBounds);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task MixedAnalysis_QueriesSizesOnlyForValidPlanAndRetriesLookupFailure(bool lookupFails, bool invalid)
+    {
+        var json = invalid ? MixedJson.Replace("\"cellWidth\":0.5", "\"cellWidth\":0.001") : MixedJson;
+        var f = new PipelineFixture(FakeLlmProvider.Returning(_ => json), new() { MaxAttempts = 3 });
+        var command = (await Prepare(f)) with { Settings = new(SpriteView.Isometric, SpriteOutputKind.Tiles) };
+        var receipt = await f.StartSprites.HandleAsync(command, Ct);
+        var job = (await f.Jobs.GetAsync(receipt.Value!.JobId, Ct))!;
+        var queries = f.Catalog.ImageQueries;
+        if (lookupFails) f.Catalog.Failure = new ProviderCallFailedException("lookup failed", isTransient: true);
+        await f.RunSpriteAnalysis.HandleAsync(job.Tasks.Single().Id, Ct);
+        Assert.Equal(queries + (invalid ? 0 : 1), f.Catalog.ImageQueries);
+        if (lookupFails || invalid)
+        {
+            Assert.Equal(Noxtend.Domain.Job.TaskStatus.Pending, job.Tasks.Single().Status);
+            Assert.Empty(job.Sprites!.Assets);
+            Assert.Null(job.Sprites.Grid);
+        }
+        else
+        {
+            Assert.Equal(SpritePhase.PlanReview, job.Sprites!.Phase);
+            Assert.Equal(3, job.Sprites.Assets.Count);
+            Assert.Equal(new SpriteGrid(0.5), job.Sprites.Grid);
+        }
     }
 
     [Fact]
@@ -253,7 +334,7 @@ public sealed class SpriteAnalysisTests
         var command = await Prepare(f);
         var source = PipelineJob.CreateSprites(command.UploadId!.Value, command.ImageProviderConfigId, command.ImageModel,
             command.Settings, new(24, 16), new(1536, 1024), f.Clock.Now).Value!;
-        source.ReplaceSpritePlan(SpritePlanParser.Parse(PlanJson, command.Settings, new(24, 16)).Value!, 0);
+        source.ReplaceSpritePlan(SpritePlanParser.Parse(PlanJson, command.Settings, new(24, 16)).Value!.Assets, 0);
         var input = source.ApproveSpritePlan(source.Sprites!.ReviewRevision).Value![0];
         var task = source.PlanTask(TaskKind.Generate, 0);
         source.BindSpriteFrame(task.Id, input);
@@ -290,7 +371,10 @@ public sealed class SpriteAnalysisTests
         var job = (await f.Jobs.GetAsync(receipt.Value!.JobId, Ct))!;
         await f.RunSpriteAnalysis.HandleAsync(job.Tasks.Single().Id, Ct);
         Assert.Equal(JobStatus.PendingReview, job.Status);
-        Assert.Single(job.Sprites!.Assets);
+        Assert.Equal(kind == SpriteOutputKind.Tiles ? 3 : 1, job.Sprites!.Assets.Count);
+        Assert.Equal(kind == SpriteOutputKind.Tiles
+            ? new[] { SpriteAssetRole.Backdrop, SpriteAssetRole.Tile, SpriteAssetRole.Object } : [SpriteAssetRole.Layer],
+            job.Sprites.Assets.Select(a => SpriteRules.RoleOf(command.Settings, a.Plan)));
     }
 
     private static byte[] Png()

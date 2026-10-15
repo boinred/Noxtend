@@ -62,6 +62,7 @@ public sealed class RunSpriteGenerationTaskHandler(
         var plan = input.Plan;
         var settings = state.Settings;
         var sourceCanvas = state.SourceCanvas;
+        var role = SpriteRules.RoleOf(settings, plan);
         var generationCanvas = input.GenerationCanvas;
         var outputCanvas = input.Canvas;
         var phase = (double)input.FrameIndex / (plan.Loop ? plan.FrameCount : 1);
@@ -83,10 +84,9 @@ public sealed class RunSpriteGenerationTaskHandler(
         var variables = new Dictionary<string, string>
         {
             ["settings"] = JsonSerializer.Serialize(settings, Json),
-            ["asset"] = JsonSerializer.Serialize(plan, Json),
+            ["asset"] = JsonSerializer.Serialize(plan with { Role = role }, Json),
             ["frame"] = JsonSerializer.Serialize(new { index = input.FrameIndex, count = plan.Loop ? plan.FrameCount : 1,
-                phase, input.BaseImageId, generationCanvas, anchor = settings.OutputKind == SpriteOutputKind.Layers
-                    ? new SpriteAnchor(0, 0) : new SpriteAnchor(outputCanvas.Width / 2d, outputCanvas.Height / 2d), input.Transform }, Json),
+                phase, input.BaseImageId, generationCanvas, anchor = SpriteRules.Anchor(role, outputCanvas), input.Transform }, Json),
             ["sourceCanvas"] = JsonSerializer.Serialize(sourceCanvas, Json),
             ["outputCanvas"] = JsonSerializer.Serialize(outputCanvas, Json),
         };
@@ -108,7 +108,7 @@ public sealed class RunSpriteGenerationTaskHandler(
         if (inspected.ContentType != "image/png" || inspected.Width != generationCanvas.Width || inspected.Height != generationCanvas.Height)
             throw new ProviderBadResponseException("생성 PNG 형식 또는 캔버스가 일치하지 않습니다");
         raw.Position = 0;
-        var layout = settings.OutputKind == SpriteOutputKind.Tiles && settings.View == SpriteView.Isometric
+        var layout = role == SpriteAssetRole.Tile && settings.View == SpriteView.Isometric
             ? SpriteTileLayout.Diamond : SpriteTileLayout.Square;
         await using var normalized = await transcoder.NormalizeSpriteAsync(raw, outputCanvas, input.Transform,
             plan.RequiresTransparency, layout, ct);

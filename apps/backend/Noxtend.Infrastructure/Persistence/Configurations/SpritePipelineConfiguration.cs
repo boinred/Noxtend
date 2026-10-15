@@ -17,6 +17,7 @@ public sealed class SpritePipelineConfiguration : IEntityTypeConfiguration<Pipel
             Json(state.Property(s => s.GenerationCanvas), "SpriteGenerationCanvasJson");
             Json(state.Property(s => s.OutputCanvas), "SpriteOutputCanvasJson");
             Json(state.Property(s => s.Transform), "SpriteTransformJson");
+            Json(state.Property(s => s.Grid), "SpriteGridJson");
             Json(state.Property(s => s.SourceDraft), "SpriteSourceDraftJson");
             state.Property(s => s.Phase).HasColumnName("SpritePhase").HasConversion<string>().HasMaxLength(32);
             state.Property(s => s.ReviewRevision).HasColumnName("SpriteReviewRevision");
@@ -28,6 +29,7 @@ public sealed class SpritePipelineConfiguration : IEntityTypeConfiguration<Pipel
                 asset.HasKey(a => a.Id);
                 asset.Property(a => a.Id).ValueGeneratedNever();
                 Json(asset.Property(a => a.Plan), "PlanJson");
+                Json(asset.Property(a => a.Canvas), "CanvasJson");
                 Json(asset.Property(a => a.Anchor), "AnchorJson");
                 Json(asset.Property(a => a.Approval), "ApprovalJson");
                 asset.OwnsMany(a => a.Frames, frame =>

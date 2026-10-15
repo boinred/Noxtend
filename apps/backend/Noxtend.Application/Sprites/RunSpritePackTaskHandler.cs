@@ -40,7 +40,8 @@ public sealed class RunSpritePackTaskHandler(IJobRepository jobs, IBlobStorage b
                     var export = SpriteExport.Create(task.Id, input, manifest, savedKey, clock.Now);
                     return current =>
                     {
-                        if (!current.TryAttachSpriteExport(export))
+                        if (!current.TryAttachSpriteExport(export)
+                            && !current.Sprites!.Exports.Contains(export))
                             throw new InvalidOperationException("현재 내보내기에 패키지를 연결할 수 없습니다");
                     };
                 }, exception => exception switch

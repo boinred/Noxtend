@@ -112,3 +112,7 @@ React 19·Vite·React Router·TanStack Query·Tailwind·shadcn/ui(Radix) 구성�
 - 모델·단가 수집 확인: 2026-10-09, revision `7862b8b`. 위 화면·hook·reader·필터 호출을 확인하고 native Select 가드와 단가 domain/API reader 순수 테스트를 실행했다. 통합 unit451/451·Fake E2E345/345·lint/typecheck/build 통과와 390px dark/1440px light 관찰은 [실행 결과](../evals/model-price-update/results.md#최종-통합-검증)에 기록했다. 실 공급자 end-to-end 확인으로 확대하지 않는다.
 - 마지막 확인: 2026-10-08, revision `d2cad8d`. 코드 지도 도입 때 문서의 코드 경로와 상대 링크 존재를 자동 대조했다. 서술된 규칙 전체를 코드와 다시 대조하지는 않았다.
 - 미확인: 실제 Backend와 연결한 화면 동작. E2E는 `tests/e2e/fakeApi.ts` 가짜 API 기준이며 `.test.tsx`는 수집되지 않는다.
+
+- 2D 역할 계약: `domain/sprites/types.ts`는 명시된 role·canvas·scale·grid를 검증하고 누락된 구형 필드만 유형 기본 역할·작업 출력 canvas·scale 1·grid null로 읽는다. `rules.ts`의 `assetRole`·`cellWidthOf`·`assetOutputSize`는 역할·타일 너비 중앙값·월드 축척과 출력 크기를 계산한다. `spriteContract.test.ts`는 Task 6 서버 fixture를 실제 `getJob` → `apiRequest` → reader 경로로 검증하며 `updateSpritePlan` role/grid 요청을 서버 fixture와 비교한다. Fake ZIP v2는 승인 snapshot과 `input.assetDetails`를 분리한다.
+
+- 2D 역할 화면(2026-10-14): `SpritePlanReview.tsx`는 타일 작업의 역할·원본 px 격자 입력·역할별 출력 크기 및 행 오류를 제공한다. plans(ID 정렬·Order 보존·명시 필드)와 grid의 canonical projection으로 draft를 비교해 HTTP 속성/에셋 배열 순서가 dirty를 만들지 않는다. 미저장 격자도 polling/409에서 보존하며 최신 계획 불러오기는 두 값을 함께 복원한다. `SpritePreview.tsx`는 tile만 3×3, object/backdrop은 자기 캔버스 단일 이미지다. `SpriteFrameReview.tsx` 역할 라벨과 `SpriteAnalysisPanel.tsx` 역할별 집계를 표시하며 Fake 회귀는 `tests/e2e/sprites-roles.spec.ts`에 있다.

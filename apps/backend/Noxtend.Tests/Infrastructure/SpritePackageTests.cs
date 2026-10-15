@@ -157,6 +157,9 @@ public sealed class SpritePackageTests
         }
         Assert.Equal(2, doc.RootElement.GetProperty("includedAssetIds").GetArrayLength());
         Assert.Equal(input.ExcludedAssetIds[0], doc.RootElement.GetProperty("excludedAssetIds")[0].GetGuid());
+        Assert.False(doc.RootElement.GetProperty("input").TryGetProperty("assetDetails", out _));
+        Assert.False(doc.RootElement.GetProperty("input").TryGetProperty("grid", out _));
+        Assert.False(doc.RootElement.GetProperty("input").TryGetProperty("tileWidth", out _));
         Assert.DoesNotContain("blobKey", doc.RootElement.GetRawText(), StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("/Users/", doc.RootElement.GetRawText());
     }
@@ -202,6 +205,54 @@ public sealed class SpritePackageTests
         await Assert.ThrowsAsync<ArgumentException>(() => new SpritePackageWriter(new SkiaImageTranscoder()).WriteAsync(
             Guid.NewGuid(), input, (_, _) => throw new InvalidOperationException(), output, default));
         Assert.Equal(0, output.Length);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task V2_MixedRolesUseOwnCanvasAndRejectMismatch(bool mismatch)
+    {
+        var sizes = new[] { new SpriteCanvas(128, 64), new SpriteCanvas(307, 256), new SpriteCanvas(1024, 683) };
+        var roles = new[] { SpriteAssetRole.Tile, SpriteAssetRole.Object, SpriteAssetRole.Backdrop };
+        var assets = sizes.Select((canvas, i) =>
+        {
+            var id = Guid.NewGuid();
+            return new SpriteApprovedAsset(Guid.NewGuid(), "asset", i, 8, false,
+                new(0, 0), SpriteRepeat.Both, SpriteTileLayout.Square, id, [id]);
+        }).ToArray();
+        var details = assets.Select((a, i) => new SpriteExportAsset(a.Id, roles[i], sizes[i],
+            i == 2 ? .8 : 1, new(0, 0, .25, .25))).ToArray();
+        var input = new SpriteExportInput(2, Guid.NewGuid(), 1, SpriteView.SideView, SpriteOutputKind.Tiles,
+            new(1200, 800), sizes[0], assets, [], new(.25), 128, details);
+        await using var output = TemporaryFile();
+        Task<Stream> Open(Guid id, CancellationToken ct)
+        {
+            var i = Array.FindIndex(assets, a => a.BaseImageId == id);
+            return Task.FromResult<Stream>(Image(sizes[i].Width + (mismatch && i == 1 ? 1 : 0), sizes[i].Height, SKColors.Red));
+        }
+        if (mismatch)
+        {
+            await Assert.ThrowsAsync<ProviderBadResponseException>(() =>
+                new SpritePackageWriter(new SkiaImageTranscoder()).WriteAsync(Guid.NewGuid(), input, Open, output, default));
+            return;
+        }
+        var manifest = await new SpritePackageWriter(new SkiaImageTranscoder()).WriteAsync(Guid.NewGuid(), input, Open, output, default);
+        Assert.Equal(2, manifest.SchemaVersion);
+        Assert.Equal(details, SpriteJsonSerializer.Deserialize<SpriteManifest>(SpriteJsonSerializer.Serialize(manifest)).Input.AssetDetails);
+        Assert.Equal(new[] { "tiles", "objects", "backdrop" }, manifest.Assets.Select(a => a.BasePath.Split('/')[0]));
+        for (var i = 0; i < sizes.Length; i++)
+            Assert.Equal(new SpriteRect(2, 2, sizes[i].Width, sizes[i].Height), manifest.Assets[i].Frames[0].Rect);
+        output.Position = 0;
+        using var zip = new ZipArchive(output, ZipArchiveMode.Read, true);
+        using var json = zip.GetEntry("manifest.json")!.Open();
+        using var doc = await JsonDocument.ParseAsync(json);
+        var wire = doc.RootElement.GetProperty("input");
+        Assert.Equal(128, wire.GetProperty("tileWidth").GetInt32());
+        Assert.Equal(.25, wire.GetProperty("grid").GetProperty("cellWidth").GetDouble());
+        Assert.Equal("object", wire.GetProperty("assetDetails")[1].GetProperty("role").GetString());
+        Assert.Equal(307, wire.GetProperty("assetDetails")[1].GetProperty("canvas").GetProperty("width").GetInt32());
+        Assert.Equal(.8, wire.GetProperty("assetDetails")[2].GetProperty("scale").GetDouble());
+        Assert.Equal(.25, wire.GetProperty("assetDetails")[0].GetProperty("sourceBounds").GetProperty("w").GetDouble());
     }
 
     private static SpriteExportInput Input(SpriteOutputKind kind)

@@ -5,6 +5,7 @@ import type { SpriteAssetPlan, SpriteState } from '@/domain/sprites/types'
 function plan(id: string, loop: boolean, frameCount = 8): SpriteAssetPlan {
   return {
     id,
+    role: 'layer',
     name: id,
     order: id === 'back' ? 0 : 1,
     sourceBounds: { x: 0, y: 0, w: 1, h: 1 },
@@ -18,6 +19,7 @@ function plan(id: string, loop: boolean, frameCount = 8): SpriteAssetPlan {
 
 function sprite(overrides: Partial<SpriteState> = {}): SpriteState {
   return {
+    grid: null,
     settings: { view: 'sideView', outputKind: 'layers', tileWidth: 128, repeat: 'both' },
     sourceCanvas: { width: 1920, height: 1080 },
     generationCanvas: { width: 1536, height: 1024 },
@@ -29,6 +31,8 @@ function sprite(overrides: Partial<SpriteState> = {}): SpriteState {
     assets: [plan('back', false), plan('water', true, 4)].map((p) => ({
       id: p.id,
       plan: p,
+      canvas: { width: 1920, height: 1080 },
+      scale: 1,
       planRevision: 1,
       anchor: { x: 0, y: 0 },
       approvedBaseImageId: null,
@@ -70,5 +74,17 @@ describe('spriteAnalysisSummary', () => {
     expect(props.summary).toBe('아이소메트릭 · 타일 0개')
     expect(props.fields[1]!.value).toBe('반복 타일 · 128px · 격자 Y축')
     expect(props.fields[3]!.value).toBe('0개 · 총 0프레임')
+  })
+  it('counts each tile asset role', () => {
+    const state = sprite()
+    state.settings.outputKind = 'tiles'
+    state.assets = ['tile', 'object', 'backdrop'].map((role, index) => ({
+      ...state.assets[0]!,
+      id: String(index),
+      plan: { ...state.assets[0]!.plan, role: role as SpriteAssetPlan['role'] },
+    }))
+    expect(spriteAnalysisSummary(state).fields[3]!.value).toContain(
+      '반복 타일 1 · 오브젝트 1 · 원경 배경 1',
+    )
   })
 })

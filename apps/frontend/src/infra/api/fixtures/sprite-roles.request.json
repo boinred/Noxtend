@@ -1,0 +1,86 @@
+{
+  "tiles": {
+    "requestId": "20000000-0000-4000-8000-000000000001",
+    "expectedRevision": 0,
+    "assets": [
+      {
+        "id": "10000000-0000-4000-8000-000000000011",
+        "name": "backdrop",
+        "order": 0,
+        "sourceBounds": {
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1
+        },
+        "requiresTransparency": false,
+        "loop": false,
+        "frameCount": 8,
+        "fps": 8,
+        "motionNotes": "",
+        "role": "backdrop"
+      },
+      {
+        "id": "10000000-0000-4000-8000-000000000012",
+        "name": "tile",
+        "order": 1,
+        "sourceBounds": {
+          "x": 0,
+          "y": 0,
+          "w": 0.25,
+          "h": 0.25
+        },
+        "requiresTransparency": true,
+        "loop": false,
+        "frameCount": 8,
+        "fps": 8,
+        "motionNotes": "",
+        "role": "tile"
+      },
+      {
+        "id": "10000000-0000-4000-8000-000000000013",
+        "name": "object",
+        "order": 2,
+        "sourceBounds": {
+          "x": 0,
+          "y": 0,
+          "w": 0.125,
+          "h": 0.125
+        },
+        "requiresTransparency": true,
+        "loop": false,
+        "frameCount": 8,
+        "fps": 8,
+        "motionNotes": "",
+        "role": "object"
+      }
+    ],
+    "grid": {
+      "cellWidth": 0.25
+    }
+  },
+  "layers": {
+    "requestId": "20000000-0000-4000-8000-000000000002",
+    "expectedRevision": 0,
+    "assets": [
+      {
+        "id": "10000000-0000-4000-8000-000000000021",
+        "name": "layer",
+        "order": 0,
+        "sourceBounds": {
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1
+        },
+        "requiresTransparency": false,
+        "loop": false,
+        "frameCount": 8,
+        "fps": 8,
+        "motionNotes": "",
+        "role": "layer"
+      }
+    ],
+    "grid": null
+  }
+}

@@ -93,6 +93,18 @@ public sealed class SpritePixelTests
     }
 
     [Fact]
+    public async Task SquareLayout_PreservesObjectCorners()
+    {
+        using var source = Image(8, 4, (x, y) => x == 4 && y == 2 ? SKColors.Transparent : SKColors.Red);
+        await using var output = await _transcoder.NormalizeSpriteAsync(
+            source, new(8, 4), new(1, 0, 0), true, SpriteTileLayout.Square, default);
+        using var decoded = SKBitmap.Decode(output);
+        foreach (var (x, y) in new[] { (0, 0), (7, 0), (0, 3), (7, 3) })
+            Assert.Equal(SKColors.Red, decoded.GetPixel(x, y));
+        Assert.Equal(0, decoded.GetPixel(4, 2).Alpha);
+    }
+
+    [Fact]
     public async Task DiamondCell_HasTransparentCornersAndVisibleCenter()
     {
         using var source = Image(8, 4, (x, y) => x == 0 && y == 0 ? SKColors.Transparent : SKColors.Red);

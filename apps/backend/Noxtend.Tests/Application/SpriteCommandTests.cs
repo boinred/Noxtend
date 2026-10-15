@@ -1,3 +1,5 @@
+using Noxtend.Application.Common;
+
 using Noxtend.Application.Sprites;
 using Microsoft.Extensions.Logging.Abstractions;
 using Noxtend.Application.Pipeline;
@@ -187,6 +189,73 @@ public sealed class SpriteCommandTests
     }
 
     [Theory]
+    [InlineData(0, 1200)]
+    [InlineData(1, 1200)]
+    [InlineData(2, 1200)]
+    [InlineData(3, 0)]
+    [InlineData(3, 1200)]
+    public async Task GridChangedDuringPack_PreservesHistoryOnlyWithLeaseOwnership(int interruption, int delayMs)
+    {
+        var f = new PipelineFixture(options: new JobOptions { LeaseSeconds = 120, LeaseRenewSeconds = 1 });
+        var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "fake",
+            new(SpriteView.SideView, SpriteOutputKind.Tiles), new(800, 600), new(1024, 1024), f.Clock.Now).Value!;
+        await f.Jobs.AddAsync(job, default);
+        var plan = new SpriteAssetPlan(Guid.NewGuid(), "tile", 0, new(0, 0, .25, .25), false);
+        job.ReplaceSpritePlan([plan], new(.25), [], 0);
+        var input = job.ApproveSpritePlan(job.Sprites!.ReviewRevision).Value![0];
+        var generate = job.PlanTask(TaskKind.GenerateSprite, 0);
+        job.BindSpriteFrame(generate.Id, input);
+        generate.Claim(f.Clock.Now, f.Options.Lease);
+        generate.Succeed(f.Clock.Now);
+        using var bitmap = new SkiaSharp.SKBitmap(input.Canvas.Width, input.Canvas.Height);
+        bitmap.Erase(SkiaSharp.SKColors.Red);
+        using var data = bitmap.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+        using var png = new MemoryStream(data.ToArray());
+        var key = await f.Blobs.SaveAsync(png, "image/png", default);
+        Assert.True(job.TryAttachSpriteImage(SpriteImage.Create(generate.Id, input, key, f.Clock.Now)));
+        job.ReconcileFromTasks(f.Clock.Now);
+        job.ApproveSpriteBases([plan.Id], job.Sprites.ReviewRevision);
+        var result = await f.SpriteCommands.ExportAsync(Context(job), [plan.Id], default);
+        var pack = job.Tasks.Single(t => t.Id == result.Value!.TaskIds.Single());
+        var before = f.Blobs.Count;
+        Guid? newerExportId = null;
+        var blobs = new MutatingBlob(f.Blobs, async () =>
+        {
+            job.ReplaceSpritePlan([plan], new(.5), [], job.Sprites.ReviewRevision);
+            if (interruption == 3)
+            {
+                var newer = await f.SpriteCommands.ExportAsync(Context(job), [plan.Id], default);
+                Assert.True(newer.IsSuccess);
+                Assert.Equal(RunTaskOutcome.Succeeded,
+                    await f.RunSpritePack.HandleAsync(newer.Value!.TaskIds.Single(), default));
+                newerExportId = job.Sprites.CompletedExportId;
+                Assert.Equal(JobStatus.Succeeded, job.Status);
+                Assert.NotNull(newerExportId);
+            }
+            if (interruption == 1) job.Cancel(f.Clock.Now);
+            if (interruption == 2) { pack.ReleaseForRetry(); pack.Claim(f.Clock.Now, f.Options.Lease); }
+        }, delayMs);
+        var handler = new RunSpritePackTaskHandler(f.Jobs, blobs, new SpritePackageWriter(new SkiaImageTranscoder()),
+            f.Execution, f.Clock, f.Options, NullLogger<RunSpritePackTaskHandler>.Instance);
+        var outcome = await handler.HandleAsync(pack.Id, default);
+        if (interruption is 0 or 3)
+        {
+            Assert.True(outcome == RunTaskOutcome.Succeeded, $"{outcome}: {pack.FailureReason}, blob reached: {blobs.Content is not null}");
+            Assert.False(job.Sprites.Exports.Single(e => e.Id == pack.SpriteExportInput!.ExportId).IsCurrent);
+            Assert.Equal(interruption == 3 ? JobStatus.Succeeded : JobStatus.PendingReview, job.Status);
+            Assert.Equal(newerExportId, job.Sprites.CompletedExportId);
+            if (newerExportId is { } id) Assert.True(job.Sprites.Exports.Single(e => e.Id == id).IsCurrent);
+            Assert.Equal(before + (interruption == 3 ? 2 : 1), f.Blobs.Count);
+        }
+        else
+        {
+            Assert.Empty(job.Sprites.Exports);
+            Assert.Equal(before, f.Blobs.Count);
+            Assert.NotEqual(RunTaskOutcome.Succeeded, outcome);
+        }
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task PackageMadeStaleOrCanceledDuringBlobSave_IsNotPublished(bool cancel)
@@ -199,6 +268,7 @@ public sealed class SpriteCommandTests
         {
             if (cancel) job.Cancel(f.Clock.Now);
             else Assert.True(job.ReplaceSpritePlan([job.Sprites.Assets[0].Plan with { Fps = 10 }], job.Sprites.ReviewRevision).IsSuccess);
+            return Task.CompletedTask;
         });
         var handler = new RunSpritePackTaskHandler(f.Jobs, blobs, new SpritePackageWriter(new SkiaImageTranscoder()),
             f.Execution, f.Clock, f.Options, NullLogger<RunSpritePackTaskHandler>.Instance);
@@ -399,6 +469,78 @@ public sealed class SpriteCommandTests
         Assert.Equal(0, f.Blobs.Count);
     }
 
+    [Fact]
+    public async Task ObjectPlan_QueriesOnlyForNewOutputAndChecksTargetGeneration()
+    {
+        var f = new PipelineFixture();
+        var command = await SpriteAnalysisTests.Prepare(f);
+        var job = PipelineJob.CreateSprites(command.UploadId!.Value, command.ImageProviderConfigId, command.ImageModel,
+            new(SpriteView.SideView, SpriteOutputKind.Tiles), new(800, 600), new(1024, 1024), f.Clock.Now).Value!;
+        await f.Jobs.AddAsync(job, default);
+        var tile = new SpriteAssetPlan(Guid.NewGuid(), "tile", 0, new(0, 0, .25, .25), true);
+        var obj = tile with { Id = Guid.NewGuid(), Name = "object", Order = 1, Role = SpriteAssetRole.Object };
+        var queries = f.Catalog.ImageQueries;
+        f.Catalog.Failure = new ProviderCallFailedException("lookup");
+        Assert.True((await f.SpriteCommands.UpdatePlanAsync(Context(job), [tile], null, default)).IsSuccess);
+        Assert.Equal(queries, f.Catalog.ImageQueries);
+        f.Catalog.Failure = null;
+        Assert.True((await f.SpriteCommands.UpdatePlanAsync(Context(job), [tile, obj], null, default)).IsSuccess);
+        Assert.Equal(queries + 1, f.Catalog.ImageQueries);
+        var revision = job.Sprites!.ReviewRevision;
+        f.Catalog.Failure = new ProviderCallFailedException("unexpected lookup");
+        Assert.True((await f.SpriteCommands.UpdatePlanAsync(Context(job), [tile, obj with { Name = "renamed", Fps = 12 }], null, default)).IsSuccess);
+        Assert.Equal(queries + 1, f.Catalog.ImageQueries);
+        f.Catalog.Failure = null;
+        f.Catalog.ImageModels.Clear();
+        Assert.Equal(ErrorCode.JobImageModelUnavailable,
+            (await f.SpriteCommands.UpdatePlanAsync(Context(job), [tile, obj with { SourceBounds = new(0, 0, .5, .5) }], null, default)).ErrorCode);
+        Assert.Equal(revision + 1, job.Sprites.ReviewRevision);
+    }
+
+    [Fact]
+    public async Task GenerationCommands_CheckTargetAssetCanvasAndPreserveRevisionOnUnavailableModel()
+    {
+        var f = new PipelineFixture();
+        var command = await SpriteAnalysisTests.Prepare(f);
+        var job = PipelineJob.CreateSprites(command.UploadId!.Value, command.ImageProviderConfigId, command.ImageModel,
+            new(SpriteView.SideView, SpriteOutputKind.Tiles), new(800, 600), new(1024, 1024), f.Clock.Now).Value!;
+        var tile = new SpriteAssetPlan(Guid.NewGuid(), "tile", 0, new(0, 0, .25, .25), true);
+        var obj = tile with { Id = Guid.NewGuid(), Order = 1, Role = SpriteAssetRole.Object, SourceBounds = new(0, 0, .5, .25) };
+        job.ReplaceSpritePlan([tile, obj], new(.25), [new(1536, 1024)], 0);
+        await f.Jobs.AddAsync(job, default);
+        f.Catalog.ImageModels.Clear();
+        f.Catalog.ImageModels.Add(new(command.ImageModel, "sprite", new(true, [new(1024, 1024)])));
+        var revision = job.Sprites!.ReviewRevision;
+        Assert.Equal(ErrorCode.JobImageModelUnavailable, (await f.SpriteCommands.ApprovePlanAsync(Context(job), default)).ErrorCode);
+        Assert.Equal(ErrorCode.JobImageModelUnavailable, (await f.SpriteCommands.ApproveBasesAsync(Context(job), [obj.Id], default)).ErrorCode);
+        Assert.Equal(ErrorCode.JobImageModelUnavailable, (await f.SpriteCommands.RegenerateAsync(Context(job), obj.Id, 0, default)).ErrorCode);
+        Assert.Equal(revision, job.Sprites.ReviewRevision);
+        Assert.Empty(job.Tasks);
+        Assert.True((await f.SpriteCommands.RegenerateAsync(Context(job), tile.Id, 0, default)).IsSuccess);
+    }
+
+    [Theory]
+    [InlineData(SpriteOutputKind.Layers, SpriteAssetRole.Layer)]
+    [InlineData(SpriteOutputKind.Tiles, SpriteAssetRole.Tile)]
+    public async Task UpdatePlan_DefaultRoleAndReceiptPrecedeCancellation(SpriteOutputKind kind, SpriteAssetRole role)
+    {
+        var f = new PipelineFixture();
+        var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "fake", new(SpriteView.SideView, kind),
+            new(800, 600), new(1024, 1024), f.Clock.Now).Value!;
+        await f.Jobs.AddAsync(job, default);
+        var plan = new SpriteAssetPlan(Guid.NewGuid(), "asset", 0, new(0, 0, 1, 1), false);
+        var context = Context(job);
+        var first = await f.SpriteCommands.UpdatePlanAsync(context, [plan], null, default);
+        Assert.True(first.IsSuccess);
+        Assert.Null(job.Sprites!.Assets[0].Plan.Role);
+        job.Cancel(f.Clock.Now);
+        f.Catalog.Failure = new ProviderCallFailedException("unexpected lookup");
+        var duplicate = await f.SpriteCommands.UpdatePlanAsync(context, [plan with { Role = role }], null, default);
+        Assert.Equal(first.Value, duplicate.Value);
+        Assert.Equal(ErrorCode.SpriteRequestConflict,
+            (await f.SpriteCommands.UpdatePlanAsync(context, [plan], new(.5), default)).ErrorCode);
+    }
+
     internal static SpriteCommandContext Context(PipelineJob job) => new(job.Id, Guid.NewGuid(), job.Sprites!.ReviewRevision);
     internal static async Task<PipelineJob> Plan(PipelineFixture f, int count = 1)
     {
@@ -452,14 +594,15 @@ public sealed class SpriteCommandTests
         public Task<Stream> OpenReadAsync(string key, CancellationToken ct) => inner.OpenReadAsync(key, ct);
         public Task DeleteAsync(string key, CancellationToken ct) => inner.DeleteAsync(key, ct);
     }
-    private sealed class MutatingBlob(IBlobStorage inner, Action mutation) : IBlobStorage
+    private sealed class MutatingBlob(IBlobStorage inner, Func<Task> mutation, int delayMs = 0) : IBlobStorage
     {
         public Stream? Content { get; private set; }
         public async Task<string> SaveAsync(Stream content, string contentType, CancellationToken ct)
         {
             Content = content;
             var key = await inner.SaveAsync(content, contentType, ct);
-            mutation();
+            await mutation();
+            if (delayMs > 0) await Task.Delay(delayMs);
             return key;
         }
         public Task<Stream> OpenReadAsync(string key, CancellationToken ct) => inner.OpenReadAsync(key, ct);

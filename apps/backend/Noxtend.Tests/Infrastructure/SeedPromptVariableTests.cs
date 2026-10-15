@@ -23,6 +23,32 @@ public sealed class SeedPromptVariableTests
     private static readonly Regex Placeholder = new(@"\{\{(\w+)\}\}", RegexOptions.Compiled);
 
     [Fact]
+    public void SpriteGenerateV2UsesExistingVariablesAndRoleRules()
+    {
+        var prompt = SeedPrompts.GenerateSpriteV2();
+        var used = Placeholder.Matches(prompt.System + prompt.User).Select(m => m.Groups[1].Value);
+        Assert.Equal(PromptTemplate.AllowedVariables(LlmOperationKind.GenerateSprite).Order(), used.Order());
+        Assert.Equal(SeedPrompts.GenerateSprite().User, prompt.User);
+        foreach (var role in new[] { "tile", "backdrop", "object", "layer" })
+            Assert.Contains($"For role {role}:", prompt.System);
+        Assert.Contains("without clipping", prompt.System);
+        Assert.Contains("opaque distant background", prompt.System);
+        Assert.True(prompt.Note.Length <= 500);
+    }
+
+    [Fact]
+    public void SpriteAnalyzeV3UsesAllowedVariablesAndRequiresRoleAndGrid()
+    {
+        var prompt = SeedPrompts.AnalyzeSpritesV3();
+        var used = Placeholder.Matches(prompt.System + prompt.User).Select(m => m.Groups[1].Value);
+        Assert.Equal(PromptTemplate.AllowedVariables(LlmOperationKind.AnalyzeSprites).Order(), used.Order());
+        using var document = JsonDocument.Parse(prompt.Schema);
+        Assert.Contains("grid", document.RootElement.GetProperty("required").EnumerateArray().Select(x => x.GetString()));
+        Assert.Contains("role", document.RootElement.GetProperty("properties").GetProperty("assets").GetProperty("items")
+            .GetProperty("required").EnumerateArray().Select(x => x.GetString()));
+    }
+
+    [Fact]
     public void SpriteAnalyzeV2UsesTheSameVariablesAsV1AndTeachesNormalizedBounds()
     {
         var v1 = SeedPrompts.AnalyzeSprites();

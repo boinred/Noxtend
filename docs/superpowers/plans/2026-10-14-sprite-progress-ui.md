@@ -73,3 +73,4 @@ pnpm test && pnpm lint && pnpm typecheck && pnpm build && pnpm test:e2e
 - 결정: buffer는 공용 `JobProgressPanel`에 넣어 3D 배경·캐릭터에도 적용. 2D 집계 줄은 `전체 n`을 항상 표시. job `pending`에서도 buffer가 흐름
 - 검증(2026-10-14, Fake API): `pnpm test` 503 통과, `pnpm lint`·`pnpm typecheck`·`pnpm build` 통과, Playwright 363 통과. 4173 포트를 무관한 `vite preview`가 점유하고 있어 4183 임시 config로 실행
 - 후속 후보: 3D 실행 중 상단 stepper와 `StageProgress`의 buffer 두 개가 함께 흐르는지 시각 확인. 2D 집계에서 `packSprites`·`analyzeSprites`의 과거 성공 공정이 합산되는 점
+- 병합(2026-10-14): PR #13을 merge commit `d415365`로 `main`에 병합하고 원격·로컬 브랜치를 삭제했다. 측정 기록은 위 검증 항목 그대로이며 근거는 이 문서와 PR 본문에 남는다

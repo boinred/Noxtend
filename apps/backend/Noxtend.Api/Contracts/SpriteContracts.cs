@@ -44,19 +44,24 @@ public sealed record SpriteSourceSelectRequest(Guid RequestId, int ExpectedRevis
 public sealed record SpriteAssetsRequest(Guid RequestId, int ExpectedRevision, IReadOnlyList<Guid>? AssetIds);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record SpritePlanRequest(Guid RequestId, int ExpectedRevision, IReadOnlyList<SpriteAssetPlanRequest>? Assets);
+public sealed record SpritePlanRequest(Guid RequestId, int ExpectedRevision, IReadOnlyList<SpriteAssetPlanRequest>? Assets, SpriteGridRequest? Grid = null);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SpriteAssetPlanRequest(Guid Id, string Name, int Order, SpriteBoundsRequest? SourceBounds,
-    bool RequiresTransparency, bool Loop = false, int FrameCount = 8, int Fps = 8, string MotionNotes = "")
+    bool RequiresTransparency, bool Loop = false, int FrameCount = 8, int Fps = 8, string MotionNotes = "", string? Role = null)
 {
     public SpriteAssetPlan? ToDomain()
         => Id != Guid.Empty && SourceBounds is { } bounds
             && double.IsFinite(bounds.X) && double.IsFinite(bounds.Y)
             && double.IsFinite(bounds.W) && double.IsFinite(bounds.H)
+            && Role is null or "layer" or "tile" or "backdrop" or "object"
             ? new(Id, Name, Order, new Bounds(bounds.X, bounds.Y, bounds.W, bounds.H),
-                RequiresTransparency, Loop, FrameCount, Fps, MotionNotes) : null;
+                RequiresTransparency, Loop, FrameCount, Fps, MotionNotes,
+                Role is null ? null : Enum.Parse<SpriteAssetRole>(Role, true)) : null;
 }
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record SpriteGridRequest(double CellWidth);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SpriteBoundsRequest(double X, double Y, double W, double H);
@@ -71,7 +76,7 @@ public sealed record SpriteResponse(SpriteSettingsResponse Settings, SpriteCanva
     SpriteCanvasResponse GenerationCanvas, SpriteCanvasResponse OutputCanvas, SpriteTransformResponse Transform,
     string Phase, int ReviewRevision, Guid? CompletedExportId, IReadOnlyList<SpriteAssetResponse> Assets,
     IReadOnlyList<SpriteImageResponse> Images, IReadOnlyList<SpriteExportResponse> Exports,
-    SpriteSourceResponse? Source)
+    SpriteSourceResponse? Source, SpriteGridRequest? Grid)
 {
     public static SpriteResponse From(SpritePipelineState state)
         => new(new(JobResponse.Wire(state.Settings.View), JobResponse.Wire(state.Settings.OutputKind),
@@ -80,8 +85,8 @@ public sealed record SpriteResponse(SpriteSettingsResponse Settings, SpriteCanva
             SpriteCanvasResponse.From(state.OutputCanvas),
             new(state.Transform.Scale, state.Transform.OffsetX, state.Transform.OffsetY),
             JobResponse.Wire(state.Phase), state.ReviewRevision,
-            state.Exports.Any(export => export.Id == state.CompletedExportId) ? state.CompletedExportId : null,
-            state.Assets.OrderBy(asset => asset.Plan.Order).Select(SpriteAssetResponse.From).ToArray(),
+            state.Exports.Any(export => export.Id == state.CompletedExportId && export.IsCurrent) ? state.CompletedExportId : null,
+            state.Assets.OrderBy(asset => asset.Plan.Order).Select(asset => SpriteAssetResponse.From(asset, state)).ToArray(),
             state.Images.Select(image => new SpriteImageResponse(image.Id, image.TaskId, image.AssetId,
                 image.FrameIndex, image.PlanRevision, image.BaseImageId, image.Width, image.Height,
                 image.ContentType, image.CreatedAt)).ToArray(),
@@ -90,7 +95,8 @@ public sealed record SpriteResponse(SpriteSettingsResponse Settings, SpriteCanva
                 export.Input.Assets.Select(asset => asset.Id).ToArray(), export.Input.ExcludedAssetIds)).ToArray(),
             state.SourceDraft is { } draft ? new(draft.Description, draft.Prompt,
                 draft.Candidates.Select(candidate => new SpriteSourceCandidateResponse(candidate.Id, candidate.Prompt,
-                    candidate.Width, candidate.Height, candidate.CreatedAt)).ToArray()) : null);
+                    candidate.Width, candidate.Height, candidate.CreatedAt)).ToArray()) : null,
+            state.Grid is { } grid ? new(grid.CellWidth) : null);
 }
 
 // Blob 키 없이 후보 이미지는 전용 경로로 제공
@@ -107,18 +113,19 @@ public sealed record SpriteAnchorResponse(double X, double Y);
 public sealed record SpriteFrameResponse(int Index, Guid? CurrentTaskId, Guid? CurrentImageId);
 public sealed record SpriteAssetResponse(Guid Id, SpriteAssetPlanRequest Plan, int PlanRevision,
     SpriteAnchorResponse Anchor, Guid? ApprovedBaseImageId, SpriteApprovalResponse? Approval,
-    IReadOnlyList<SpriteFrameResponse> Frames)
+    IReadOnlyList<SpriteFrameResponse> Frames, SpriteCanvasResponse Canvas, double Scale)
 {
-    public static SpriteAssetResponse From(SpriteAsset asset)
+    public static SpriteAssetResponse From(SpriteAsset asset, SpritePipelineState state)
     {
         var plan = asset.Plan;
         return new(asset.Id, new(plan.Id, plan.Name, plan.Order,
                 new(plan.SourceBounds.X, plan.SourceBounds.Y, plan.SourceBounds.W, plan.SourceBounds.H),
-                plan.RequiresTransparency, plan.Loop, plan.FrameCount, plan.Fps, plan.MotionNotes),
+                plan.RequiresTransparency, plan.Loop, plan.FrameCount, plan.Fps, plan.MotionNotes, JobResponse.Wire(SpriteRules.RoleOf(state.Settings, plan))),
             asset.PlanRevision, new(asset.Anchor.X, asset.Anchor.Y), asset.ApprovedBaseImageId,
             asset.Approval is { } approval ? new(approval.PlanRevision,
                 SpriteApprovedAssetResponse.From(approval.Snapshot)) : null,
-            asset.Frames.Select(frame => new SpriteFrameResponse(frame.Index, frame.CurrentTaskId, frame.CurrentImageId)).ToArray());
+            asset.Frames.Select(frame => new SpriteFrameResponse(frame.Index, frame.CurrentTaskId, frame.CurrentImageId)).ToArray(),
+            SpriteCanvasResponse.From(asset.Canvas?.Output ?? state.OutputCanvas), asset.Canvas?.Scale ?? 1);
     }
 }
 public sealed record SpriteApprovalResponse(int PlanRevision, SpriteApprovedAssetResponse Snapshot);

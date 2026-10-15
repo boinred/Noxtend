@@ -43,11 +43,18 @@ internal static class SpriteJsonSerializer
         {
             SpriteSettings s => SpriteRules.ValidateSettings(s, new(1, 1)).IsSuccess,
             SpriteCanvas c => c.Width > 0 && c.Height > 0 && (long)c.Width * c.Height <= 16_777_216,
+            SpriteGrid g => double.IsFinite(g.CellWidth) && g.CellWidth > 0 && g.CellWidth <= 1,
+            SpriteAssetCanvas c => Valid(c.Output) && Valid(c.Generation) && Valid(c.Transform)
+                && double.IsFinite(c.Scale) && c.Scale > 0 && c.Scale <= 1,
+            SpriteExportAsset a => a.Id != Guid.Empty && Enum.IsDefined(a.Role) && Valid(a.Canvas) && a.Canvas.Width <= 1024 && a.Canvas.Height <= 1024
+                && double.IsFinite(a.Scale) && a.Scale > 0 && a.Scale <= 1 && ValidBounds(a.SourceBounds),
             SpriteAnchor a => double.IsFinite(a.X) && double.IsFinite(a.Y),
             SpriteTransform t => double.IsFinite(t.Scale) && t.Scale > 0
                 && double.IsFinite(t.OffsetX) && double.IsFinite(t.OffsetY),
-            SpriteAssetPlan p => p.Id != Guid.Empty && SpriteRules.Validate(
-                new(SpriteView.SideView, SpriteOutputKind.Layers), new(1, 1), [p]).IsSuccess,
+            SpriteAssetPlan p => p.Id != Guid.Empty && !string.IsNullOrWhiteSpace(p.Name)
+                && ValidBounds(p.SourceBounds) && (!p.Loop || p.FrameCount is 4 or 8)
+                && p.Fps is >= 1 and <= 30 && p.MotionNotes is not null && p.MotionNotes.Length <= 500
+                && (p.Role is null || Enum.IsDefined(p.Role.Value)),
             SpriteAssetApproval a => a.PlanRevision > 0 && Valid(a.Snapshot),
             SpriteApprovedAsset a => a.Id != Guid.Empty && !string.IsNullOrWhiteSpace(a.Name)
                 && a.Fps is >= 1 and <= 30 && Valid(a.Anchor) && Enum.IsDefined(a.Repeat)
@@ -58,12 +65,20 @@ internal static class SpriteJsonSerializer
                 && i.FrameIndex >= 0 && i.FrameIndex < (i.Plan.Loop ? i.Plan.FrameCount : 1)
                 && (i.FrameIndex == 0 ? i.BaseImageId is null : i.BaseImageId is { } id && id != Guid.Empty)
                 && Valid(i.GenerationCanvas) && Valid(i.Canvas) && Valid(i.Transform),
-            SpriteExportInput i => i.SchemaVersion == 1 && i.ExportId != Guid.Empty && i.ReviewRevision >= 0
+            SpriteExportInput i => i.SchemaVersion is 1 or 2 && i.ExportId != Guid.Empty && i.ReviewRevision >= 0
                 && Enum.IsDefined(i.View) && Enum.IsDefined(i.OutputKind) && Valid(i.SourceCanvas)
                 && Valid(i.OutputCanvas) && i.Assets is { Count: > 0 and <= 12 }
                 && i.Assets.All(Valid) && i.Assets.Sum(a => a.ImageIds.Count) <= 64
                 && Ids(i.Assets.Select(a => a.Id).ToArray()) && i.ExcludedAssetIds is not null
-                && Ids(i.ExcludedAssetIds) && !i.Assets.Any(a => i.ExcludedAssetIds.Contains(a.Id)),
+                && Ids(i.ExcludedAssetIds) && !i.Assets.Any(a => i.ExcludedAssetIds.Contains(a.Id))
+                && (i.SchemaVersion == 1 ? i.Grid is null && i.TileWidth is null && i.AssetDetails is null
+                    : (i.OutputKind == SpriteOutputKind.Layers ? i.Grid is null && i.TileWidth is null
+                        : i.Grid is not null && Valid(i.Grid) && i.TileWidth is 64 or 128 or 256)
+                        && i.AssetDetails is not null && i.AssetDetails.All(Valid)
+                        && Ids(i.AssetDetails.Select(a => a.Id).ToArray())
+                        && i.AssetDetails.Select(a => a.Id).ToHashSet().SetEquals(i.Assets.Select(a => a.Id))
+                        && i.AssetDetails.All(a => i.OutputKind == SpriteOutputKind.Layers
+                            ? a.Role == SpriteAssetRole.Layer : a.Role != SpriteAssetRole.Layer)),
             SpriteSourceDraft d => SpriteSourceDraft.ValidDescription(d.Description) && d.Description == d.Description.Trim()
                 && (d.Prompt is null || SpriteSourceDraft.ValidPrompt(d.Prompt)) && d.TextProviderConfigId != Guid.Empty
                 && !string.IsNullOrWhiteSpace(d.TextModel) && d.TextModel.Length <= 128
@@ -76,8 +91,8 @@ internal static class SpriteJsonSerializer
                 && (i.Description is null || SpriteSourceDraft.ValidDescription(i.Description))
                 && (i.Prompt is null || SpriteSourceDraft.ValidPrompt(i.Prompt)),
             SpriteReceipt r => r.JobId != Guid.Empty && Enum.IsDefined(r.Status) && r.Revision >= 0 && Ids(r.TaskIds),
-            SpriteManifest m => m.SchemaVersion == 1 && m.JobId != Guid.Empty
-                && m.ProductionMode == ProductionMode.TwoD && Valid(m.Input)
+            SpriteManifest m => m.SchemaVersion is 1 or 2 && m.JobId != Guid.Empty
+                && m.ProductionMode == ProductionMode.TwoD && Valid(m.Input) && m.SchemaVersion == m.Input.SchemaVersion
                 && m.CoordinateOrigin == "topLeft" && m.CoordinateUnits == "pixels"
                 && m.Assets is not null && m.Assets.Count == m.Input.Assets.Count
                 && m.Assets.All(a => a is not null && Valid(a.Asset) && SafePath(a.BasePath)
@@ -99,6 +114,11 @@ internal static class SpriteJsonSerializer
         Validate(value);
         return true;
     }
+
+    private static bool ValidBounds(Bounds? bounds)
+        => bounds is not null && double.IsFinite(bounds.X) && double.IsFinite(bounds.Y)
+            && double.IsFinite(bounds.W) && double.IsFinite(bounds.H) && bounds.X >= 0 && bounds.Y >= 0
+            && bounds.W > 0 && bounds.H > 0 && bounds.X + bounds.W <= 1 && bounds.Y + bounds.H <= 1;
 
     private static bool Ids(IReadOnlyList<Guid>? ids)
         => ids is not null && ids.All(id => id != Guid.Empty) && ids.Distinct().Count() == ids.Count;

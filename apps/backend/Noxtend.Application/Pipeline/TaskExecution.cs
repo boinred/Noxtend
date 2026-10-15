@@ -111,8 +111,12 @@ public sealed class TaskExecution(
             var owned = current?.Tasks.FirstOrDefault(t => t.Id == taskId);
             if (current?.Status == JobStatus.Canceled || owned?.Status == Domain.Job.TaskStatus.Canceled)
                 return RunTaskOutcome.Canceled;
-            if (current is null || current.IsTerminal || owned is null
-                || !owned.IsOwnedBy(attempt, clock.Now, ownershipVersion) || !current.IsCurrentTask(owned))
+            var preserveExport = current is not null && owned is not null
+                && failure is null && !canceled && current.CanPreserveSpriteExportTask(owned);
+            if (current is null || owned is null
+                || (current.IsTerminal && !(preserveExport && current.Status is JobStatus.Succeeded or JobStatus.PartiallySucceeded))
+                || !owned.IsOwnedBy(attempt, clock.Now, ownershipVersion)
+                || (!current.IsCurrentTask(owned) && !preserveExport))
                 return RunTaskOutcome.Skipped;
             TimeSpan? retryDelay = null;
             try
@@ -229,8 +233,11 @@ public sealed class TaskExecution(
                 // 루프 종료가 진행 중 SQL을 취소하지 않도록 완료 후 최종 조회와 합류
                 var current = await jobs.ReloadAsync(jobId, CancellationToken.None);
                 var task = current?.Tasks.FirstOrDefault(t => t.Id == taskId);
-                if (current is null || current.IsTerminal || task is null
-                    || !task.IsOwnedBy(attempt, clock.Now, ownershipVersion) || !current.IsCurrentTask(task))
+                var preserveExport = current is not null && task is not null && current.CanPreserveSpriteExportTask(task);
+                if (current is null || task is null
+                    || (current.IsTerminal && !(preserveExport && current.Status is JobStatus.Succeeded or JobStatus.PartiallySucceeded))
+                    || !task.IsOwnedBy(attempt, clock.Now, ownershipVersion)
+                    || (!current.IsCurrentTask(task) && !preserveExport))
                 {
                     await cts.CancelAsync();
                     return ownershipVersion;

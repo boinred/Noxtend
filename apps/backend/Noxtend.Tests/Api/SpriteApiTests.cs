@@ -148,8 +148,8 @@ public sealed class SpriteApiTests
         var f = new PipelineFixture();
         var job = await SpriteCommandTests.Plan(f);
         var api = Sprites(f);
-        var plans = job.Sprites!.Assets.Select(SpriteAssetResponse.From).Select(asset => asset.Plan).ToArray();
-        var ids = job.Sprites.Assets.Select(asset => asset.Id).ToArray();
+        var plans = SpriteResponse.From(job.Sprites!).Assets.Select(asset => asset.Plan).ToArray();
+        var ids = job.Sprites!.Assets.Select(asset => asset.Id).ToArray();
         async Task<IActionResult> Call(Guid id, int revision) => operation switch
         {
             "update" => await api.UpdatePlanAsync(id, new(Guid.NewGuid(), revision, plans), default),
@@ -293,6 +293,68 @@ public sealed class SpriteApiTests
         Assert.Empty(f.Queue.Enqueued);
         Assert.Equal(0, f.Blobs.Count);
     }
+
+    [Theory]
+    [InlineData("layer", 202)]
+    [InlineData("object", 400)]
+    [InlineData("unknown", 400)]
+    [InlineData("0", 400)]
+    [InlineData("Layer", 400)]
+    public async Task JsonBinding_RolesReachPlanValidation(string role, int status)
+    {
+        var f = new PipelineFixture();
+        var job = await SpriteCommandTests.Plan(f);
+        var plan = job.Sprites!.Assets.Single().Plan;
+        var json = $$"""{"requestId":"{{Guid.NewGuid()}}","expectedRevision":{{job.Sprites.ReviewRevision}},"grid":null,"assets":[{"id":"{{plan.Id}}","name":"changed","order":0,"sourceBounds":{"x":0,"y":0,"w":1,"h":1},"requiresTransparency":false,"role":"{{role}}"}]}""";
+        var binding = await Bind<SpritePlanRequest>(json);
+        Assert.False(binding.HasError);
+        var result = await Sprites(f).UpdatePlanAsync(job.Id, (SpritePlanRequest)binding.Model!, default);
+        Status(result, status);
+        if (status == 400) Assert.Equal(ErrorCode.SpritePlanInvalid, DataError(result));
+        else Assert.Null(job.Sprites.Assets.Single().Plan.Role);
+    }
+
+    [Theory]
+    [InlineData("1e400")]
+    [InlineData("0")]
+    [InlineData("-0.1")]
+    [InlineData("1.1")]
+    public async Task JsonBinding_InvalidGridIs400BeforeFingerprint(string width)
+    {
+        var f = new PipelineFixture();
+        var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "fake",
+            new(SpriteView.SideView, SpriteOutputKind.Tiles), new(800, 600), new(1024, 1024), f.Clock.Now).Value!;
+        await f.Jobs.AddAsync(job, default);
+        var json = $$$"""{"requestId":"{{{Guid.NewGuid()}}}","expectedRevision":{{{job.Sprites!.ReviewRevision}}},"assets":[{"id":"{{{Guid.NewGuid()}}}","name":"tile","order":0,"sourceBounds":{"x":0,"y":0,"w":1,"h":1},"requiresTransparency":false,"role":"tile"}],"grid":{"cellWidth":{{{width}}}}}""";
+        var binding = await Bind<SpritePlanRequest>(json);
+        Assert.False(binding.HasError);
+        var revision = job.Sprites.ReviewRevision;
+        var result = await Sprites(f).UpdatePlanAsync(job.Id, (SpritePlanRequest)binding.Model!, default);
+        Status(result, 400);
+        Assert.Equal(ErrorCode.SpritePlanInvalid, DataError(result));
+        var error = JsonSerializer.SerializeToElement(Assert.IsType<ObjectResult>(result).Value, ServerJson()).GetProperty("error");
+        if (width == "1e400") Assert.Equal("2D 요청 입력이 유효하지 않습니다", error.GetProperty("message").GetString());
+        else Assert.Contains("격자", error.GetProperty("message").GetString());
+        Assert.Equal(revision, job.Sprites.ReviewRevision);
+    }
+
+    [Fact]
+    public async Task LegacySpriteResponse_ExposesEffectiveRoleCanvasAndScale()
+    {
+        var f = new PipelineFixture();
+        var job = await SpriteCommandTests.Plan(f);
+        typeof(SpriteAsset).GetProperty(nameof(SpriteAsset.Canvas))!.SetValue(job.Sprites!.Assets.Single(), null);
+        var json = JsonSerializer.Serialize(SpriteResponse.From(job.Sprites), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        using var doc = JsonDocument.Parse(json);
+        var asset = doc.RootElement.GetProperty("assets")[0];
+        Assert.Equal("layer", asset.GetProperty("plan").GetProperty("role").GetString());
+        Assert.Equal(job.Sprites.OutputCanvas.Width, asset.GetProperty("canvas").GetProperty("width").GetInt32());
+        Assert.Equal(1, asset.GetProperty("scale").GetDouble());
+        Assert.Equal(JsonValueKind.Null, doc.RootElement.GetProperty("grid").ValueKind);
+    }
+
+    private static string DataError(IActionResult result)
+        => JsonSerializer.SerializeToElement(Assert.IsType<ObjectResult>(result).Value, ServerJson()).GetProperty("error").GetProperty("code").GetString()!;
 
     [Fact]
     public async Task NullAssetCollections_Are400()
@@ -441,6 +503,155 @@ public sealed class SpriteApiTests
         Assert.Null(typeof(JobResponse).Assembly.GetType("Noxtend.Api.Contracts.GenerateSpriteSourceRequest"));
     }
 
+    [Theory]
+    [InlineData("tiles")]
+    [InlineData("layers")]
+    public async Task JsonBinding_RequestFixtureStoresRolesAndGrid(string scenario)
+    {
+        using var fixture = JsonDocument.Parse(await File.ReadAllTextAsync(FixturePath("sprite-roles.request.json")));
+        var binding = await Bind<SpritePlanRequest>(fixture.RootElement.GetProperty(scenario).GetRawText());
+        Assert.False(binding.HasError);
+        var request = (SpritePlanRequest)binding.Model!;
+        var f = new PipelineFixture();
+        var command = await SpriteAnalysisTests.Prepare(f);
+        var settings = new SpriteSettings(SpriteView.SideView, scenario == "tiles" ? SpriteOutputKind.Tiles : SpriteOutputKind.Layers);
+        var job = PipelineJob.CreateSprites(command.UploadId!.Value, command.ImageProviderConfigId, command.ImageModel,
+            settings, new(800, 600), new(1536, 1024), f.Clock.Now).Value!;
+        await f.Jobs.AddAsync(job, default);
+        Receipt(await Sprites(f).UpdatePlanAsync(job.Id, request, default));
+        Assert.Equal(request.Grid?.CellWidth, job.Sprites!.Grid?.CellWidth);
+        Assert.Equal(request.Assets!.Select(a => a.Role), SpriteResponse.From(job.Sprites).Assets.Select(a => a.Plan.Role));
+    }
+
+    [Theory]
+    [InlineData(SpriteOutputKind.Layers)]
+    [InlineData(SpriteOutputKind.Tiles)]
+    public async Task JsonBinding_OmittedRoleAndGridUseLegacyDefaultsAndUnknownFieldsFail(SpriteOutputKind kind)
+    {
+        var f = new PipelineFixture();
+        var command = await SpriteAnalysisTests.Prepare(f);
+        var job = PipelineJob.CreateSprites(command.UploadId!.Value, command.ImageProviderConfigId, command.ImageModel,
+            new(SpriteView.SideView, kind), new(800, 600), new(1536, 1024), f.Clock.Now).Value!;
+        await f.Jobs.AddAsync(job, default);
+        var id = FixedId(61);
+        var json = $$"""{"requestId":"{{Guid.NewGuid()}}","expectedRevision":{{job.Sprites!.ReviewRevision}},"assets":[{"id":"{{id}}","name":"legacy","order":0,"sourceBounds":{"x":0,"y":0,"w":1,"h":1},"requiresTransparency":false}]}""";
+        var binding = await Bind<SpritePlanRequest>(json);
+        Assert.False(binding.HasError);
+        Receipt(await Sprites(f).UpdatePlanAsync(job.Id, (SpritePlanRequest)binding.Model!, default));
+        Assert.Null(job.Sprites.Grid);
+        Assert.Null(job.Sprites.Assets.Single().Plan.Role);
+        Assert.True((await Bind<SpritePlanRequest>(json[..^1] + ",\"unknown\":1}")).HasError);
+        Assert.True((await Bind<SpritePlanRequest>(json.Replace("\"requiresTransparency\":false", "\"requiresTransparency\":false,\"unknown\":1"))).HasError);
+        Assert.True((await Bind<SpritePlanRequest>(json[..^1] + ",\"grid\":{\"cellWidth\":0.25,\"unknown\":1}}")).HasError);
+    }
+
+    [Fact]
+    public async Task ServerRolesFixture_MatchesActualResponseMapperAndJsonOptions()
+    {
+        var mixed = FixtureJob(1, SpriteOutputKind.Tiles);
+        SpriteAssetPlan[] plans = [
+            new(FixedId(11), "배경", 0, new(0, 0, 1, 1), false, Role: SpriteAssetRole.Backdrop),
+            new(FixedId(12), "타일", 1, new(0, 0, .25, .25), true, Role: SpriteAssetRole.Tile),
+            new(FixedId(13), "오브젝트", 2, new(0, 0, .125, .25), true, Role: SpriteAssetRole.Object),
+        ];
+        Assert.True(mixed.ReplaceSpritePlan(plans, new(.1), [new(1024, 1024)], 0).IsSuccess);
+        var legacy = FixtureJob(2, SpriteOutputKind.Layers);
+        Assert.True(legacy.ReplaceSpritePlan([new(FixedId(21), "구형 레이어", 0, new(0, 0, 1, 1), false)], 0).IsSuccess);
+        Set(legacy.Sprites!.Assets.Single(), nameof(SpriteAsset.Canvas), null);
+        var approved = FixtureJob(3, SpriteOutputKind.Tiles);
+        Assert.True(approved.ReplaceSpritePlan([new(FixedId(31), "구형 타일", 0, new(0, 0, .25, .25), false)], 0).IsSuccess);
+        var asset = approved.Sprites!.Assets.Single();
+        Set(asset, nameof(SpriteAsset.Canvas), null);
+        var snapshot = new SpriteApprovedAsset(asset.Id, asset.Plan.Name, 0, 8, false, asset.Anchor,
+            SpriteRepeat.Both, SpriteTileLayout.Square, FixedId(32), [FixedId(32)]);
+        Set(asset, nameof(SpriteAsset.ApprovedBaseImageId), snapshot.BaseImageId);
+        Set(asset, nameof(SpriteAsset.Approval), new SpriteAssetApproval(1, snapshot));
+        Set(asset.Frames.Single(), nameof(SpriteFrame.CurrentImageId), snapshot.BaseImageId);
+        var empty = FixtureJob(4, SpriteOutputKind.Tiles);
+        var responses = new Dictionary<string, ApiResponse<JobResponse>> {
+            ["mixedJob"] = ApiResponse<JobResponse>.Ok(JobResponse.From(new(mixed, []))),
+            ["legacyJob"] = ApiResponse<JobResponse>.Ok(JobResponse.From(new(legacy, []))),
+            ["legacyApproval"] = ApiResponse<JobResponse>.Ok(JobResponse.From(new(approved, []))),
+            ["gridNull"] = ApiResponse<JobResponse>.Ok(JobResponse.From(new(empty, []))),
+        };
+        var options = ServerJson();
+        options.WriteIndented = true;
+        var json = JsonSerializer.Serialize(responses, options) + "\n";
+        var path = FixturePath("sprite-roles.server.json");
+        if (Environment.GetEnvironmentVariable("NOXTEND_REGENERATE_SPRITE_ROLES_FIXTURE") == "1")
+            await File.WriteAllTextAsync(path, json);
+        var expected = System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(path));
+        Assert.True(System.Text.Json.Nodes.JsonNode.DeepEquals(expected, System.Text.Json.Nodes.JsonNode.Parse(json)),
+            "서버 계약 fixture 불일치: 인접 문서의 명시적 재생성 명령 확인");
+        Assert.Equal(snapshot, asset.Approval!.Snapshot);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CompletedExportId_RequiresCurrentExportAfterGridOrNameEdit(bool rename)
+    {
+        var job = FixtureJob(5, SpriteOutputKind.Tiles);
+        var plan = new SpriteAssetPlan(FixedId(51), "타일", 0, new(0, 0, .25, .25), false);
+        Assert.True(job.ReplaceSpritePlan([plan], new(.25), [], 0).IsSuccess);
+        var input = job.ApproveSpritePlan(job.Sprites!.ReviewRevision).Value!.Single();
+        var task = job.PlanSpriteFrames([input], FixedId(52)).Single();
+        task.Claim(FixtureNow, TimeSpan.FromMinutes(2));
+        Assert.True(job.TryAttachSpriteImage(SpriteImage.Create(task.Id, input, "fixture.png", FixtureNow)));
+        task.Succeed(FixtureNow);
+        job.ReconcileFromTasks(FixtureNow);
+        Assert.True(job.ApproveSpriteBases([plan.Id], job.Sprites.ReviewRevision).IsSuccess);
+        var old = CompleteExport(job);
+        Assert.Equal(old, SpriteResponse.From(job.Sprites).CompletedExportId);
+        if (rename) plan = plan with { Name = "새 이름" };
+        Assert.True(job.ReplaceSpritePlan([plan], new(rename ? .25 : .5), [], job.Sprites.ReviewRevision).IsSuccess);
+        Assert.Equal(old, job.Sprites.CompletedExportId);
+        Assert.Null(SpriteResponse.From(job.Sprites).CompletedExportId);
+        if (rename) Assert.True(job.ApproveSpriteAsset(plan.Id, job.Sprites.ReviewRevision).IsSuccess);
+        var next = CompleteExport(job);
+        Assert.NotEqual(old, next);
+        Assert.Equal(next, SpriteResponse.From(job.Sprites).CompletedExportId);
+    }
+
+    private static Guid CompleteExport(PipelineJob job)
+    {
+        var input = job.CaptureSpriteExport([job.Sprites!.Assets.Single().Id], job.Sprites.ReviewRevision).Value!;
+        var task = job.PlanTask(TaskKind.PackSprites, job.Tasks.Count);
+        task.BindSpriteExport(input);
+        task.Claim(FixtureNow, TimeSpan.FromMinutes(2));
+        Assert.True(job.TryAttachSpriteExport(SpriteExport.Create(task.Id, input,
+            new(input.SchemaVersion, job.Id, ProductionMode.TwoD, input, "topLeft", "pixels", []), "fixture.zip", FixtureNow)));
+        task.Succeed(FixtureNow);
+        job.ReconcileFromTasks(FixtureNow);
+        return input.ExportId;
+    }
+    private static readonly DateTimeOffset FixtureNow = new(2026, 10, 14, 0, 0, 0, TimeSpan.Zero);
+    private static Guid FixedId(int id) => Guid.Parse($"10000000-0000-4000-8000-{id:000000000000}");
+    private static void Set(object target, string property, object? value)
+        => target.GetType().GetProperty(property)!.SetValue(target, value);
+    private static PipelineJob FixtureJob(int id, SpriteOutputKind kind)
+    {
+        var job = PipelineJob.CreateSprites(FixedId(100), FixedId(101), "fixture-model",
+            new(SpriteView.SideView, kind), new(800, 600), new(1024, 1024), FixtureNow).Value!;
+        Set(job, nameof(PipelineJob.Id), FixedId(id));
+        return job;
+    }
+    private static JsonSerializerOptions ServerJson()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging().AddControllers().AddJsonOptions(ApiJson.Configure);
+        using var provider = services.BuildServiceProvider();
+        return new(provider.GetRequiredService<IOptions<JsonOptions>>().Value.JsonSerializerOptions);
+    }
+    private static string FixturePath(string filename)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "apps", "backend", "Noxtend.slnx")))
+            directory = directory.Parent;
+        if (directory is null) throw new DirectoryNotFoundException("apps/backend/Noxtend.slnx 저장소 루트를 찾을 수 없습니다");
+        return Path.Combine(directory.FullName, "apps", "frontend", "src", "infra", "api", "fixtures", filename);
+    }
+
     private static SpriteJobsController Sprites(PipelineFixture f) => new(f.StartSprites, f.SpriteCommands, f.SpriteSource, f.Jobs, f.Blobs)
     {
         ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
@@ -472,7 +683,7 @@ public sealed class SpriteApiTests
     private static async Task<InputFormatterResult> Bind(Type type, string json)
     {
         var services = new ServiceCollection();
-        services.AddLogging().AddControllers();
+        services.AddLogging().AddControllers().AddJsonOptions(ApiJson.Configure);
         using var provider = services.BuildServiceProvider();
         var http = new DefaultHttpContext { RequestServices = provider };
         http.Request.ContentType = "application/json";
@@ -486,7 +697,7 @@ public sealed class SpriteApiTests
     private static async Task<DefaultHttpContext> ExecuteFile(FileStreamResult file)
     {
         var services = new ServiceCollection();
-        services.AddLogging().AddControllers();
+        services.AddLogging().AddControllers().AddJsonOptions(ApiJson.Configure);
         using var provider = services.BuildServiceProvider();
         var http = new DefaultHttpContext { RequestServices = provider };
         http.Response.Body = new MemoryStream();

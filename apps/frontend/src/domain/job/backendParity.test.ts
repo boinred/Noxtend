@@ -86,6 +86,7 @@ describe('백엔드 열거형과 프론트 유니온이 일치한다', () => {
     'SpriteRepeat',
     'SpriteTileLayout',
     'SpritePhase',
+    'SpriteAssetRole',
   ])('%s — 2D wire enum과 일치한다', (name) => {
     const spriteFrontend = readFileSync(resolve(__dirname, '../sprites/types.ts'), 'utf8')
     const spriteBackend =

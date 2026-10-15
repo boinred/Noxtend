@@ -305,3 +305,58 @@ it('sprite progress counts current slots, approvals and stored current ZIPs', ()
   sprite.exports[0]!.isCurrent = true
   expect(spriteProgressCounts(sprite, [])).toMatchObject({ exported: 1 })
 })
+
+it('matches server asset sizing and tile median', async () => {
+  const { assetOutputSize, cellWidthOf } = await import('./rules')
+  const sprite = readSpriteJob({ productionMode: 'twoD', sprite: spriteFixture() }).sprite!
+  const settings = sprite.settings
+  const object = {
+    ...sprite.assets[0]!.plan,
+    role: 'object' as const,
+    sourceBounds: { x: 0, y: 0, w: 0.2, h: 0.25 },
+  }
+  expect(assetOutputSize(settings, { width: 1536, height: 1024 }, 128 / 1536, object)).toEqual({
+    canvas: { width: 307, height: 256 },
+    scale: 1,
+  })
+  const backdrop = { ...object, role: 'backdrop' as const }
+  expect(assetOutputSize(settings, { width: 1200, height: 800 }, 0.1, backdrop)).toEqual({
+    canvas: { width: 1024, height: 683 },
+    scale: 0.8,
+  })
+  expect(
+    assetOutputSize(settings, { width: 1025, height: 1000 }, 128 / 1025, {
+      ...object,
+      sourceBounds: { x: 0, y: 0, w: 1, h: 1 },
+    }),
+  ).toEqual({ error: '오브젝트 출력 크기는 1~1024픽셀이어야 합니다' })
+  expect(assetOutputSize(settings, sprite.sourceCanvas, null, object)).toEqual({
+    error: '격자 칸 너비가 필요합니다',
+  })
+  expect(
+    cellWidthOf(
+      null,
+      [
+        { ...object, role: 'tile', sourceBounds: { x: 0, y: 0, w: 0.2, h: 1 } },
+        { ...object, role: 'tile', sourceBounds: { x: 0, y: 0, w: 0.4, h: 1 } },
+      ],
+      settings,
+    ),
+  ).toBeCloseTo(0.3)
+})
+
+it.each([
+  [0.5, 1],
+  [1024.49, 1024],
+  [1024.5, null],
+])('rounds positive midpoint %s away from zero before bounds checking', async (width, expected) => {
+  const { assetOutputSize } = await import('./rules')
+  const sprite = readSpriteJob({ productionMode: 'twoD', sprite: spriteFixture() }).sprite!
+  const result = assetOutputSize(sprite.settings, { width: 1536, height: 1024 }, 128 / 1536, {
+    ...sprite.assets[0]!.plan,
+    role: 'object',
+    sourceBounds: { x: 0, y: 0, w: width! / 1536, h: 0.25 },
+  })
+  if (expected === null) expect(result).toHaveProperty('error')
+  else expect(result).toEqual({ canvas: { width: expected, height: 256 }, scale: 1 })
+})

@@ -141,38 +141,71 @@ public sealed partial class PipelineJob
         return Result<PipelineTask>.Ok(PlanSourceTask(TaskKind.AnalyzeSprites,
             draft.TextProviderConfigId, draft.TextModel, null, requestId));
     }
+    public SpriteAssetCanvas SpriteAssetCanvasOf(SpriteAsset asset)
+        => asset.Canvas ?? new(Sprites!.OutputCanvas, Sprites.GenerationCanvas, Sprites.Transform, 1);
+
+    public bool SpritePlanNeedsGenerationSizes(IReadOnlyList<SpriteAssetPlan> plans, SpriteGrid? grid)
+    {
+        var state = Sprites!;
+        var cellWidth = SpriteRules.CellWidth(grid, plans, state.Settings);
+        return plans.Any(plan => SpriteRules.RoleOf(state.Settings, plan) is SpriteAssetRole.Object or SpriteAssetRole.Backdrop
+            && !state.Assets.Any(asset => asset.Id == plan.Id
+                && SpriteAssetCanvasOf(asset).Output == SpriteRules.AssetOutput(state.Settings, state.SourceCanvas, cellWidth, plan).Value.Canvas));
+    }
+
     public Result<bool> ReplaceSpritePlan(IReadOnlyList<SpriteAssetPlan> plans, int expectedRevision)
+        => ReplaceSpritePlan(plans, null, [], expectedRevision);
+
+    public Result<bool> ReplaceSpritePlan(IReadOnlyList<SpriteAssetPlan> plans, SpriteGrid? grid,
+        IReadOnlyList<SpriteCanvas> generationSizes, int expectedRevision)
     {
         var guard = CheckSpriteCommand(expectedRevision);
         if (!guard.IsSuccess) return guard;
         var state = Sprites!;
         if (_tasks.Any(t => t.Kind == TaskKind.AnalyzeSprites && !t.IsTerminal && IsCurrentTask(t)))
             return Result<bool>.Fail(ErrorCode.SpriteBusy, "분석 중에는 계획을 편집할 수 없습니다");
-        var validation = SpriteRules.Validate(state.Settings, state.SourceCanvas, plans);
+        var validation = SpriteRules.Validate(state.Settings, state.SourceCanvas, plans, grid);
         if (!validation.IsSuccess) return validation;
-        var affected = state.Assets.Where(a =>
-            !plans.Any(p => p.Id == a.Plan.Id) || plans.Any(p => p.Id == a.Plan.Id && GenerationChanged(a.Plan, p))).ToArray();
-        if (affected.Any(a => SpriteAssetBusy(a.Plan.Id)))
+        plans = plans.Select(p => SpriteRules.NormalizeRole(state.Settings, p)).ToArray();
+        if (SpritePlanNeedsGenerationSizes(plans, grid) && (generationSizes.Count == 0
+            || generationSizes.Any(size => size.Width <= 0 || size.Height <= 0)))
+            return Result<bool>.Fail(ErrorCode.JobImageModelUnavailable, "확인된 생성 크기가 필요합니다");
+        var cellWidth = SpriteRules.CellWidth(grid, plans, state.Settings);
+        var canvases = plans.ToDictionary(p => p.Id, p =>
+        {
+            var output = SpriteRules.AssetOutput(state.Settings, state.SourceCanvas, cellWidth, p).Value;
+            var existing = state.Assets.FirstOrDefault(a => a.Id == p.Id);
+            return SpriteRules.RoleOf(state.Settings, p) is SpriteAssetRole.Object or SpriteAssetRole.Backdrop
+                && existing is not null && SpriteAssetCanvasOf(existing).Output == output.Canvas
+                ? SpriteAssetCanvasOf(existing) with { Scale = output.Scale }
+                : SpriteRules.AssetCanvas(state.Settings, state.SourceCanvas, state.GenerationCanvas, cellWidth, p, generationSizes).Value!;
+        });
+        var affected = state.Assets.Where(a => !plans.Any(p => p.Id == a.Id)
+            || plans.Any(p => p.Id == a.Id && (GenerationChanged(a.Plan, p)
+                || SpriteAssetCanvasOf(a).Output != canvases[p.Id].Output))).ToArray();
+        if (affected.Any(a => SpriteAssetBusy(a.Id)))
             return Result<bool>.Fail(ErrorCode.SpriteBusy, "실행 중인 대상의 생성 입력은 바꿀 수 없습니다");
-        if (state.Assets.Count == plans.Count && state.Assets.All(a => plans.Contains(a.Plan)))
-            return Result<bool>.Ok(false);
-
-        var changedIds = plans.Where(p => !state.Assets.Any(a => a.Plan == p)).Select(p => p.Id).ToArray();
-        var membershipChanged = state.Assets.Count != plans.Count
-            || state.Assets.Any(a => !plans.Any(p => p.Id == a.Plan.Id));
-        foreach (var asset in affected) CancelPendingSpriteTasks(asset.Plan.Id);
+        var gridChanged = state.Grid != grid;
+        if (!gridChanged && state.Assets.Count == plans.Count && state.Assets.All(a => plans.Contains(a.Plan)
+            && SpriteAssetCanvasOf(a) == canvases[a.Id])) return Result<bool>.Ok(false);
+        var changedIds = plans.Where(p => !state.Assets.Any(a => a.Plan == p && SpriteAssetCanvasOf(a) == canvases[p.Id]))
+            .Select(p => p.Id).ToArray();
+        var membershipChanged = state.Assets.Count != plans.Count || state.Assets.Any(a => !plans.Any(p => p.Id == a.Id));
+        foreach (var asset in affected) CancelPendingSpriteTasks(asset.Id);
         var assets = plans.OrderBy(p => p.Order).Select(plan =>
         {
-            var asset = state.Assets.FirstOrDefault(a => a.Plan.Id == plan.Id);
-            if (asset is null)
-                return new SpriteAsset(plan, state.Settings.OutputKind == SpriteOutputKind.Layers
-                    ? new(0, 0) : new(state.OutputCanvas.Width / 2.0, state.OutputCanvas.Height / 2.0));
-            if (asset.Plan != plan) asset.UpdatePlan(plan, GenerationChanged(asset.Plan, plan));
+            var asset = state.Assets.FirstOrDefault(a => a.Id == plan.Id);
+            var canvas = canvases[plan.Id];
+            var anchor = SpriteRules.Anchor(SpriteRules.RoleOf(state.Settings, plan), canvas.Output);
+            if (asset is null) asset = new SpriteAsset(plan, anchor);
+            else if (asset.Plan != plan || affected.Contains(asset)) asset.UpdatePlan(plan, affected.Contains(asset));
+            asset.UpdateCanvas(canvas, anchor);
             return asset;
         }).ToArray();
-        var generationChanged = affected.Length > 0 || plans.Any(p => !state.Assets.Any(a => a.Plan.Id == p.Id));
+        var generationChanged = affected.Length > 0 || plans.Any(p => !state.Assets.Any(a => a.Id == p.Id));
         state.ReplaceAssets(assets);
-        state.Touch(membershipChanged ? null : changedIds);
+        state.ReplaceGrid(grid);
+        state.Touch(membershipChanged || gridChanged ? null : changedIds);
         if (generationChanged) state.SetPhase(SpritePhase.PlanReview);
         UpdateSpriteState();
         return Result<bool>.Ok(true);
@@ -317,13 +350,25 @@ public sealed partial class PipelineJob
                 && asset.Frames[input.FrameIndex].CurrentTaskId == task.Id;
         }
         if (task.SpriteExportInput is { } export)
-            return export.Assets.Select(a => a.Id).Concat(export.ExcludedAssetIds).ToHashSet()
-                    .SetEquals(Sprites.Assets.Select(a => a.Plan.Id))
-                && export.Assets.All(a => Sprites.Assets.Any(current => current.Plan.Id == a.Id && current.Approval is not null && SameApprovedAsset(current.Approval.Snapshot, a)));
+            return (export.SchemaVersion == 1 || export.Grid == EffectiveSpriteExportGrid())
+                && SpriteExportAssetsCurrent(export);
         return task.Kind != TaskKind.AnalyzeSprites
             || (Sprites.Phase == SpritePhase.Analyzing && Sprites.Assets.Count == 0
                 && task.Id == _tasks.Where(t => t.Kind == TaskKind.AnalyzeSprites).MaxBy(t => t.Ordinal)?.Id);
     }
+
+    public bool CanPreserveSpriteExportTask(PipelineTask task)
+        => ProductionMode == ProductionMode.TwoD && Sprites is not null && Status != JobStatus.Canceled
+            && task.JobId == Id && _tasks.Any(t => t.Id == task.Id) && task.Kind == TaskKind.PackSprites
+            && task.Status == TaskStatus.Running
+            && task.SpriteExportInput is { SchemaVersion: 2 } input
+            && input.Grid != EffectiveSpriteExportGrid() && SpriteExportAssetsCurrent(input);
+
+    private bool SpriteExportAssetsCurrent(SpriteExportInput input)
+        => input.Assets.Select(a => a.Id).Concat(input.ExcludedAssetIds).ToHashSet()
+                .SetEquals(Sprites!.Assets.Select(a => a.Plan.Id))
+            && input.Assets.All(a => Sprites.Assets.Any(current => current.Plan.Id == a.Id
+                && current.Approval is not null && SameApprovedAsset(current.Approval.Snapshot, a)));
 
     public bool TryAttachSpriteImage(SpriteImage image)
     {
@@ -360,11 +405,19 @@ public sealed partial class PipelineJob
         OpenSpriteReview();
         Sprites.SetPhase(SpritePhase.Packaging);
         Status = reopening ? JobStatus.Pending : JobStatus.Running;
-        return Result<SpriteExportInput>.Ok(new(1, Guid.NewGuid(), Sprites.ReviewRevision,
+        return Result<SpriteExportInput>.Ok(new(2, Guid.NewGuid(), Sprites.ReviewRevision,
             Sprites.Settings.View, Sprites.Settings.OutputKind, Sprites.SourceCanvas, Sprites.OutputCanvas,
             Array.AsReadOnly(selected.Value!.OrderBy(a => a.Plan.Order).Select(a => a.Approval!.Snapshot).ToArray()),
-            Array.AsReadOnly(Sprites.Assets.Where(a => !assetIds.Contains(a.Plan.Id)).Select(a => a.Plan.Id).ToArray())));
+            Array.AsReadOnly(Sprites.Assets.Where(a => !assetIds.Contains(a.Plan.Id)).Select(a => a.Plan.Id).ToArray()),
+            EffectiveSpriteExportGrid(), Sprites.Settings.OutputKind == SpriteOutputKind.Tiles ? Sprites.Settings.TileWidth : null,
+            Array.AsReadOnly(selected.Value!.OrderBy(a => a.Plan.Order).Select(a => new SpriteExportAsset(a.Id,
+                SpriteRules.RoleOf(Sprites.Settings, a.Plan), SpriteAssetCanvasOf(a).Output,
+                SpriteAssetCanvasOf(a).Scale, a.Plan.SourceBounds)).ToArray())));
     }
+
+    private SpriteGrid? EffectiveSpriteExportGrid()
+        => Sprites!.Settings.OutputKind == SpriteOutputKind.Layers ? null
+            : new(SpriteRules.CellWidth(Sprites.Grid, Sprites.Assets.Select(a => a.Plan).ToArray(), Sprites.Settings)!.Value);
 
     public bool TryAttachSpriteExport(SpriteExport export)
     {
@@ -372,7 +425,7 @@ public sealed partial class PipelineJob
         var task = _tasks.FirstOrDefault(t => t.Id == export.TaskId);
         if (task?.SpriteExportInput is not { } input || !CanAttachSpriteResult(task, export.CreatedAt)
             || !SameExportInput(input, export.Input) || export.Id != input.ExportId || export.Manifest.JobId != Id
-            || export.Manifest.ProductionMode != ProductionMode.TwoD || !SameExportInput(export.Manifest.Input, input)
+            || export.Manifest.ProductionMode != ProductionMode.TwoD || export.Manifest.SchemaVersion != input.SchemaVersion || !SameExportInput(export.Manifest.Input, input)
             || string.IsNullOrWhiteSpace(export.BlobKey) || Sprites.Exports.Any(e => e.Id == export.Id)) return false;
         export.SetCurrent(IsCurrentTask(task));
         Sprites.AddExport(export);
@@ -428,8 +481,9 @@ public sealed partial class PipelineJob
         => task.Kind is TaskKind.EnhanceSpriteSource or TaskKind.GenerateSpriteSource;
     private static Result<T> SpriteFailure<T>(Result<bool> result)
         => Result<T>.Fail(result.ErrorCode!, result.ErrorMessage!);
-    private static bool GenerationChanged(SpriteAssetPlan before, SpriteAssetPlan after)
-        => before.SourceBounds != after.SourceBounds || before.RequiresTransparency != after.RequiresTransparency
+    private bool GenerationChanged(SpriteAssetPlan before, SpriteAssetPlan after)
+        => SpriteRules.RoleOf(Sprites!.Settings, before) != SpriteRules.RoleOf(Sprites.Settings, after)
+            || before.SourceBounds != after.SourceBounds || before.RequiresTransparency != after.RequiresTransparency
             || before.Loop != after.Loop || (before.Loop && before.FrameCount != after.FrameCount)
             || before.MotionNotes != after.MotionNotes;
     private bool SpriteAssetBusy(Guid id)
@@ -441,18 +495,18 @@ public sealed partial class PipelineJob
     }
     private SpriteFrameInput SpriteInput(SpriteAsset asset, int index)
         => new(asset.Plan.Id, asset.Plan, index, asset.PlanRevision, index == 0 ? null : asset.ApprovedBaseImageId,
-            Sprites!.GenerationCanvas, Sprites.OutputCanvas, Sprites.Transform);
+            SpriteAssetCanvasOf(asset).Generation, SpriteAssetCanvasOf(asset).Output, SpriteAssetCanvasOf(asset).Transform);
     private bool MatchesSpriteInput(SpriteAsset asset, SpriteFrameInput input)
         => input.AssetId == input.Plan.Id && input.PlanRevision == asset.PlanRevision
             && !GenerationChanged(asset.Plan, input.Plan) && input.FrameIndex >= 0 && input.FrameIndex < asset.Frames.Count
-            && input.Canvas == Sprites!.OutputCanvas && input.GenerationCanvas == Sprites.GenerationCanvas
-            && input.Transform == Sprites.Transform && (input.FrameIndex == 0 ? input.BaseImageId is null
+            && input.Canvas == SpriteAssetCanvasOf(asset).Output && input.GenerationCanvas == SpriteAssetCanvasOf(asset).Generation
+            && input.Transform == SpriteAssetCanvasOf(asset).Transform && (input.FrameIndex == 0 ? input.BaseImageId is null
                 : input.BaseImageId is not null && input.BaseImageId == asset.ApprovedBaseImageId
                     && input.BaseImageId == asset.Frames[0].CurrentImageId);
     private SpriteAssetApproval SpriteApproval(SpriteAsset asset)
         => new(asset.PlanRevision, new(asset.Plan.Id, asset.Plan.Name, asset.Plan.Order, asset.Plan.Fps,
             asset.Plan.Loop, asset.Anchor, Sprites!.Settings.Repeat,
-            Sprites.Settings.View == SpriteView.Isometric && Sprites.Settings.OutputKind == SpriteOutputKind.Tiles
+            Sprites.Settings.View == SpriteView.Isometric && SpriteRules.RoleOf(Sprites.Settings, asset.Plan) == SpriteAssetRole.Tile
                 ? SpriteTileLayout.Diamond : SpriteTileLayout.Square,
             asset.Frames[0].CurrentImageId!.Value,
             Array.AsReadOnly(asset.Frames.OrderBy(f => f.Index).Select(f => f.CurrentImageId!.Value).ToArray())));
@@ -473,6 +527,9 @@ public sealed partial class PipelineJob
         => left.SchemaVersion == right.SchemaVersion && left.ExportId == right.ExportId
             && left.ReviewRevision == right.ReviewRevision && left.View == right.View && left.OutputKind == right.OutputKind
             && left.SourceCanvas == right.SourceCanvas && left.OutputCanvas == right.OutputCanvas
+            && left.Grid == right.Grid && left.TileWidth == right.TileWidth
+            && (left.AssetDetails is null ? right.AssetDetails is null
+                : right.AssetDetails is not null && left.AssetDetails.SequenceEqual(right.AssetDetails))
             && left.ExcludedAssetIds.SequenceEqual(right.ExcludedAssetIds) && left.Assets.Count == right.Assets.Count
             && left.Assets.Zip(right.Assets).All(pair => SameApprovedAsset(pair.First, pair.Second));
     private static bool CanAttachSpriteResult(PipelineTask task, DateTimeOffset now)

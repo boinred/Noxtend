@@ -212,9 +212,10 @@ for (const view of ['topDown', 'isometric'] as const)
         },
       })
       await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+      await choose(page, '미리볼 타일', '전경 나무')
       const preview = page.getByRole('img', { name: '반복 경계 검수', exact: true })
       await expect(preview.locator('image')).toHaveCount(9)
-      const scrub = page.getByRole('slider', { name: '후경 지면 프레임 탐색', exact: true })
+      const scrub = page.getByRole('slider', { name: '전경 나무 프레임 탐색', exact: true })
       await scrub.focus()
       await page.keyboard.press('ArrowRight')
       await expect(preview.locator('image').nth(0)).toHaveAttribute('data-frame-index', '1')
@@ -353,7 +354,7 @@ test('approved animation exports all current frames in a valid ZIP manifest', as
   }
   expect(bytes.readUInt32LE(bytes.length - 22)).toBe(0x06054b50)
   const manifest = JSON.parse(files.get('manifest.json')!.toString())
-  expect(manifest.schemaVersion).toBe(1)
+  expect(manifest.schemaVersion).toBe(2)
   expect(manifest.assets).toHaveLength(2)
   for (const asset of manifest.assets) {
     expect(asset.frames).toHaveLength(8)

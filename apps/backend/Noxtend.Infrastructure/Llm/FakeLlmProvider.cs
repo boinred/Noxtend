@@ -104,10 +104,14 @@ public sealed class FakeLlmProvider : ILlmProvider
         var view = prompt.Contains("\"view\":\"topDown\"", StringComparison.Ordinal) ? "topDown"
             : prompt.Contains("\"view\":\"isometric\"", StringComparison.Ordinal) ? "isometric" : "sideView";
         var outputKind = prompt.Contains("\"outputKind\":\"tiles\"", StringComparison.Ordinal) ? "tiles" : "layers";
-        return JsonSerializer.Serialize(new { view, outputKind, assets = new[] {
-            new { name = "배경", order = 0, sourceBounds = new { x = 0, y = 0, w = 1, h = 1 },
-                requiresTransparency = outputKind == "tiles" && view == "isometric",
-                loop = false, frameCount = 8, fps = 8, motionNotes = "" } } });
+        var roles = outputKind == "tiles" ? new[] { "backdrop", "tile", "object" } : ["layer"];
+        return JsonSerializer.Serialize(new { view, outputKind,
+            grid = outputKind == "tiles" ? new { cellWidth = 0.5 } : null,
+            assets = roles.Select((role, order) => new {
+                name = role, role, order,
+                sourceBounds = new { x = 0.0, y = 0.0, w = role == "tile" || role == "object" ? 0.5 : 1, h = 0.5 },
+                requiresTransparency = role == "object" || role == "tile" && view == "isometric",
+                loop = false, frameCount = 8, fps = 8, motionNotes = "" }) });
     }
 
     /// <summary>

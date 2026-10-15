@@ -26,6 +26,8 @@ public sealed class SpritePipelineState
     public SpriteCanvas GenerationCanvas { get; private set; } = null!;
     public SpriteCanvas OutputCanvas { get; private set; } = null!;
     public SpriteTransform Transform { get; private set; } = null!;
+    public SpriteGrid? Grid { get; private set; }
+    internal void ReplaceGrid(SpriteGrid? grid) => Grid = grid;
     public SpritePhase Phase { get; private set; }
     public SpriteSourceDraft? SourceDraft { get; private set; }
     public int ReviewRevision { get; private set; }
@@ -89,6 +91,12 @@ public sealed class SpriteAsset
     public int PlanRevision { get; private set; }
     public SpriteAnchor Anchor { get; private set; } = null!;
     public IReadOnlyList<SpriteFrame> Frames => _frames.OrderBy(frame => frame.Index).ToArray();
+    public SpriteAssetCanvas? Canvas { get; private set; }
+    internal void UpdateCanvas(SpriteAssetCanvas canvas, SpriteAnchor anchor)
+    {
+        Canvas = canvas;
+        Anchor = anchor;
+    }
     public Guid? ApprovedBaseImageId { get; private set; }
     public SpriteAssetApproval? Approval { get; private set; }
 

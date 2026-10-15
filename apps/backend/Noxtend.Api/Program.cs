@@ -11,14 +11,7 @@ using Noxtend.Infrastructure.Persistence;
 // is constructed anywhere else.
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers().AddJsonOptions(options =>
-{
-    // 기본 인코더는 비ASCII 를 \uXXXX 로 escape 한다. 일관성 프롬프트와 파츠 이름이
-    // 전부 한국어라 (§2.2) 한 글자가 6바이트가 되고, 폴링 응답이 그만큼 무거워진다.
-    // Relaxed 가 위험해지는 것은 HTML 에 직접 끼워 넣을 때인데, 여기 응답은 JSON 으로만 소비된다
-    options.JsonSerializerOptions.Encoder = System.Text.Encodings.Web.JavaScriptEncoder
-        .UnsafeRelaxedJsonEscaping;
-});
+builder.Services.AddControllers().AddJsonOptions(Noxtend.Api.Contracts.ApiJson.Configure);
 builder.Services.AddOpenApi();
 builder.Services.AddNoxtendInfrastructure(builder.Configuration);
 

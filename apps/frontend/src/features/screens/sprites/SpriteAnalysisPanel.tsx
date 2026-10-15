@@ -1,5 +1,6 @@
+import { assetRole } from '@/domain/sprites/rules'
 import { AnalysisSummaryPanel, type AnalysisSummaryPanelProps } from '../AnalysisSummaryPanel'
-import { spriteOutputLabel, spriteViewLabel } from '@/domain/sprites/labels'
+import { spriteOutputLabel, spriteViewLabel, spriteRoleLabel } from '@/domain/sprites/labels'
 import type { SpriteCanvas, SpriteState } from '@/domain/sprites/types'
 
 const size = (canvas: SpriteCanvas) => `${canvas.width}×${canvas.height}`
@@ -31,7 +32,7 @@ export function spriteAnalysisSummary(sprite: SpriteState): AnalysisSummaryPanel
       {
         id: 'assets',
         label: '대상',
-        value: `${plans.length}개 · 총 ${frames}프레임`,
+        value: `${plans.length}개 · 총 ${frames}프레임${settings.outputKind === 'tiles' && plans.length ? ` · ${(['tile', 'object', 'backdrop'] as const).map((role) => `${spriteRoleLabel(role)} ${plans.filter((plan) => assetRole(settings, plan) === role).length}`).join(' · ')}` : ''}`,
         testId: 'sprite-analysis-assets',
       },
     ],

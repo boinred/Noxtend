@@ -27,6 +27,9 @@
 4. 복구: 중복 배달·종료 공정·다른 owner는 `Skipped`로 Ack한다. 프로세스 종료 시 Ack하지 않고 `SweepStaleTasksHandler`가 lease 만료 공정을 재시도 한도 안에서 다시 적재하고 준비된 대기 공정을 재적재한다. rowversion 경합은 `ConcurrencyConflictException`으로 감싸며 Worker는 오류로 기록하지 않는다.
 5. 유사도 평가는 별도 경로다: `SimilarityController` → `StartSimilarityRunHandler`·`UploadCandidateRenderHandler`·`RetrySimilarityRunHandler` → `ISimilarityQueue` → `SimilarityWorker` → `EvaluateSimilarityHandler`, 회수는 `SimilaritySweeper` → `SweepSimilarityHandler`.
 
+2026-10-15 실행 경계 확인: `TaskExecution`은 이미 실행 중인 v2 `PackSprites`가 격자만 바뀌어 이전 결과가 된 경우, 새 ZIP이 먼저 완료하여 작업이 `Succeeded`·`PartiallySucceeded`여도 리스 갱신과 이력 ZIP 반영을 허용한다. `CanPreserveSpriteExportTask`의 대상 목록·승인·실행 상태 검사와 lease·attempt·rowversion 소유권 검사를 모두 통과해야 한다. 새 ZIP의 상태·`CompletedExportId`는 유지하며 취소·실패 종료와 다른 공정의 종료 가드는 유지한다. `SpriteCommandTests.GridChangedDuringPack_PreservesHistoryOnlyWithLeaseOwnership`이 실제 새 export 완료 뒤 이전 export의 즉시 반영·리스 갱신 경로와 취소·소유권 변경을 검사한다.
+
+
 TaskKind별 handler는 `TaskWorkerRegistration`의 표가 정본이다. 텍스트 공정은 `RunTaskHandler`, 이미지 생성은 `RunGenerationTaskHandler`, 3D는 `RunMeshTaskHandler`, 2D는 `Noxtend.Application/Sprites/Run*TaskHandler.cs`다. 원본 준비 공정은 `EnhanceSpriteSource`가 텍스트 리스(`JobOptions`)와 워커 1개, `GenerateSpriteSource`가 이미지 리스(`GenerationOptions`)와 `generationWorkers` 그룹·`ReclaimPlan` 생성 방치 기준을 쓴다. 보완 JSON 위반·공급자 일시 오류는 재시도, 이미지 장수·형식 위반은 유료 재호출 없이 실패한다. 단계별 상세는 [Backend 코드 안내](backend.md)와 [공급자와 프롬프트](providers-and-prompts.md)를 본다.
 
 ## 3D 메시 공정
