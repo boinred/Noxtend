@@ -438,3 +438,10 @@ Task 9 문서 검증: `pnpm docs:check`와 `git diff --check` 통과. 문서 검
 최초 전체 리뷰 → P2 1건·P3 3건 수정 → 별도 `roles_final_rereview`의 수정 범위 재리뷰를 완료했다. 재리뷰는 네 지적 모두 ADDRESSED, 신규 Critical/Important 없음, code quality approved로 보고했다. 수정·지도 커밋은 `916e1b5`이며 이 코드의 전체 Backend 회귀 1973건과 관련 Frontend 역할 E2E 3건·lint·typecheck·fresh build가 통과했다. 검사 실행 중 애플리케이션·테스트 소스는 바꾸지 않았다. `pnpm docs:check`, `git diff --check`, 경로 지정 stage의 비밀값 패턴 점검과 커밋 훅도 통과했다.
 
 Tasks 1–9 구현·전체 리뷰 지적 보완·수정 범위 독립 재리뷰·필수 로컬 검증은 완료했다. 10월 14일의 검증과 최초 실패 기록은 당시 근거로 보존한다. 실제 AI 품질·유료 smoke·운영 DB migration·실 HTTP 호출·push·merge·배포는 미수행이며, v1 실패 공정 SQL→writer 재시도를 하나로 연결한 신규 통합 사례도 추가하지 않았다. 기존 NU1903·Skia/xUnit·Vite chunk 경고는 별도 제약으로 남는다.
+
+
+#### PR 병합·브랜치 정리 — 2026-10-15
+
+[PR #14](https://github.com/boinred/Noxtend/pull/14)를 `main`에 merge commit `e78880935c32bfd09358fc80686f1e79f0bd065c`로 병합했다. 병합 직전 원격 `main`에 추가 변경이 없었고 PR은 MERGEABLE/CLEAN이었다. GitHub 등록 status check는 없었으므로 로컬 검증 근거와 독립 리뷰를 사용했다. `git diff --exit-code 77d010d origin/main`으로 병합 트리와 검증된 트리의 동일성을 확인했으며 같은 코드를 대상으로 전체 회귀를 반복하지 않았다.
+
+기본 checkout을 `main`으로 fast-forward하고 로컬·원격 `claude/2d-asset-roles` 브랜치를 삭제했다. 별도 worktree는 없으며 기본 checkout을 유지한다. 위 절의 push·merge 미수행은 병합 전 검증 시점 기록이다. 실제 AI·유료 smoke·운영 DB migration·Docker 배포는 이번 병합에서도 수행하지 않았다.
