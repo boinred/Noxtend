@@ -39,4 +39,12 @@ Frontend E2E는 Fake API·Chromium을 사용하며 실제 AI 호출 증거가 �
 
 ## 전달 상태
 
-PR 생성·main 병합·작업 브랜치 정리를 진행 중이다. 실제 완료 결과는 아래에 추가한다.
+2026-10-16 PR 병합과 작업 브랜치 정리 완료. 아래 기록은 위 검증 당시 결과를 유지한 후속 전달 기록이다.
+
+- PR: [#15](https://github.com/boinred/Noxtend/pull/15)
+- 구현 커밋: `2c4bab8d3fc90d97ff11a02b1d991f81dc9ffd08`
+- main 병합 커밋: `212e742a853a0e2bbee48e65ce6714d1372132be` (2026-10-16 13:16 KST)
+- main 병합 결과와 구현 커밋의 전체 트리가 동일함을 `git diff`로 확인했다. 병합 충돌 또는 추가 기능 변경은 없었다.
+- `codex/provider-errors-sprite-schema` 로컬·원격 브랜치를 삭제했고 기본 checkout을 main으로 동기화했다. 별도 worktree는 없으며 위 로컬 근거는 기본 checkout에 그대로 남아 있다.
+- 통합 전 문서·공백·비밀값 패턴 검사와 실제 커밋 훅의 Frontend lint·format 검사를 통과했다. GitHub에 등록된 PR 상태 검사는 없었으며 CI 성공으로 표현하지 않는다.
+- 이 전달 기록은 main의 문서 후속 커밋으로 보존한다. 실 AI·Docker 재배포·실 모바일 기기 검증은 추가하지 않았다.
