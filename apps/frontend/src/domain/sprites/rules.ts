@@ -83,6 +83,34 @@ export function cellWidthOf(
   if (!widths.length) return null
   return (widths[Math.floor((widths.length - 1) / 2)]! + widths[Math.floor(widths.length / 2)]!) / 2
 }
+// 원본 px 좌표의 재배치 영역
+export function assetSourceRect(
+  settings: SpriteSettings,
+  source: SpriteCanvas,
+  cellWidth: number | null,
+  plan: SpriteAssetPlan,
+): { x: number; y: number; width: number; height: number } {
+  const role = assetRole(settings, plan)
+  if (role === 'layer' || role === 'backdrop')
+    return { x: 0, y: 0, width: source.width, height: source.height }
+  const bounds = plan.sourceBounds
+  if (role === 'object')
+    return {
+      x: bounds.x * source.width,
+      y: bounds.y * source.height,
+      width: bounds.w * source.width,
+      height: bounds.h * source.height,
+    }
+  // 타일은 ROI 중심에 한 칸, 다이아몬드는 높이 절반
+  const width = (cellWidth ?? bounds.w) * source.width
+  const height = settings.view === 'isometric' ? width / 2 : width
+  return {
+    x: (bounds.x + bounds.w / 2) * source.width - width / 2,
+    y: (bounds.y + bounds.h / 2) * source.height - height / 2,
+    width,
+    height,
+  }
+}
 export function assetOutputSize(
   settings: SpriteSettings,
   source: SpriteCanvas,

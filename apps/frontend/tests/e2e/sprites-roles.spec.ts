@@ -38,6 +38,39 @@ test('roles expose per asset output and validation with single image preview', a
   await page.screenshot({ path: info.outputPath('roles-390.png'), fullPage: true })
 })
 
+test('source comparison overlays current base images on their source regions', async ({ page }) => {
+  await installFakeApi(page, { sprites: { seed: 'baseReview', settings, partialBases: true } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const compare = page
+    .getByRole('region', { name: '원본 비교' })
+    .getByRole('img', { name: '원본 위 재배치' })
+  await expect(compare).toHaveAttribute('viewBox', '0 0 320 180')
+  const images = compare.locator('image')
+  await expect(images).toHaveCount(3)
+  await expect(images.nth(0)).toHaveAttribute(
+    'href',
+    new RegExp(`/api/uploads/${SPRITE_IDS.upload}/`),
+  )
+  // 원경 배경은 원본 전체, 오브젝트는 ROI
+  for (const [index, x, y, width, height] of [
+    [1, 0, 0, 320, 180],
+    [2, 0, 0, 160, 90],
+  ])
+    for (const [name, value] of Object.entries({ x, y, width, height }))
+      await expect(images.nth(index!)).toHaveAttribute(name, String(value))
+  // 기준 이미지 없는 타일은 ROI 중심의 한 칸 윤곽
+  const missing = compare.locator('rect')
+  await expect(missing).toHaveCount(1)
+  for (const [name, value] of Object.entries({ x: 0, y: 10, width: 320, height: 160 }))
+    await expect(missing).toHaveAttribute(name, String(value))
+  const opacity = page.getByRole('slider', { name: '재배치 투명도' })
+  await expect(opacity).toHaveValue('50')
+  await expect(compare.locator('g')).toHaveAttribute('opacity', '0.5')
+  await opacity.fill('80')
+  await expect(opacity).toHaveAttribute('aria-valuetext', '80%')
+  await expect(compare.locator('g')).toHaveAttribute('opacity', '0.8')
+})
+
 test('grid draft survives refresh and conflict then reloads both and saves reordered HTTP properties', async ({
   page,
 }) => {
