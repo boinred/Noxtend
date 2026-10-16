@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSpriteRoiEditor } from './useSpriteRoiEditor'
 import {
   Select,
   SelectContent,
@@ -150,6 +151,32 @@ export function SpritePlanReview({
   function edit(id: string, patch: Partial<SpriteAssetPlan>) {
     setPlans((current) => current.map((p) => (p.id === id ? { ...p, ...patch } : p)))
   }
+  function isActive(id: string) {
+    return (
+      sprite.assets
+        .find((asset) => asset.id === id)
+        ?.frames.some((frame) =>
+          tasks.some(
+            (task) =>
+              task.id === frame.currentTaskId &&
+              (task.status === 'running' || task.status === 'pending'),
+          ),
+        ) ?? false
+    )
+  }
+  const roi = useSpriteRoiEditor({
+    plans,
+    lockedIds: plans
+      .filter((plan) => isActive(plan.id))
+      .map((plan) => plan.id)
+      .join(','),
+    disabled: busy,
+    revision: `${draft.revision}:${sprite.reviewRevision}`,
+    onCommit: (id, sourceBounds) => edit(id, { sourceBounds }),
+  })
+  const displayPlans = plans.map((plan) =>
+    roi.preview?.partId === plan.id ? { ...plan, sourceBounds: roi.preview.bounds } : plan,
+  )
   return (
     <section className={styles.panel} aria-label="제작 계획 검수">
       <h2 className={styles.title}>제작 계획 검수</h2>
@@ -202,7 +229,10 @@ export function SpritePlanReview({
       ) : null}
       <PartsOverlay
         sourceImageId={sourceImageId}
-        parts={plans.map((plan, index) => ({
+        frameRef={roi.frameRef}
+        selection={{ selectedId: roi.selectedId, onSelect: roi.setSelectedId }}
+        editing={{ preview: roi.preview, onPointerHandleDown: roi.onPointerHandleDown }}
+        parts={displayPlans.map((plan, index) => ({
           id: plan.id,
           name: plan.name,
           label: `${index + 1}. ${plan.name}${tiles ? ` · ${spriteRoleLabel(assetRole(sprite.settings, plan))}` : ''}`,
@@ -210,21 +240,37 @@ export function SpritePlanReview({
         }))}
         alwaysShowBoxes
       />
+      <p className={styles.hint}>
+        영역이나 이름을 선택하고 끌어 이동하세요. 손잡이는 크기 조정, Esc는 취소입니다.
+      </p>
       <div className={styles.stack}>
-        {plans.map((p, index) => {
-          const active = sprite.assets
-            .find((a) => a.id === p.id)
-            ?.frames.some((f) =>
-              tasks.some(
-                (t) =>
-                  t.id === f.currentTaskId && (t.status === 'running' || t.status === 'pending'),
-              ),
-            )
+        {displayPlans.map((p, index) => {
+          const active = isActive(p.id)
           return (
-            <fieldset key={p.id} disabled={busy || active} className={styles.asset}>
-              <legend>
-                {index + 1}. {p.name}
-              </legend>
+            <fieldset
+              key={p.id}
+              disabled={busy || active}
+              className={`${styles.asset} ${roi.selectedId === p.id ? 'border-primary bg-primary/5' : ''}`}
+              data-testid="sprite-plan-card"
+            >
+              <legend className="sr-only">대상 설정 {index + 1}</legend>
+              <button
+                type="button"
+                aria-label={`대상 선택 ${index + 1}`}
+                aria-pressed={roi.selectedId === p.id}
+                onClick={() => roi.setSelectedId(p.id)}
+                className="min-w-0 rounded text-left focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                <span className="block break-words font-semibold">
+                  {index + 1}. {p.name}
+                </span>
+                <span className={styles.hint}>
+                  {spriteRoleLabel(assetRole(sprite.settings, p))}
+                  {'canvas' in outputs[index]!
+                    ? ` · 출력 ${outputs[index]!.canvas.width}×${outputs[index]!.canvas.height}px`
+                    : ''}
+                </span>
+              </button>
               {tiles ? (
                 <div className={styles.field}>
                   <label htmlFor={`sprite-role-${p.id}`}>에셋 역할 {index + 1}</label>
@@ -253,17 +299,12 @@ export function SpritePlanReview({
                   </Select>
                 </div>
               ) : null}
-              {'canvas' in outputs[index]! ? (
-                <p className={styles.hint}>
-                  출력 {outputs[index]!.canvas.width}×{outputs[index]!.canvas.height}px
-                </p>
-              ) : null}
               {roleErrors[index] ? (
                 <p role="alert" className={styles.error}>
                   {roleErrors[index]}
                 </p>
               ) : null}
-              <div className={styles.grid}>
+              <div className="grid min-w-0 grid-cols-2 gap-3 max-[360px]:grid-cols-1">
                 <label className={styles.field}>
                   대상 이름 {index + 1}
                   <input
@@ -283,49 +324,57 @@ export function SpritePlanReview({
                   />
                 </label>
               </div>
-              <fieldset className="grid grid-cols-4 gap-2 max-[720px]:grid-cols-2">
-                {(['x', 'y', 'w', 'h'] as const).map((axis) => (
-                  <label key={axis} className={styles.field}>
-                    ROI {axis} {index + 1}
-                    <input
-                      className={backgroundStyles.input}
-                      type="number"
-                      min="0"
-                      max="1"
-                      step="0.01"
-                      value={Number.isFinite(p.sourceBounds[axis]) ? p.sourceBounds[axis] : ''}
-                      onChange={(e) =>
-                        edit(p.id, {
-                          sourceBounds: { ...p.sourceBounds, [axis]: e.target.valueAsNumber },
-                        })
-                      }
-                    />
-                  </label>
-                ))}
-              </fieldset>
-              <label className={styles.row}>
-                <input
-                  type="checkbox"
-                  checked={p.requiresTransparency}
-                  disabled={tiles}
-                  onChange={(e) => edit(p.id, { requiresTransparency: e.target.checked })}
-                />
-                투명 배경 {index + 1}
-              </label>
-              <label className={styles.row}>
-                <input
-                  type="checkbox"
-                  checked={p.loop}
-                  onChange={(e) =>
-                    edit(p.id, {
-                      loop: e.target.checked,
-                      frameCount: [4, 8].includes(p.frameCount) ? p.frameCount : 8,
-                    })
-                  }
-                />
-                루프 애니메이션 {index + 1}
-              </label>
-              <div className={styles.grid}>
+              <details className="min-w-0">
+                <summary className="cursor-pointer text-sm text-muted-foreground">
+                  정밀 조정 {index + 1}
+                </summary>
+                <fieldset className="mt-2 grid grid-cols-2 gap-2">
+                  {(['x', 'y', 'w', 'h'] as const).map((axis) => (
+                    <label key={axis} className={styles.field}>
+                      {{ x: 'X 위치', y: 'Y 위치', w: '너비', h: '높이' }[axis]}
+                      <input
+                        className={backgroundStyles.input}
+                        aria-label={`ROI ${axis} ${index + 1}`}
+                        type="number"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={Number.isFinite(p.sourceBounds[axis]) ? p.sourceBounds[axis] : ''}
+                        onChange={(e) =>
+                          edit(p.id, {
+                            sourceBounds: { ...p.sourceBounds, [axis]: e.target.valueAsNumber },
+                          })
+                        }
+                      />
+                    </label>
+                  ))}
+                </fieldset>
+              </details>
+              <div className="flex flex-wrap gap-x-5 gap-y-2">
+                <label className={styles.row}>
+                  <input
+                    type="checkbox"
+                    checked={p.requiresTransparency}
+                    disabled={tiles}
+                    onChange={(e) => edit(p.id, { requiresTransparency: e.target.checked })}
+                  />
+                  투명 배경 {index + 1}
+                </label>
+                <label className={styles.row}>
+                  <input
+                    type="checkbox"
+                    checked={p.loop}
+                    onChange={(e) =>
+                      edit(p.id, {
+                        loop: e.target.checked,
+                        frameCount: [4, 8].includes(p.frameCount) ? p.frameCount : 8,
+                      })
+                    }
+                  />
+                  루프 애니메이션 {index + 1}
+                </label>
+              </div>
+              <div className="grid min-w-0 grid-cols-2 gap-3 max-[360px]:grid-cols-1">
                 <div className={styles.field}>
                   <label htmlFor={`sprite-frames-${p.id}`}>프레임 수 {index + 1}</label>
                   <Select

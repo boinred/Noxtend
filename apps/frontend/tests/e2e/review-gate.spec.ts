@@ -173,3 +173,34 @@ test.describe('검수 게이트 — review-gate', () => {
     await expect(page.getByTestId('review-confirm-descriptions')).toBeEnabled()
   })
 })
+
+test('기존 3D mouse 손잡이는 이동 좌표를 서버에 저장한다', async ({ page }) => {
+  await installFakeApi(page, { reviewGate: true })
+  const response = page.waitForResponse(
+    (r) => r.url().endsWith('/review') && r.request().method() === 'GET',
+  )
+  await gotoReview(page)
+  const envelope = await (await response).json()
+  await page.route('**/review/parts/*/placements/*', async (route) => {
+    const bounds = route.request().postDataJSON()
+    envelope.data.parts[0].placements[0] = bounds
+    await route.fulfill({ json: envelope })
+  })
+  await page.getByTestId('overlay-chip').first().click()
+  const body = page.getByTestId('overlay-handle-body').first()
+  await expect(body).toBeVisible()
+  const rect = (await body.boundingBox())!
+  const request = page.waitForRequest(
+    (r) => r.method() === 'PATCH' && r.url().includes('/placements/'),
+  )
+  await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(rect.x + rect.width / 2 + 15, rect.y + rect.height / 2 + 10)
+  await page.mouse.up()
+  const mutation = await request
+  expect(mutation.postDataJSON()).toMatchObject({ w: 0.12, h: 0.2 })
+  expect(mutation.postDataJSON().x).toBeGreaterThan(0.05)
+  await expect
+    .poll(async () => (await page.getByTestId('overlay-box').first().boundingBox())!.x)
+    .toBeGreaterThan(rect.x)
+})
