@@ -65,10 +65,12 @@ export function resizeBounds(drag: HandleDrag, point: Point): Bounds {
   const south = drag.handle.startsWith('s')
 
   // 왼쪽 변을 끌면 오른쪽 변이 고정이다. 최소 크기에서 멈춰 뒤집히지 않는다
-  const left = west ? Math.min(clamp01(x + dx), x + w - MIN_SIDE) : x
-  const right = east ? Math.max(clamp01(x + w + dx), x + MIN_SIDE) : x + w
-  const top = north ? Math.min(clamp01(y + dy), y + h - MIN_SIDE) : y
-  const bottom = south ? Math.max(clamp01(y + h + dy), y + MIN_SIDE) : y + h
+  const minWidth = Math.min(MIN_SIDE, w)
+  const minHeight = Math.min(MIN_SIDE, h)
+  const left = west ? Math.min(clamp01(x + dx), x + w - minWidth) : x
+  const right = east ? Math.max(clamp01(x + w + dx), x + minWidth) : x + w
+  const top = north ? Math.min(clamp01(y + dy), y + h - minHeight) : y
+  const bottom = south ? Math.max(clamp01(y + h + dy), y + minHeight) : y + h
 
   return { x: left, y: top, w: right - left, h: bottom - top }
 }

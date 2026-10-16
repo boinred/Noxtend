@@ -144,6 +144,17 @@ internal static class SeedPrompts
         }
         """;
 
+    public static (string System, string User, string Schema, string Note) AnalyzeSpritesV4()
+    {
+        var previous = AnalyzeSpritesV3();
+        var schema = System.Text.Json.Nodes.JsonNode.Parse(previous.Schema)!;
+        var grid = schema["properties"]!["grid"]!;
+        var alternatives = grid["oneOf"];
+        grid.AsObject().Remove("oneOf");
+        grid["anyOf"] = alternatives;
+        return (previous.System, previous.User, schema.ToJsonString(), "이미지 기반 2D 배경 역할·격자 분석 v4 - OpenAI anyOf 호환");
+    }
+
     public static (string System, string User, string Schema, string Note) AnalyzeSpritesV3()
     {
         var schema = System.Text.Json.Nodes.JsonNode.Parse(SpriteAnalyzeSchemaV2)!;

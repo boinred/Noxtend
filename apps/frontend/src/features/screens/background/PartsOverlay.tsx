@@ -15,7 +15,13 @@
 import { useMemo, useState } from 'react'
 import { sourceImageUrl } from '@/app/queries/media'
 import { backgroundStyles as styles } from './backgroundStyles'
-import type { HTMLAttributes, MouseEvent as ReactMouseEvent, ReactNode, Ref } from 'react'
+import type {
+  HTMLAttributes,
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+  ReactNode,
+  Ref,
+} from 'react'
 import type { Bounds, SceneSpec } from '@/domain/job/types'
 
 /**
@@ -38,6 +44,7 @@ export interface OverlayPart {
 }
 
 export interface PartsOverlayProps {
+  selection?: { selectedId: string | null; onSelect: (id: string) => void }
   sourceImageId: string
   parts: OverlayPart[]
   scene?: SceneSpec | null
@@ -60,7 +67,14 @@ export interface PartsOverlayProps {
    * `preview` 가 있으면 그 배치만 이 좌표로 그린다 — 손을 놓기 전에도 끌리는 것이 보인다.
    */
   editing?: {
-    onHandleDown: (
+    onPointerHandleDown?: (
+      partId: string,
+      ordinal: number,
+      box: Bounds,
+      handle: OverlayHandle,
+      event: ReactPointerEvent,
+    ) => void
+    onHandleDown?: (
       partId: string,
       ordinal: number,
       box: Bounds,
@@ -164,6 +178,7 @@ function largest(placements: Bounds[]): Bounds {
 
 export function PartsOverlay({
   sourceImageId,
+  selection,
   parts,
   scene = null,
   action,
@@ -195,7 +210,7 @@ export function PartsOverlay({
   }, [parts])
 
   // 손을 얹은 것이 우선이고, 없으면 고정된 것이 남는다
-  const shown = highlightedPartId ?? hovered ?? stuck
+  const shown = selection ? selection.selectedId : (highlightedPartId ?? hovered ?? stuck)
 
   return (
     <div className={styles.overlay} data-testid="parts-overlay">
@@ -245,6 +260,16 @@ export function PartsOverlay({
                     <div
                       key={index}
                       className={styles.box}
+                      onPointerDown={
+                        selection
+                          ? (event) => {
+                              if (!event.isPrimary || event.button !== 0) return
+                              event.stopPropagation()
+                              selection.onSelect(part.id)
+                              editing?.onPointerHandleDown?.(part.id, index, box, 'body', event)
+                            }
+                          : undefined
+                      }
                       data-shown={isShown || alwaysShowBoxes}
                       data-testid="overlay-box"
                       data-part={part.name}
@@ -254,6 +279,19 @@ export function PartsOverlay({
                         width: `${box.w * 100}%`,
                         height: `${box.h * 100}%`,
                         borderColor: color,
+                        ...(selection
+                          ? {
+                              pointerEvents: 'auto' as const,
+                              touchAction: 'none',
+                              zIndex:
+                                1 +
+                                placed.filter(({ part: other }) =>
+                                  other.placements.some(
+                                    (candidate) => candidate.w * candidate.h > raw.w * raw.h,
+                                  ),
+                                ).length,
+                            }
+                          : {}),
                         // 지목한 것만 제 색으로. 스물다섯 개가 전부 진하면 어느 것을 보고
                         // 있는지 알 수 없다 — 나머지는 옅게 깔아 위치만 남긴다
                         opacity: alwaysShowBoxes && !isShown ? 0.32 : 1,
@@ -278,7 +316,7 @@ export function PartsOverlay({
                         // 프레임의 "새 사각형 그리기" 가 같은 mousedown 을 먹으면 안 된다
                         event.stopPropagation()
                         event.preventDefault()
-                        editing.onHandleDown(part.id, index, box, handle, event)
+                        editing.onHandleDown?.(part.id, index, box, handle, event)
                       }
 
                       return (
@@ -291,9 +329,24 @@ export function PartsOverlay({
                               left: `${box.x * 100}%`,
                               top: `${box.y * 100}%`,
                               width: `${box.w * 100}%`,
+                              ...(selection ? { pointerEvents: 'none' as const } : {}),
                               height: `${box.h * 100}%`,
                             }}
-                            onMouseDown={down('body')}
+                            onMouseDown={editing.onPointerHandleDown ? undefined : down('body')}
+                            onPointerDown={
+                              editing.onPointerHandleDown
+                                ? (event) => {
+                                    event.stopPropagation()
+                                    editing.onPointerHandleDown?.(
+                                      part.id,
+                                      index,
+                                      box,
+                                      'body',
+                                      event,
+                                    )
+                                  }
+                                : undefined
+                            }
                           />
                           {HANDLES.map((handle) => (
                             <div
@@ -305,8 +358,25 @@ export function PartsOverlay({
                                 left: `${(box.x + box.w * handle.x) * 100}%`,
                                 top: `${(box.y + box.h * handle.y) * 100}%`,
                                 cursor: handle.cursor,
+                                ...(selection ? { touchAction: 'none', zIndex: 30 } : {}),
                               }}
-                              onMouseDown={down(handle.id)}
+                              onMouseDown={
+                                editing.onPointerHandleDown ? undefined : down(handle.id)
+                              }
+                              onPointerDown={
+                                editing.onPointerHandleDown
+                                  ? (event) => {
+                                      event.stopPropagation()
+                                      editing.onPointerHandleDown?.(
+                                        part.id,
+                                        index,
+                                        box,
+                                        handle.id,
+                                        event,
+                                      )
+                                    }
+                                  : undefined
+                              }
                             />
                           ))}
                         </div>
@@ -385,7 +455,8 @@ export function PartsOverlay({
                     type="button"
                     className={styles.chip}
                     data-dimmed={isDimmed}
-                    data-stuck={stuck === part.id}
+                    data-stuck={selection ? selection.selectedId === part.id : stuck === part.id}
+                    aria-pressed={selection ? selection.selectedId === part.id : undefined}
                     data-testid="overlay-chip"
                     style={{
                       background: color,
@@ -403,7 +474,11 @@ export function PartsOverlay({
                     onMouseLeave={() => setHovered(null)}
                     onFocus={() => setHovered(part.id)}
                     onBlur={() => setHovered(null)}
-                    onClick={() => setStuck(stuck === part.id ? null : part.id)}
+                    onClick={() =>
+                      selection
+                        ? selection.onSelect(part.id)
+                        : setStuck(stuck === part.id ? null : part.id)
+                    }
                   >
                     {part.label ?? part.name}
                   </button>

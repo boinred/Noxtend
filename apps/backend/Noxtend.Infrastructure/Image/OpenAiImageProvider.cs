@@ -38,6 +38,11 @@ public sealed partial class OpenAiImageProvider(HttpClient http, string apiKey, 
 
     public async Task<ImageResult> GenerateAsync(ImageRequest request, CancellationToken ct)
     {
+        // 헤더 우선 읽기에서도 본문 수신의 기존 HTTP timeout 유지
+        using var callCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        callCancellation.CancelAfter(http.Timeout);
+        ct = callCancellation.Token;
+
         ImageModels.ValidateSpriteRequest(ProviderKind.OpenAI, model, request);
 
         using var message = request.Reference.Count > 0
@@ -46,17 +51,14 @@ public sealed partial class OpenAiImageProvider(HttpClient http, string apiKey, 
 
         message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
-        using var response = await ProviderHttp.SendAsync(http, message, ct);
+        using var response = await ProviderHttp.SendAsync(http, message, ct, HttpCompletionOption.ResponseHeadersRead);
 
         if (!response.IsSuccessStatusCode)
         {
-            // 상태 코드만 흘린다. 본문에는 키 조각이나 조직 식별자가 섞일 수 있다
-            throw new ProviderCallFailedException(
-                $"{(int)response.StatusCode}",
-                isTransient: await ProviderHttp.IsOpenAiTransientAsync(response, ct));
+            throw await ProviderHttp.OpenAiFailureAsync(response, apiKey, ct);
         }
 
-        var result = ParseResponse(await response.Content.ReadAsStringAsync(ct));
+        var result = ParseResponse(await ProviderHttp.ReadBodyAsync(response, ct));
         return result with
         {
             RateLimitRemainingRequests = RateLimitRemaining(response.Headers, "x-ratelimit-remaining-requests"),

@@ -37,6 +37,26 @@ public sealed class SeedPromptVariableTests
     }
 
     [Fact]
+    public void SpriteAnalyzeV4PreservesV3ContractWithSupportedUnion()
+    {
+        var v3 = SeedPrompts.AnalyzeSpritesV3();
+        var v4 = SeedPrompts.AnalyzeSpritesV4();
+        Assert.Equal(v3.System, v4.System);
+        Assert.Equal(v3.User, v4.User);
+        Assert.Equal(v3.Schema.Replace("\"oneOf\"", "\"anyOf\""), v4.Schema);
+        Assert.True(v4.Note.Length <= 500);
+        using var document = JsonDocument.Parse(v4.Schema);
+        foreach (var (_, node) in ObjectsIn(document.RootElement, "$"))
+        {
+            Assert.False(node.GetProperty("additionalProperties").GetBoolean());
+            Assert.Equal(node.GetProperty("properties").EnumerateObject().Select(p => p.Name).Order(),
+                node.GetProperty("required").EnumerateArray().Select(p => p.GetString()).Order());
+        }
+        Assert.DoesNotContain("\"oneOf\"", v4.Schema);
+        Assert.Equal(2, document.RootElement.GetProperty("properties").GetProperty("grid").GetProperty("anyOf").GetArrayLength());
+    }
+
+    [Fact]
     public void SpriteAnalyzeV3UsesAllowedVariablesAndRequiresRoleAndGrid()
     {
         var prompt = SeedPrompts.AnalyzeSpritesV3();
@@ -168,6 +188,14 @@ public sealed class SeedPromptVariableTests
     /// <summary>스키마 안의 모든 object 노드 — 중첩된 items 안까지 훑는다.</summary>
     private static IEnumerable<(string Path, JsonElement Node)> ObjectsIn(JsonElement node, string path)
     {
+        if (node.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var child in node.EnumerateArray())
+                foreach (var found in ObjectsIn(child, path + "[]"))
+                    yield return found;
+            yield break;
+        }
+
         if (node.ValueKind != JsonValueKind.Object)
         {
             yield break;

@@ -41,6 +41,7 @@ export type IconName =
   | 'settings'
   | 'copy'
   | 'upload'
+  | 'download'
   | 'check'
 
 /** 24x24 viewBox, currentColor stroke 기준 */
@@ -84,6 +85,7 @@ const PATHS: Record<IconName, string> = {
     'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm7.4-3a7.4 7.4 0 0 0-.1-1.1l2-1.5-2-3.4-2.3 1a7.5 7.5 0 0 0-1.9-1.1L14.7 3H9.3l-.4 2.4a7.5 7.5 0 0 0-1.9 1.1l-2.3-1-2 3.4 2 1.5a7.4 7.4 0 0 0 0 2.2l-2 1.5 2 3.4 2.3-1c.6.5 1.2.8 1.9 1.1l.4 2.4h5.4l.4-2.4c.7-.3 1.3-.6 1.9-1.1l2.3 1 2-3.4-2-1.5c.1-.4.1-.7.1-1.1Z',
   copy: 'M9 9h10v12H9zM5 15H3V3h12v2',
   upload: 'M12 16V4m-5 5 5-5 5 5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2',
+  download: 'M12 4v12m-5-5 5 5 5-5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2',
   check: 'm5 13 4 4 10-10',
 }
 

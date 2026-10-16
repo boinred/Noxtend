@@ -75,6 +75,7 @@ test('regenerating one frame invalidates approval and keeps other assets usable'
   await expect(
     page.getByRole('img', { name: '후경 지면 프레임 2', exact: true }),
   ).not.toHaveAttribute('src', original!)
+  page.once('dialog', (dialog) => dialog.accept())
   await page.getByRole('button', { name: '후경 지면 기준 재생성', exact: true }).click()
   await expect(
     page.getByText(
@@ -371,6 +372,7 @@ test('approved animation exports all current frames in a valid ZIP manifest', as
       expect(frame.rect).toEqual({ x: frame.index * 324 + 2, y: 2, width: 320, height: 180 })
     }
   }
+  page.once('dialog', (dialog) => dialog.accept())
   await page.getByRole('button', { name: '후경 지면 기준 재생성', exact: true }).click()
   await expect(page.getByText('프레임 2 · 누락', { exact: true })).toBeVisible()
   await expect(page.getByLabel('후경 지면 기준 승인 선택', { exact: true })).toBeEnabled()

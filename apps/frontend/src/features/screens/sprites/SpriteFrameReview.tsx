@@ -2,6 +2,7 @@ import { assetRole } from '@/domain/sprites/rules'
 import { spriteRoleLabel } from '@/domain/sprites/labels'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Icon } from '@/features/shell/Icon'
 import { spriteImageUrl } from '@/app/queries/media'
 import {
   useApproveSpriteBases,
@@ -50,7 +51,22 @@ export function SpriteFrameReview({
   })
   return (
     <section className={styles.panel} aria-label="기준 이미지 검수">
-      <h2 className={styles.title}>기준 이미지 검수</h2>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-base font-semibold text-foreground">기준 이미지 검수</h2>
+        <label className="flex min-h-10 items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="size-5 focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+            checked={selectable.length > 0 && ids.length === selectable.length}
+            ref={(input) => {
+              if (input) input.indeterminate = ids.length > 0 && ids.length < selectable.length
+            }}
+            disabled={busy || selectable.length === 0}
+            onChange={(e) => setSelected(e.target.checked ? selectable.map((a) => a.id) : [])}
+          />
+          전체 선택
+        </label>
+      </div>
       <p className={styles.hint}>
         체크무늬에서 투명 영역을 확인하고 승인할 대상을 선택해 주세요. 정적 대상은 기준 승인으로
         최종 승인됩니다.
@@ -79,42 +95,70 @@ export function SpriteFrameReview({
                     className={styles.image}
                     style={checkerboard}
                   />
-                  <a className={styles.link} href={spriteImageUrl(jobId, imageId)}>
-                    PNG 다운로드 · {a.plan.name}
-                  </a>
                 </>
               ) : (
                 <p className={styles.hint}>{active ? '기준 이미지 생성 중' : '기준 이미지 없음'}</p>
               )}
+              <div className="flex flex-nowrap items-center gap-2">
+                {imageId ? (
+                  <Button asChild variant="outline" size="icon" className="size-10">
+                    <a
+                      href={spriteImageUrl(jobId, imageId)}
+                      aria-label={`PNG 다운로드 · ${a.plan.name}`}
+                      title="PNG 다운로드"
+                    >
+                      <Icon name="download" />
+                    </a>
+                  </Button>
+                ) : null}
+                {sprite.phase !== 'planReview' && sprite.phase !== 'packaging' ? (
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="size-10"
+                    aria-label={`${a.plan.name} 기준 재생성`}
+                    title="기준 재생성"
+                    disabled={busy || active}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `${a.plan.name} 기준 이미지를 재생성할까요? 기존 기준 승인과 최종 승인이 무효화됩니다.${a.plan.loop ? ' 후속 프레임도 무효화됩니다.' : ''} 기준 이미지를 다시 검수해야 합니다. 진행하시겠습니까?`,
+                        )
+                      ) {
+                        regenerate.mutate({ ...context(), assetId: a.id, index: 0 })
+                      }
+                    }}
+                  >
+                    <Icon name="reset" />
+                  </Button>
+                ) : null}
+                {!a.approval && reviewing && !baseApproved ? (
+                  <label
+                    className="ml-auto flex min-h-10 shrink-0 items-center justify-center gap-2 px-3 rounded-lg border border-border has-disabled:opacity-45"
+                    title="기준 승인 선택"
+                  >
+                    <input
+                      type="checkbox"
+                      className="size-5 focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+                      aria-label={`${a.plan.name} 기준 승인 선택`}
+                      checked={ids.includes(a.id)}
+                      disabled={busy || !selectable.some((asset) => asset.id === a.id)}
+                      onChange={(e) =>
+                        setSelected(
+                          e.target.checked
+                            ? [...selected, a.id]
+                            : selected.filter((id) => id !== a.id),
+                        )
+                      }
+                    />
+                    승인
+                  </label>
+                ) : null}
+              </div>
               {a.approval ? (
                 <p className={styles.hint}>
                   최종 승인 완료 · {a.approval.snapshot.imageIds.length}프레임
                 </p>
-              ) : reviewing && !baseApproved ? (
-                <label className={styles.row}>
-                  <input
-                    type="checkbox"
-                    checked={ids.includes(a.id)}
-                    disabled={busy || !selectable.some((asset) => asset.id === a.id)}
-                    onChange={(e) =>
-                      setSelected(
-                        e.target.checked
-                          ? [...selected, a.id]
-                          : selected.filter((id) => id !== a.id),
-                      )
-                    }
-                  />
-                  {a.plan.name} 기준 승인 선택
-                </label>
-              ) : null}
-              {sprite.phase !== 'planReview' && sprite.phase !== 'packaging' ? (
-                <Button
-                  variant="outline"
-                  disabled={busy || active}
-                  onClick={() => regenerate.mutate({ ...context(), assetId: a.id, index: 0 })}
-                >
-                  {a.plan.name} 기준 재생성
-                </Button>
               ) : null}
               {a.plan.loop ? (
                 <>

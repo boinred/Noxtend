@@ -5,6 +5,10 @@ import { installFakeApi } from './fakeApi'
 import { SPRITE_IDS, SPRITE_SOURCE_PNG, type SpriteFakeOptions } from './spriteFakeApi'
 import { spriteBackgroundWithSourcePath, readSpriteSource } from '../../src/routes/paths'
 
+async function openPrecise(page: Page) {
+  const summary = page.getByText('정밀 조정 1', { exact: true })
+  if ((await summary.locator('..').getAttribute('open')) === null) await summary.click()
+}
 const viewLabels: Record<string, string> = {
   sideView: '횡스크롤',
   topDown: '탑다운',
@@ -171,7 +175,9 @@ test('sprite plan uses the shared analysis overlay and reflects draft edits', as
   expect(new Set(colors).size).toBe(2)
 
   await page.getByLabel('대상 이름 1', { exact: true }).fill('고대 석조 교량')
+  await openPrecise(page)
   await page.getByLabel('ROI w 1', { exact: true }).fill('0.6')
+  await openPrecise(page)
   await page.getByLabel('ROI x 1', { exact: true }).fill('0.1')
   const chip = overlay.getByRole('button', { name: '1. 고대 석조 교량', exact: true })
   await expect(chip).toBeVisible()
@@ -182,11 +188,11 @@ test('sprite plan uses the shared analysis overlay and reflects draft edits', as
   expect(box.width / image.width).toBeCloseTo(0.6, 2)
   expect((box.x - image.x) / image.width).toBeCloseTo(0.1, 2)
   await chip.focus()
-  await expect(overlay.getByTestId('overlay-chip').nth(1)).toHaveAttribute('data-dimmed', 'true')
   await page.keyboard.press('Enter')
+  await expect(overlay.getByTestId('overlay-chip').nth(1)).toHaveAttribute('data-dimmed', 'true')
   await expect(chip).toHaveAttribute('data-stuck', 'true')
   await page.keyboard.press('Enter')
-  await expect(chip).toHaveAttribute('data-stuck', 'false')
+  await expect(chip).toHaveAttribute('data-stuck', 'true')
   await chip.blur()
   await overlay.screenshot({ path: testInfo.outputPath('sprite-overlay-desktop.png') })
 
@@ -231,7 +237,9 @@ for (const view of ['sideView', 'topDown', 'isometric'])
         tileWidth: 128,
         repeat: 'both',
       })
+      await openPrecise(page)
       await expect(page.getByLabel('ROI x 1', { exact: true })).toHaveValue('0')
+      await openPrecise(page)
       await page.getByLabel('ROI w 1', { exact: true }).fill('0.7')
       await expect(
         page.getByRole('button', { name: '계획 승인 · 기준 이미지 생성' }),
@@ -239,6 +247,7 @@ for (const view of ['sideView', 'topDown', 'isometric'])
       await page.getByRole('button', { name: '계획 저장' }).click()
       await expect(page.getByRole('button', { name: '계획 승인 · 기준 이미지 생성' })).toBeEnabled()
       await page.reload()
+      await openPrecise(page)
       await expect(page.getByLabel('ROI w 1', { exact: true })).toHaveValue('0.7')
       await approvePlan(page)
       const image = page.getByRole('img', { name: '전경 나무 기준 이미지', exact: true })
@@ -271,9 +280,7 @@ for (const view of ['sideView', 'topDown', 'isometric'])
       await page.getByLabel('전경 나무 내보내기 선택', { exact: false }).check()
       if (kind === 'tiles')
         await page.getByLabel('오브젝트 바위 내보내기 선택', { exact: false }).check()
-      await expect(
-        page.getByText(`포함: ${kind === 'tiles' ? 3 : 2}개 · 제외 대상: 없음`),
-      ).toBeVisible()
+      await expect(page.getByText(`포함: ${kind === 'tiles' ? 3 : 2}개 · 제외: 0개`)).toBeVisible()
       await expect(page.getByRole('button', { name: '내보내기', exact: true })).toBeEnabled()
       await page.getByRole('button', { name: '내보내기', exact: true }).click()
       await expect(
@@ -331,9 +338,11 @@ test('plan add remove and ROI/depth validation preserves an explicit static draf
 }) => {
   await installFakeApi(page, { sprites: {} })
   await start(page)
+  await openPrecise(page)
   await page.getByLabel('ROI w 1', { exact: true }).fill('0')
   await expect(page.getByRole('button', { name: '계획 저장' })).toBeDisabled()
   await expect(page.getByRole('alert')).toContainText('양수 ROI')
+  await openPrecise(page)
   await page.getByLabel('ROI w 1', { exact: true }).fill('1')
   await page.getByLabel('깊이 순서 2', { exact: true }).fill('0')
   await expect(page.getByRole('alert')).toContainText('중복 없는 정수 순서')
@@ -401,6 +410,7 @@ test('cached detail failure preserves dirty name and ROI through successful retr
   await start(page)
   await expect(page.getByRole('heading', { name: '제작 계획 검수' })).toBeVisible()
   await page.getByLabel('대상 이름 1', { exact: true }).fill('아직 저장하지 않은 이름')
+  await openPrecise(page)
   await page.getByLabel('ROI w 1', { exact: true }).fill('0.6')
   let failing = true
   await page.route(`**/api/jobs/${SPRITE_IDS.job}`, (route) =>
@@ -417,6 +427,7 @@ test('cached detail failure preserves dirty name and ROI through successful retr
   await expect(page.getByLabel('대상 이름 1', { exact: true })).toHaveValue(
     '아직 저장하지 않은 이름',
   )
+  await openPrecise(page)
   await expect(page.getByLabel('ROI w 1', { exact: true })).toHaveValue('0.6')
   await expect(page.getByRole('button', { name: '계획 저장', exact: true })).toBeDisabled()
   await expect(page.getByRole('button', { name: '계획 승인 · 기준 이미지 생성' })).toBeDisabled()
@@ -426,6 +437,7 @@ test('cached detail failure preserves dirty name and ROI through successful retr
   await expect(page.getByLabel('대상 이름 1', { exact: true })).toHaveValue(
     '아직 저장하지 않은 이름',
   )
+  await openPrecise(page)
   await expect(page.getByLabel('ROI w 1', { exact: true })).toHaveValue('0.6')
   await expect(page.getByRole('button', { name: '계획 저장', exact: true })).toBeEnabled()
   await expect(page.getByRole('button', { name: '계획 승인 · 기준 이미지 생성' })).toBeDisabled()
@@ -470,7 +482,7 @@ test('partial bases export an explicit approved subset and report exclusions', a
   await expect(panel.getByLabel('배경 생성 성공')).toHaveText('1 / 2')
   await expect(page.getByText('Fake 이미지 생성 실패')).toBeVisible()
   await page.getByLabel('후경 지면 내보내기 선택', { exact: false }).check()
-  await expect(page.getByText('포함: 1개 · 제외 대상: 전경 나무')).toBeVisible()
+  await expect(page.getByText('포함: 1개 · 제외: 1개')).toBeVisible()
   await page.getByRole('button', { name: '내보내기', exact: true }).click()
   await expect(page.getByRole('status').first()).toContainText('부분 성공')
   await expect(panel.getByRole('listitem').filter({ hasText: '배경 생성' })).toContainText('미완료')
@@ -663,7 +675,7 @@ test('approved subset can package while another asset is generating', async ({ p
   await approveBases(page, true)
   await expect(page.getByText('기준 이미지 생성 중', { exact: true })).toBeVisible()
   await page.getByLabel('후경 지면 내보내기 선택', { exact: false }).check()
-  await expect(page.getByText('포함: 1개 · 제외 대상: 전경 나무')).toBeVisible()
+  await expect(page.getByText('포함: 1개 · 제외: 1개')).toBeVisible()
   await expect(page.getByRole('button', { name: '내보내기', exact: true })).toBeEnabled()
   await page.getByRole('button', { name: '내보내기', exact: true }).click()
   await expect(page.getByRole('link', { name: '현재 ZIP 다운로드', exact: false })).toBeVisible()
@@ -713,6 +725,7 @@ for (const partial of [false, true])
     const original = await page
       .getByRole('img', { name: '후경 지면 기준 이미지', exact: true })
       .getAttribute('src')
+    page.once('dialog', (dialog) => dialog.accept())
     await page.getByRole('button', { name: '후경 지면 기준 재생성', exact: true }).click()
     await expect(page).toHaveURL(`/2d/background/${SPRITE_IDS.job}`)
     await expect(
@@ -1376,3 +1389,337 @@ test('added target save synchronizes the draft without reloading', async ({ page
   await expect(page.getByRole('button', { name: '대상 추가', exact: true })).toBeEnabled()
   await expect(page.getByLabel('대상 이름 3', { exact: true })).toHaveValue('대상 3')
 })
+
+test('base review selects all locally and keeps compact accessible controls', async ({ page }) => {
+  const records: NonNullable<SpriteFakeOptions['records']> = []
+  await installFakeApi(page, { sprites: { seed: 'baseReview', records } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const panel = page.getByRole('region', { name: '기준 이미지 검수', exact: true })
+  const all = panel.getByRole('checkbox', { name: '전체 선택', exact: true })
+  const first = panel.getByRole('checkbox', { name: '후경 지면 기준 승인 선택', exact: true })
+  const second = panel.getByRole('checkbox', { name: '전경 나무 기준 승인 선택', exact: true })
+  await expect(all).not.toBeChecked()
+  await first.check()
+  await expect(all).toBeChecked({ indeterminate: true })
+  await all.focus()
+  await all.press('Space')
+  await expect(first).toBeChecked()
+  await expect(second).toBeChecked()
+  await expect(all).toBeChecked()
+  await all.press('Space')
+  await expect(first).not.toBeChecked()
+  await expect(second).not.toBeChecked()
+  expect(records).toHaveLength(0)
+  await first.check()
+  await panel.getByRole('button', { name: '선택한 기준 이미지 승인', exact: true }).click()
+  await expect(panel.getByText('최종 승인 완료 · 1프레임')).toHaveCount(1)
+  await expect(first).toHaveCount(0)
+  await all.check()
+  await expect(second).toBeChecked()
+  expect(records.filter((r) => r.path.endsWith('/base/approve'))).toHaveLength(1)
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 })
+    const card = panel.getByRole('article').nth(1)
+    const controls = [
+      card.getByRole('link', { name: 'PNG 다운로드 · 전경 나무', exact: true }),
+      card.getByRole('button', { name: '전경 나무 기준 재생성', exact: true }),
+      second.locator('..'),
+    ]
+    const boxes = await Promise.all(controls.map((control) => control.boundingBox()))
+    expect(boxes.every((box) => box && box.width >= 16)).toBe(true)
+    const centers = boxes.map((box) => box!.y + box!.height / 2)
+    expect(Math.max(...centers) - Math.min(...centers)).toBeLessThan(2)
+    await expect(controls[0]!).toHaveText('')
+    await expect(controls[1]!).toHaveText('')
+    await expect(controls[2]!).toHaveText('승인')
+    expect(boxes[0]!.x).toBeLessThan(boxes[1]!.x)
+    expect(boxes[1]!.x + boxes[1]!.width).toBeLessThan(boxes[2]!.x)
+    const row = (await controls[2]!.locator('..').boundingBox())!
+    expect(boxes[2]!.x + boxes[2]!.width).toBeCloseTo(row.x + row.width, 0)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      width,
+    )
+    const theme = page.getByTestId('theme-toggle')
+    if ((await theme.getAttribute('data-theme-state')) === 'light') await theme.click()
+    await card.screenshot({ path: `/tmp/noxtend-base-review-confirm-${width}.png` })
+  }
+})
+
+test('base review excludes generating and missing images from select all', async ({ page }) => {
+  const records: NonNullable<SpriteFakeOptions['records']> = []
+  await installFakeApi(page, { sprites: { seed: 'baseReview', runningBase: true, records } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const panel = page.getByRole('region', { name: '기준 이미지 검수', exact: true })
+  await expect(panel.getByLabel('전경 나무 기준 승인 선택', { exact: true })).toBeDisabled()
+  await panel.getByLabel('전체 선택', { exact: true }).check()
+  await expect(panel.getByLabel('후경 지면 기준 승인 선택', { exact: true })).toBeChecked()
+  await expect(panel.getByLabel('전경 나무 기준 승인 선택', { exact: true })).not.toBeChecked()
+  expect(records).toHaveLength(0)
+  await panel.getByRole('button', { name: '선택한 기준 이미지 승인', exact: true }).click()
+  await expect(panel.getByText('최종 승인 완료 · 1프레임')).toHaveCount(1)
+  const request = records.find((r) => r.path.endsWith('/base/approve'))!
+  expect(request.body.assetIds).toHaveLength(1)
+  await expect(panel.getByLabel('전체 선택', { exact: true })).toBeDisabled()
+})
+
+test('base review disables all selection without images', async ({ page }) => {
+  await installFakeApi(page, { sprites: { seed: 'failed' } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const panel = page.getByRole('region', { name: '기준 이미지 검수', exact: true })
+  await expect(panel.getByLabel('전체 선택', { exact: true })).toBeDisabled()
+  await expect(panel.getByLabel('후경 지면 기준 승인 선택', { exact: true })).toBeDisabled()
+})
+
+test('base review locks selection while approval is pending', async ({ page }) => {
+  await installFakeApi(page, { sprites: { seed: 'baseReview' } })
+  let release!: () => void
+  const pending = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await page.route('**/base/approve', async (route) => {
+    await pending
+    await route.fallback()
+  })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const panel = page.getByRole('region', { name: '기준 이미지 검수', exact: true })
+  await panel.getByLabel('전체 선택', { exact: true }).check()
+  await panel.getByRole('button', { name: '선택한 기준 이미지 승인', exact: true }).click()
+  try {
+    await expect(panel.getByLabel('전체 선택', { exact: true })).toBeDisabled()
+    await expect(panel.getByLabel('후경 지면 기준 승인 선택', { exact: true })).toBeDisabled()
+    await expect(
+      panel.getByRole('button', { name: '후경 지면 기준 재생성', exact: true }),
+    ).toBeDisabled()
+  } finally {
+    release()
+  }
+  await expect(panel.getByText('최종 승인 완료 · 1프레임')).toHaveCount(2)
+})
+
+test('base review keeps long names above a keyboard accessible mobile control row', async ({
+  page,
+}) => {
+  await installFakeApi(page, { sprites: { seed: 'baseReview' } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const name = '아주 긴 배경 대상 이름으로 좁은 화면에서도 조작부가 줄바꿈되지 않는지 확인'
+  await page.getByLabel('대상 이름 1', { exact: true }).fill(name)
+  await page.getByRole('button', { name: '계획 저장', exact: true }).click()
+  await page.setViewportSize({ width: 390, height: 900 })
+  const panel = page.getByRole('region', { name: '기준 이미지 검수', exact: true })
+  const card = panel.getByRole('article').first()
+  await expect(card.getByRole('heading', { name, exact: true })).toBeVisible()
+  const link = card.getByRole('link', { name: `PNG 다운로드 · ${name}`, exact: true })
+  const checkbox = card.getByRole('checkbox', { name: `${name} 기준 승인 선택`, exact: true })
+  const regenerate = card.getByRole('button', { name: `${name} 기준 재생성`, exact: true })
+  await link.focus()
+  await page.keyboard.press('Tab')
+  await expect(regenerate).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(checkbox).toBeFocused()
+  await page.keyboard.press('Space')
+  await expect(checkbox).toBeChecked()
+  const boxes = await Promise.all([
+    link.boundingBox(),
+    checkbox.locator('..').boundingBox(),
+    regenerate.boundingBox(),
+  ])
+  expect(boxes.every((box) => box && box.width >= 40 && box.height >= 40)).toBe(true)
+  expect(new Set(boxes.map((box) => box!.y)).size).toBe(1)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+  await card.screenshot({ path: '/tmp/noxtend-base-review-long-name-390.png' })
+})
+
+for (const seed of ['baseReview', 'frameReview'] as const) {
+  test(`base regeneration confirms before creating a request for ${seed}`, async ({ page }) => {
+    const records: NonNullable<SpriteFakeOptions['records']> = []
+    await installFakeApi(page, { sprites: { seed, records } })
+    await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+    const button = page.getByRole('button', { name: '후경 지면 기준 재생성', exact: true })
+    await expect(button).toBeEnabled()
+    const before = await page.evaluate(
+      async (id) => (await fetch(`/api/jobs/${id}`)).json(),
+      SPRITE_IDS.job,
+    )
+    const sprite = before.data?.sprite ?? before.sprite
+    await page.evaluate(() => {
+      const original = crypto.randomUUID.bind(crypto)
+      Object.assign(window, { regenerationIds: 0 })
+      crypto.randomUUID = () => {
+        Object.assign(window, { regenerationIds: Reflect.get(window, 'regenerationIds') + 1 })
+        return original()
+      }
+    })
+    let message = ''
+    page.once('dialog', async (dialog) => {
+      message = dialog.message()
+      await dialog.dismiss()
+    })
+    await button.click()
+    expect(message).toContain('후경 지면')
+    expect(message).toContain('승인')
+    expect(message).toContain('진행')
+    if (seed === 'frameReview') expect(message).toContain('후속 프레임')
+    expect(records).toHaveLength(0)
+    expect(await page.evaluate(() => Reflect.get(window, 'regenerationIds'))).toBe(0)
+    page.once('dialog', (dialog) => dialog.accept())
+    await button.click()
+    await expect.poll(() => records.length).toBe(1)
+    expect(records[0]!.path).toBe(
+      `/api/jobs/${SPRITE_IDS.job}/sprites/assets/${sprite.assets[0].id}/frames/0/regenerate`,
+    )
+    expect(records[0]!.body).toEqual({
+      expectedRevision: sprite.reviewRevision,
+      requestId: expect.any(String),
+    })
+    expect(await page.evaluate(() => Reflect.get(window, 'regenerationIds'))).toBe(1)
+  })
+}
+
+test('export selection toggles approved targets without mutations and sends exact subset', async ({
+  page,
+}) => {
+  const records: NonNullable<SpriteFakeOptions['records']> = []
+  await installFakeApi(page, { sprites: { seed: 'completed', records } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const panel = page.getByRole('region', { name: '승인 결과 내보내기', exact: true })
+  const all = panel.getByRole('checkbox', { name: '전체 선택', exact: true })
+  await expect(all).not.toBeChecked()
+  await expect(panel.getByText('선택 0 / 승인됨 2개', { exact: true })).toBeVisible()
+  await all.check()
+  await expect(panel.getByText('선택 2 / 승인됨 2개', { exact: true })).toBeVisible()
+  const first = panel.getByLabel('후경 지면 내보내기 선택', { exact: true })
+  await first.uncheck()
+  await expect(all).toBeChecked({ indeterminate: true })
+  await all.check()
+  await all.uncheck()
+  await expect(panel.getByText('선택 0 / 승인됨 2개', { exact: true })).toBeVisible()
+  await first.focus()
+  await page.keyboard.press('Space')
+  expect(records).toHaveLength(0)
+  await panel.getByText('제외 대상 1개', { exact: true }).click()
+  await expect(panel.getByRole('listitem')).toHaveText('전경 나무')
+  const current = await page.evaluate(
+    async (id) => (await (await fetch(`/api/jobs/${id}`)).json()).data,
+    SPRITE_IDS.job,
+  )
+  await panel.getByRole('button', { name: '내보내기', exact: true }).click()
+  await expect.poll(() => records.length).toBe(1)
+  expect(records[0]!.body.assetIds).toEqual([current.sprite.assets[0].id])
+})
+
+test('export selection excludes unapproved targets and disables an empty approval set', async ({
+  page,
+}) => {
+  const records: NonNullable<SpriteFakeOptions['records']> = []
+  await installFakeApi(page, { sprites: { seed: 'baseReview', records } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const panel = page.getByRole('region', { name: '승인 결과 내보내기', exact: true })
+  const all = panel.getByRole('checkbox', { name: '전체 선택', exact: true })
+  await expect(all).toBeDisabled()
+  await expect(panel.getByRole('button', { name: '내보내기', exact: true })).toBeDisabled()
+  await expect(panel.getByText('미승인', { exact: true })).toHaveCount(2)
+  await approveBases(page, true)
+  await all.check()
+  await expect(panel.getByText('선택 1 / 승인됨 1개', { exact: true })).toBeVisible()
+  await expect(panel.getByLabel('전경 나무 내보내기 선택', { exact: true })).toBeDisabled()
+  expect(records).toHaveLength(1)
+  await panel.getByRole('button', { name: '내보내기', exact: true }).click()
+  await expect(page.getByRole('link', { name: '현재 ZIP 다운로드', exact: false })).toBeVisible()
+  expect(records.at(-1)!.body.assetIds).toHaveLength(1)
+})
+
+test('export selection locks during a request and retries the same payload', async ({ page }) => {
+  await installFakeApi(page, { sprites: { seed: 'completed' } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const panel = page.getByRole('region', { name: '승인 결과 내보내기', exact: true })
+  const requests: unknown[] = []
+  let release!: () => void
+  const waiting = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await page.route('**/sprites/exports', async (route) => {
+    requests.push(route.request().postDataJSON())
+    if (requests.length === 1) await waiting
+    await route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      json: { error: { message: '패키징 연결 실패' } },
+    })
+  })
+  await panel.getByRole('checkbox', { name: '전체 선택', exact: true }).check()
+  await panel.getByRole('button', { name: '내보내기', exact: true }).click()
+  await expect(panel.getByRole('status')).toHaveText('패키징 요청 중…')
+  for (const checkbox of await panel.getByRole('checkbox').all())
+    await expect(checkbox).toBeDisabled()
+  await expect(panel.getByRole('link', { name: '현재 ZIP 다운로드', exact: false })).toBeEnabled()
+  release()
+  await panel.getByRole('button', { name: '같은 내보내기 요청 재전송', exact: true }).click()
+  await expect.poll(() => requests.length).toBe(2)
+  expect(requests[1]).toEqual(requests[0])
+})
+
+test('export selection prunes removed or unapproved targets after refresh', async ({ page }) => {
+  const records: NonNullable<SpriteFakeOptions['records']> = []
+  await installFakeApi(page, { sprites: { seed: 'completed', records } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const panel = page.getByRole('region', { name: '승인 결과 내보내기', exact: true })
+  await panel.getByRole('checkbox', { name: '전체 선택', exact: true }).check()
+  const current = await page.evaluate(
+    async (id) => await (await fetch(`/api/jobs/${id}`)).json(),
+    SPRITE_IDS.job,
+  )
+  current.data.sprite.assets[1].approval = null
+  await page.route(`**/api/jobs/${SPRITE_IDS.job}`, (route) => route.fulfill({ json: current }))
+  await page.getByRole('button', { name: '서버 상태 새로고침', exact: true }).click()
+  await expect(panel.getByText('선택 1 / 승인됨 1개', { exact: true })).toBeVisible()
+  await expect(panel.getByLabel('전경 나무 내보내기 선택', { exact: true })).not.toBeChecked()
+  current.data.sprite.assets = [current.data.sprite.assets[0]]
+  await page.getByRole('button', { name: '서버 상태 새로고침', exact: true }).click()
+  await expect(panel.getByLabel('전경 나무 내보내기 선택', { exact: true })).toHaveCount(0)
+  await panel.getByRole('button', { name: '내보내기', exact: true }).click()
+  await expect.poll(() => records.length).toBe(1)
+  expect(records[0]!.body.assetIds).toEqual([current.data.sprite.assets[0].id])
+})
+
+for (const mode of ['desktop-dark', 'mobile-dark', 'mobile-light']) {
+  test(`export selection ten long names stays compact and bounded ${mode}`, async ({
+    page,
+  }, testInfo) => {
+    await installFakeApi(page, { sprites: { seed: 'completed' } })
+    await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+    const current = await page.evaluate(
+      async (id) => await (await fetch(`/api/jobs/${id}`)).json(),
+      SPRITE_IDS.job,
+    )
+    current.data.sprite.assets = Array.from({ length: 10 }, (_, index) => {
+      const asset = structuredClone(current.data.sprite.assets[index % 2])
+      asset.id = `70000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`
+      asset.plan.name = `${index + 1}. 절벽가장자리의고대석조기둥과오벨리스크가이어지는아주긴배경레이어이름`
+      if (index > 6) asset.approval = null
+      return asset
+    })
+    await page.route(`**/api/jobs/${SPRITE_IDS.job}`, (route) => route.fulfill({ json: current }))
+    await page.getByRole('button', { name: '서버 상태 새로고침', exact: true }).click()
+    await page.setViewportSize({
+      width: mode.startsWith('mobile') ? 390 : 1440,
+      height: mode.startsWith('mobile') ? 844 : 900,
+    })
+    const theme = page.getByTestId('theme-toggle')
+    if (
+      (await theme.getAttribute('data-theme-state')) !== (mode.endsWith('light') ? 'light' : 'dark')
+    )
+      await theme.click()
+    const panel = page.getByRole('region', { name: '승인 결과 내보내기', exact: true })
+    await panel.getByRole('checkbox', { name: '전체 선택', exact: true }).check()
+    await expect(panel.getByText('선택 7 / 승인됨 7개', { exact: true })).toBeVisible()
+    expect(await panel.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+    const rows = panel.locator('label').filter({ has: page.locator('input[aria-label]') })
+    await expect(rows).toHaveCount(10)
+    for (const row of await rows.all())
+      expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(40)
+    const first = (await rows.nth(0).boundingBox())!,
+      second = (await rows.nth(1).boundingBox())!
+    expect(mode.startsWith('mobile') ? second.y > first.y : second.y === first.y).toBe(true)
+    await panel.screenshot({ path: testInfo.outputPath(`export-selection-${mode}.png`) })
+  })
+}

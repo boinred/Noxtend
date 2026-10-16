@@ -56,3 +56,18 @@ describe('resizeBounds', () => {
     expect(next.w).toBeCloseTo(0.2)
   })
 })
+
+it('작은 오른쪽 아래 ROI도 프레임 내부의 양수 크기를 유지한다', () => {
+  for (const handle of ['nw', 'se'] as const) {
+    const next = resizeBounds(
+      { ...drag(handle), origin: { x: 0.999, y: 0.999, w: 0.001, h: 0.001 } },
+      { x: 2, y: 2 },
+    )
+    expect(next.x).toBeGreaterThanOrEqual(0)
+    expect(next.y).toBeGreaterThanOrEqual(0)
+    expect(next.w).toBeGreaterThan(0)
+    expect(next.h).toBeGreaterThan(0)
+    expect(next.x + next.w).toBeLessThanOrEqual(1)
+    expect(next.y + next.h).toBeLessThanOrEqual(1)
+  }
+})
