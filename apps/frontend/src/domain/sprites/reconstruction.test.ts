@@ -4,6 +4,7 @@ import {
   fillTiles,
   latticeCells,
   placementRects,
+  placementsOf,
   reconstructionCell,
   reconstructionVisible,
   tileFillKey,
@@ -71,6 +72,7 @@ function planOf(
     name: id,
     order: 0,
     sourceBounds,
+    placements: null,
     requiresTransparency: false,
     loop: false,
     frameCount: 1,
@@ -520,11 +522,41 @@ describe('fillTiles', () => {
   })
 })
 
+describe('placementsOf', () => {
+  it('falls back to the source bounds when no placements are stored', () => {
+    const plan = objectPlan({ x: 0.5, y: 0.25, w: 0.25, h: 0.5 })
+    expect(placementsOf(plan)).toEqual([{ x: 0.5, y: 0.25, w: 0.25, h: 0.5 }])
+  })
+
+  it('returns the stored placements instead of the source bounds', () => {
+    const placements = [
+      { x: 0.1, y: 0.1, w: 0.2, h: 0.2 },
+      { x: 0.6, y: 0.5, w: 0.2, h: 0.3 },
+    ]
+    const plan = { ...objectPlan({ x: 0.5, y: 0.25, w: 0.25, h: 0.5 }), placements }
+    expect(placementsOf(plan)).toEqual(placements)
+  })
+})
+
 describe('placementRects', () => {
   it('maps placements to source pixels', () => {
     const plan = objectPlan({ x: 0.5, y: 0.25, w: 0.25, h: 0.5 })
     expect(placementRects(plan, { width: 800, height: 600 })).toEqual([
       { x: 400, y: 150, width: 200, height: 300 },
+    ])
+  })
+
+  it('maps every stored placement', () => {
+    const plan = {
+      ...objectPlan({ x: 0, y: 0, w: 1, h: 1 }),
+      placements: [
+        { x: 0.5, y: 0.25, w: 0.25, h: 0.5 },
+        { x: 0, y: 0, w: 0.5, h: 0.5 },
+      ],
+    }
+    expect(placementRects(plan, { width: 800, height: 600 })).toEqual([
+      { x: 400, y: 150, width: 200, height: 300 },
+      { x: 0, y: 0, width: 400, height: 300 },
     ])
   })
 })

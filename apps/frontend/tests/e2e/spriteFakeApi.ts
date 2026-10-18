@@ -354,6 +354,14 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
           w: role === 'object' ? 0.5 : 1,
           h: role === 'object' ? 0.5 : 1,
         },
+        // 오브젝트는 ROI 와 다른 두 자리
+        placements:
+          role === 'object'
+            ? [
+                { x: 0.5, y: 0, w: 0.25, h: 0.5 },
+                { x: 0.25, y: 0.5, w: 0.25, h: 0.5 },
+              ]
+            : null,
         requiresTransparency:
           role === 'object' ||
           (role === 'layer' && order !== 0) ||
@@ -874,6 +882,7 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
           return fail(route, 503, '승인 응답 유실')
         }
         const sprite = job.sprite!
+        let placementsOnly = false
         if (path.endsWith('/plan') && method === 'PUT') {
           const plans = body.assets as SpriteAssetPlan[]
           const grid = (body.grid ?? null) as SpriteState['grid']
@@ -932,6 +941,17 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
           const invalid = sizes.find((size) => 'error' in size)
           if (invalid && 'error' in invalid)
             return fail(route, 400, invalid.error, 'SPRITE_PLAN_INVALID')
+          // 자리만 바뀐 저장은 승인·이미지·단계 유지, revision 만 증가
+          const samePlan = (a: SpriteAssetPlan, b: SpriteAssetPlan) =>
+            JSON.stringify({ ...a, placements: null }) ===
+            JSON.stringify({ ...b, placements: null })
+          placementsOnly =
+            JSON.stringify(sprite.grid) === JSON.stringify(grid) &&
+            sprite.assets.length === plans.length &&
+            plans.every((plan) => sprite.assets.some((a) => samePlan(a.plan, plan))) &&
+            plans.some(
+              (plan) => !sprite.assets.some((a) => JSON.stringify(a.plan) === JSON.stringify(plan)),
+            )
           sprite.grid = grid
           job.sprite!.assets = plans.map((plan, index) => {
             const size = sizes[index]!
@@ -947,6 +967,10 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
                 JSON.stringify(existing.canvas) === JSON.stringify(size.canvas)
               ) {
                 existing.scale = size.scale
+                return existing
+              }
+              if (placementsOnly) {
+                existing.plan = plan
                 return existing
               }
               const generationChanged =
@@ -1004,7 +1028,7 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
           job.sprite!.phase = index === 0 ? 'baseReview' : 'frameReview'
           job.status = 'pendingReview'
         }
-        if (!path.endsWith('/exports') && !path.includes('/sprites/source/')) {
+        if (!path.endsWith('/exports') && !path.includes('/sprites/source/') && !placementsOnly) {
           sprite.exports.forEach((e) => {
             e.isCurrent =
               e.isCurrent &&

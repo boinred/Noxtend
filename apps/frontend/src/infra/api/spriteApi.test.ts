@@ -40,6 +40,7 @@ const plan = {
   name: '앞 레이어',
   order: 1,
   sourceBounds: { x: 0, y: 0, w: 1, h: 1 },
+  placements: null,
   requiresTransparency: true,
   loop: false,
   frameCount: 8,

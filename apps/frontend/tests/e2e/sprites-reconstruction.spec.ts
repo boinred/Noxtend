@@ -27,7 +27,7 @@ test('reconstruction follows opacity after plan approval', async ({ page }) => {
   await expect(opacity).toHaveAttribute('aria-valuetext', '80%')
   await expect(images).toHaveAttribute('opacity', '0.8')
   await expect(images.locator('image[data-tile-id]').first()).toHaveAttribute('width', '320')
-  await expect(images.locator('image[data-asset-id]')).toHaveCount(2) // 원경 배경 1·오브젝트 자리 1
+  await expect(images.locator('image[data-asset-id]')).toHaveCount(3) // 원경 배경 1·오브젝트 자리 2
   // 재구성 층이 ROI 선택을 막지 않음
   const image = review.getByTestId('overlay-image')
   await image.scrollIntoViewIfNeeded()
@@ -36,7 +36,9 @@ test('reconstruction follows opacity after plan approval', async ({ page }) => {
   await expect(review.getByTestId('overlay-handle')).toHaveCount(8)
 })
 
-test('backdrop fills the source canvas while objects keep their own ROI', async ({ page }) => {
+test('backdrop fills the source canvas while objects without placements keep their own ROI', async ({
+  page,
+}) => {
   await installFakeApi(page, { sprites: { seed: 'baseReview', settings } })
   await page.goto(`/2d/background/${SPRITE_IDS.job}`)
   const body = await page.evaluate(
@@ -45,13 +47,15 @@ test('backdrop fills the source canvas while objects keep their own ROI', async 
   )
   const assets = body.data.sprite.assets as {
     id: string
-    plan: { role: string; sourceBounds: Record<string, number> }
+    plan: { role: string; sourceBounds: Record<string, number>; placements: unknown }
   }[]
   const backdrop = assets.find((asset) => asset.plan.role === 'backdrop')!
   const object = assets.find((asset) => asset.plan.role === 'object')!
   // 시드의 원경 배경 ROI는 원본 전체와 같아 응답에서만 어긋나게 바꿈
   backdrop.plan.sourceBounds = { x: 0.25, y: 0.25, w: 0.5, h: 0.5 }
+  // 저장된 자리가 없으면 ROI 한 자리
   object.plan.sourceBounds = { x: 0.25, y: 0.5, w: 0.5, h: 0.5 }
+  object.plan.placements = null
   await page.route(`**/api/jobs/${SPRITE_IDS.job}`, (route) =>
     route.request().method() === 'GET' ? route.fulfill({ json: body }) : route.fallback(),
   )
@@ -71,6 +75,92 @@ test('backdrop fills the source canvas while objects keep their own ROI', async 
       )
 })
 
+// 시드 오브젝트의 두 자리(원본 320×180 px), ROI(0,0,160,90)와 다름
+const OBJECT_RECTS = [
+  { x: 160, y: 0, width: 80, height: 90 },
+  { x: 80, y: 90, width: 80, height: 90 },
+]
+
+test('objects are drawn at each stored placement instead of the ROI', async ({ page }) => {
+  await installFakeApi(page, { sprites: { seed: 'baseReview', settings } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const { data } = await page.evaluate(
+    (id) => fetch(`/api/jobs/${id}`).then((response) => response.json()),
+    SPRITE_IDS.job,
+  )
+  const object = (data.sprite.assets as { id: string; plan: { role: string } }[]).find(
+    (asset) => asset.plan.role === 'object',
+  )!
+  const drawn = page
+    .getByRole('region', { name: '제작 계획 검수' })
+    .getByRole('img', { name: '원본 재구성' })
+    .getByTestId('reconstruction-images')
+    .locator(`image[data-asset-id="${object.id}"]`)
+  await expect(drawn).toHaveCount(2)
+  // 아래쪽 y 가 작은 자리부터 그림
+  for (const [index, rect] of OBJECT_RECTS.entries())
+    for (const [name, value] of Object.entries(rect))
+      await expect(drawn.nth(index)).toHaveAttribute(name, String(value))
+})
+
+interface WirePlan {
+  role: string
+  motionNotes: string
+  placements: { x: number; y: number; w: number; h: number }[] | null
+}
+interface WireSprite {
+  phase: string
+  reviewRevision: number
+  grid: unknown
+  images: unknown[]
+  assets: { planRevision: number; approval: unknown; plan: WirePlan }[]
+}
+
+test('saving only placements keeps approvals and images and bumps only the revision', async ({
+  page,
+}) => {
+  await installFakeApi(page, { sprites: { seed: 'completed', settings } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const { before, after, changed } = await page.evaluate(async (id) => {
+    const read = async (): Promise<WireSprite> =>
+      (await (await fetch(`/api/jobs/${id}`)).json()).data.sprite
+    const save = async (sprite: WireSprite, edit: (plan: WirePlan) => void) => {
+      const assets = sprite.assets.map((asset) => structuredClone(asset.plan))
+      assets.forEach(edit)
+      await fetch(`/api/jobs/${id}/sprites/plan`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestId: crypto.randomUUID(),
+          expectedRevision: sprite.reviewRevision,
+          assets,
+          grid: sprite.grid,
+        }),
+      })
+      return read()
+    }
+    const before = await read()
+    const after = await save(before, (plan) => {
+      if (plan.role === 'object') plan.placements = [{ x: 0.1, y: 0.1, w: 0.2, h: 0.2 }]
+    })
+    const changed = await save(after, (plan) => {
+      if (plan.role === 'object') plan.motionNotes = '다른 동작'
+    })
+    return { before, after, changed }
+  }, SPRITE_IDS.job)
+  const objectOf = (sprite: WireSprite) =>
+    sprite.assets.find((asset) => asset.plan.role === 'object')!
+  expect(objectOf(after).plan.placements).toEqual([{ x: 0.1, y: 0.1, w: 0.2, h: 0.2 }])
+  expect(objectOf(before).approval).not.toBeNull()
+  expect(objectOf(after).approval).toEqual(objectOf(before).approval)
+  expect(objectOf(after).planRevision).toBe(objectOf(before).planRevision)
+  expect(after.images).toEqual(before.images)
+  expect(after.phase).toBe(before.phase)
+  expect(after.reviewRevision).toBe(before.reviewRevision + 1)
+  // 생성 입력이 바뀌면 기존 규칙대로 승인 해제
+  expect(objectOf(changed).approval).toBeNull()
+})
+
 test('missing base images show dashed outlines regardless of opacity', async ({ page }) => {
   await installFakeApi(page, { sprites: { seed: 'baseReview', settings, partialBases: true } })
   await page.goto(`/2d/background/${SPRITE_IDS.job}`)
@@ -84,7 +174,7 @@ test('missing base images show dashed outlines regardless of opacity', async ({ 
     await expect(missing).toHaveAttribute(name, String(value))
   await expect(images.locator('rect')).toHaveCount(0)
   await expect(images.locator('image[data-tile-id]')).toHaveCount(0)
-  await expect(images.locator('image[data-asset-id]')).toHaveCount(2)
+  await expect(images.locator('image[data-asset-id]')).toHaveCount(3)
   await review.getByRole('slider', { name: '재구성 투명도' }).fill('0')
   await expect(images).toHaveAttribute('opacity', '0')
   await expect(missing).toBeVisible()
@@ -108,7 +198,7 @@ test('failed displayed images show dashed outlines and a reason', async ({ page 
   const review = page.getByRole('region', { name: '제작 계획 검수' })
   const layer = review.getByRole('img', { name: '원본 재구성' })
   const images = layer.getByTestId('reconstruction-images')
-  await expect(images.locator('image[data-asset-id]')).toHaveCount(2)
+  await expect(images.locator('image[data-asset-id]')).toHaveCount(3)
   const { data } = await page.evaluate(
     (id) => fetch(`/api/jobs/${id}`).then((response) => response.json()),
     SPRITE_IDS.job,
@@ -128,9 +218,11 @@ test('failed displayed images show dashed outlines and a reason', async ({ page 
     review.getByRole('alert').filter({ hasText: '재구성 이미지 일부를 불러오지 못했습니다' }),
   ).toBeVisible()
   const missing = layer.locator(`rect[data-missing="${object.id}"]`)
-  await expect(missing).toHaveCount(1)
-  for (const [name, value] of Object.entries({ x: 0, y: 0, width: 160, height: 90 }))
-    await expect(missing).toHaveAttribute(name, String(value))
+  await expect(missing).toHaveCount(2)
+  // 자리마다 윤곽, 저장된 자리 순서
+  for (const [index, rect] of OBJECT_RECTS.entries())
+    for (const [name, value] of Object.entries(rect))
+      await expect(missing.nth(index)).toHaveAttribute(name, String(value))
   await expect(images.locator(`[data-asset-id="${object.id}"]`)).toHaveCount(0)
   await expect(images.locator('rect')).toHaveCount(0)
   // 나머지 재구성은 유지

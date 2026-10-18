@@ -261,9 +261,9 @@ export function fillTiles(input: {
   return best
 }
 
-// 다중 자리 필드 도입 전 ROI 한 자리
+// 저장된 자리가 없으면 ROI 한 자리
 export function placementsOf(plan: SpriteAssetPlan): Bounds[] {
-  return [plan.sourceBounds]
+  return plan.placements ?? [plan.sourceBounds]
 }
 
 export function placementRects(

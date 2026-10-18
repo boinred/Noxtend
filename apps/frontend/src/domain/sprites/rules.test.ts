@@ -183,6 +183,38 @@ describe('sprite wire boundary', () => {
     expect(() => readSpriteJob({ productionMode: 'twoD', sprite })).toThrow()
   })
 
+  describe('plan placements', () => {
+    const readPlacements = (placements?: unknown) => {
+      const sprite = spriteFixture()
+      const plan = sprite.assets[0]!.plan as Record<string, unknown>
+      if (placements !== undefined) plan.placements = placements
+      return readSpriteJob({ productionMode: 'twoD', sprite }).sprite!.assets[0]!.plan.placements
+    }
+    it('normalizes a missing field to null', () => {
+      expect(readPlacements()).toBeNull()
+    })
+    it('keeps an explicit null', () => {
+      expect(readPlacements(null)).toBeNull()
+    })
+    it('keeps a valid list as is', () => {
+      const placements = [
+        { x: 0.1, y: 0.2, w: 0.3, h: 0.4 },
+        { x: 0.5, y: 0.5, w: 0.25, h: 0.25 },
+      ]
+      expect(readPlacements(placements)).toEqual(placements)
+    })
+    it.each([
+      [[{ x: 0, y: 0, w: 1 }]],
+      [[null]],
+      ['x'],
+      [[{ x: 0, y: 0, w: 1, h: Infinity }]],
+      [[{ x: 0, y: 0, w: 1, h: Number.NaN }]],
+      [[{ x: 0, y: 0, w: 1, h: '1' }]],
+    ])('rejects malformed placements %j', (placements) => {
+      expect(() => readPlacements(placements)).toThrow()
+    })
+  })
+
   it('reads a sourceDraft job with a null sourceImageId and its source draft', () => {
     const sprite = draftFixture()
     const job = readSpriteJob({ productionMode: 'twoD', sourceImageId: null, sprite })

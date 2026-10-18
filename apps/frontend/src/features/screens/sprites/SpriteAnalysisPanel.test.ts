@@ -9,6 +9,7 @@ function plan(id: string, loop: boolean, frameCount = 8): SpriteAssetPlan {
     name: id,
     order: id === 'back' ? 0 : 1,
     sourceBounds: { x: 0, y: 0, w: 1, h: 1 },
+    placements: null,
     requiresTransparency: id !== 'back',
     loop,
     frameCount,
