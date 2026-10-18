@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { sourceImageUrl, spriteImageUrl } from '@/app/queries/media'
+import { fetchImageBlob, sourceImageUrl, spriteImageUrl } from '@/app/queries/media'
 import { tileFillKey } from '@/domain/sprites/reconstruction'
 import type { CellSize, Pixels, TileFill } from '@/domain/sprites/reconstruction'
 import { assetRole } from '@/domain/sprites/rules'
@@ -12,13 +12,11 @@ const EMPTY: TileFill = { offset: { x: 0, y: 0 }, cells: [] }
 type WorkerReply = { fill: TileFill } | { error: { name: string; message: string } }
 
 async function pixelsOf(url: string, width: number, height: number): Promise<Pixels> {
-  const image = new Image()
-  image.crossOrigin = 'anonymous'
-  image.src = url
-  await image.decode()
+  const image = await createImageBitmap(await fetchImageBlob(url))
   const context = new OffscreenCanvas(width, height).getContext('2d', { willReadFrequently: true })
   if (!context) throw new Error('canvas 2d unavailable')
   context.drawImage(image, 0, 0, width, height)
+  image.close()
   return { width, height, data: context.getImageData(0, 0, width, height).data }
 }
 

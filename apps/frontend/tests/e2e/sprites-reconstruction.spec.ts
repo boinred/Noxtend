@@ -67,6 +67,42 @@ test('unreadable images show a reason instead of a partial reconstruction', asyn
   await expect(review.getByTestId('overlay-image')).toBeVisible()
 })
 
+test('failed displayed images show dashed outlines and a reason', async ({ page }) => {
+  await installFakeApi(page, { sprites: { seed: 'baseReview', settings } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const review = page.getByRole('region', { name: '제작 계획 검수' })
+  const layer = review.getByRole('img', { name: '원본 재구성' })
+  const images = layer.getByTestId('reconstruction-images')
+  await expect(images.locator('image[data-asset-id]')).toHaveCount(2)
+  const { data } = await page.evaluate(
+    (id) => fetch(`/api/jobs/${id}`).then((response) => response.json()),
+    SPRITE_IDS.job,
+  )
+  const object = (
+    data.sprite.assets as {
+      id: string
+      plan: { role: string }
+      frames: { currentImageId: string }[]
+    }[]
+  ).find((asset) => asset.plan.role === 'object')!
+  await page.route(`**/sprites/images/${object.frames[0]!.currentImageId}`, (route) =>
+    route.fulfill({ status: 500 }),
+  )
+  await page.reload()
+  await expect(
+    review.getByRole('alert').filter({ hasText: '재구성 이미지 일부를 불러오지 못했습니다' }),
+  ).toBeVisible()
+  const missing = layer.locator(`rect[data-missing="${object.id}"]`)
+  await expect(missing).toHaveCount(1)
+  for (const [name, value] of Object.entries({ x: 0, y: 0, width: 160, height: 90 }))
+    await expect(missing).toHaveAttribute(name, String(value))
+  await expect(images.locator(`[data-asset-id="${object.id}"]`)).toHaveCount(0)
+  await expect(images.locator('rect')).toHaveCount(0)
+  // 나머지 재구성은 유지
+  await expect(images.locator('image[data-asset-id]')).toHaveCount(1)
+  await expect(images.locator('image[data-tile-id]').first()).toBeAttached()
+})
+
 test('small cells keep editing usable without excessive SVG nodes', async ({ page }) => {
   const records: NonNullable<SpriteFakeOptions['records']> = []
   await installFakeApi(page, {

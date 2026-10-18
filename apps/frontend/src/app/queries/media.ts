@@ -21,3 +21,6 @@ export {
 } from '@/infra/api/jobApi'
 
 export { spriteImageUrl, spriteExportUrl, spriteSourceCandidateUrl } from '@/infra/api/spriteApi'
+
+/** 픽셀 비교용 이미지 본문 (2D 재구성). 화면이 직접 fetch 하지 않도록 같은 통로를 지난다. */
+export { fetchImageBlob } from '@/infra/api/client'

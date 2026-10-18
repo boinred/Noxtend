@@ -181,6 +181,12 @@ export function SpritePlanReview({
     roi.preview?.partId === plan.id ? { ...plan, sourceBounds: roi.preview.bounds } : plan,
   )
   const [opacity, setOpacity] = useState(50)
+  const [failedImages, setFailedImages] = useState<string[]>([])
+  const imagesFailed = sprite.assets.some((asset) =>
+    asset.frames.some(
+      (frame) => frame.index === 0 && failedImages.includes(frame.currentImageId ?? ''),
+    ),
+  )
   const reconstructing = reconstructionVisible(sprite)
   const tileCell = reconstructionCell(sprite.settings, sprite.sourceCanvas, cell)
   const tileFill = useTileFill({
@@ -267,6 +273,11 @@ export function SpritePlanReview({
               {tileFill.error}
             </p>
           ) : null}
+          {imagesFailed ? (
+            <p role="alert" className={styles.error}>
+              재구성 이미지 일부를 불러오지 못했습니다
+            </p>
+          ) : null}
         </>
       ) : null}
       <PartsOverlay
@@ -280,6 +291,10 @@ export function SpritePlanReview({
               fill={tileFill.fill}
               cell={tileCell}
               opacity={opacity}
+              failedImageIds={failedImages}
+              onImageError={(id) =>
+                setFailedImages((current) => (current.includes(id) ? current : [...current, id]))
+              }
             />
           ) : null
         }

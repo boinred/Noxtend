@@ -11,6 +11,8 @@ export function SpriteReconstructionLayer({
   fill,
   cell,
   opacity,
+  failedImageIds,
+  onImageError,
 }: {
   jobId: string
   sprite: SpriteState
@@ -18,19 +20,23 @@ export function SpriteReconstructionLayer({
   fill: TileFill | null
   cell: CellSize | null
   opacity: number
+  failedImageIds: string[]
+  onImageError: (imageId: string) => void
 }) {
   const { width, height } = sprite.sourceCanvas
   const assets = [...plans]
     .sort((a, b) => a.order - b.order)
     .map((plan) => {
       const role = assetRole(sprite.settings, plan)
+      const imageId =
+        sprite.assets
+          .find((asset) => asset.id === plan.id)
+          ?.frames.find((frame) => frame.index === 0)?.currentImageId ?? null
       return {
         id: plan.id,
         role,
-        imageId:
-          sprite.assets
-            .find((asset) => asset.id === plan.id)
-            ?.frames.find((frame) => frame.index === 0)?.currentImageId ?? null,
+        // 표시 실패 이미지는 누락과 같이 윤곽으로
+        imageId: imageId && !failedImageIds.includes(imageId) ? imageId : null,
         // 원경 배경·레이어는 원본 전체, 그 밖은 자리
         rects:
           role === 'backdrop' || role === 'layer'
@@ -58,6 +64,7 @@ export function SpriteReconstructionLayer({
             data-asset-id={asset.id}
             href={spriteImageUrl(jobId, asset.imageId)}
             preserveAspectRatio="none"
+            onError={() => onImageError(asset.imageId)}
             {...asset.rects[0]}
           />
         ))}
@@ -88,6 +95,7 @@ export function SpriteReconstructionLayer({
                 data-asset-id={asset.id}
                 href={spriteImageUrl(jobId, asset.imageId)}
                 preserveAspectRatio="none"
+                onError={() => onImageError(asset.imageId)}
                 {...rect}
               />
             )),

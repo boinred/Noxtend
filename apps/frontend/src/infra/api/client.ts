@@ -57,6 +57,16 @@ export function apiUrl(path: string): string {
   return `${BASE_URL}${path}`
 }
 
+/**
+ * 픽셀을 읽을 이미지 본문. 같은 URL 을 `<img>` 가 no-cors 로 받아 둔 캐시에는
+ * `Access-Control-Allow-Origin` 이 없어 읽기가 막히므로, 캐시를 건너뛰고 CORS 로 새로 받는다.
+ */
+export async function fetchImageBlob(url: string): Promise<Blob> {
+  const response = await fetch(url, { mode: 'cors', cache: 'reload' })
+  if (!response.ok) throw new Error(`이미지 응답 ${response.status}`)
+  return response.blob()
+}
+
 export interface RequestOptions {
   method?: string
   body?: unknown
