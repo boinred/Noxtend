@@ -9,6 +9,8 @@ import type {
   SpriteAsset,
   SpriteAccepted,
   SpriteSourceDraft,
+  SpriteCanvas,
+  SpriteGrid,
 } from '../../src/domain/sprites/types'
 
 export const SPRITE_IDS = {
@@ -22,6 +24,7 @@ const now = '2026-10-06T00:00:00Z'
 export interface SpriteFakeOptions {
   records?: { path: string; body: Record<string, unknown> }[]
   seed?:
+    | 'planReview'
     | 'baseReview'
     | 'failed'
     | 'canceled'
@@ -57,6 +60,9 @@ export interface SpriteFakeOptions {
   tileOnly?: boolean
   reorderedPlans?: boolean
   settings?: SpriteSettings
+  // 재구성 부하 경계용 원본 크기·격자
+  sourceCanvas?: SpriteCanvas
+  grid?: SpriteGrid
 }
 
 // Node stdlib CRC·zlib, 실제 RGBA PNG fixture
@@ -310,8 +316,8 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
     const scale = Math.min(outputCanvas.width / 1024, outputCanvas.height / 1024)
     const sprite: SpriteState = {
       settings,
-      grid: null,
-      sourceCanvas: { width: 320, height: 180 },
+      grid: options.grid ?? null,
+      sourceCanvas: options.sourceCanvas ?? { width: 320, height: 180 },
       generationCanvas: { width: 1024, height: 1024 },
       outputCanvas,
       transform: {
@@ -632,7 +638,7 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
       job.sprite!.phase = 'analyzing'
       job.status = 'running'
       job.tasks[0]!.status = 'running'
-    } else {
+    } else if (options.seed !== 'planReview') {
       if (options.seed === 'frameReview')
         job.sprite!.assets.forEach((a, index) => {
           a.plan.loop = true

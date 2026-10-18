@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useSpriteRoiEditor } from './useSpriteRoiEditor'
+import { useTileFill } from './useTileFill'
+import { SpriteReconstructionLayer } from './SpriteReconstructionLayer'
 import {
   Select,
   SelectContent,
@@ -16,6 +18,7 @@ import { useModelPrices } from '@/app/queries/useTuning'
 import { apiErrorMessage, apiErrorStatus } from '@/app/queries/errors'
 import { assetRole, assetOutputSize, cellWidthOf } from '@/domain/sprites/rules'
 import { spriteRoleLabel } from '@/domain/sprites/labels'
+import { reconstructionCell, reconstructionVisible } from '@/domain/sprites/reconstruction'
 import type { SpriteGrid } from '@/domain/sprites/types'
 import type { SpriteState, SpriteAssetPlan } from '@/domain/sprites/types'
 import { spriteStyles as styles } from './spriteStyles'
@@ -177,6 +180,17 @@ export function SpritePlanReview({
   const displayPlans = plans.map((plan) =>
     roi.preview?.partId === plan.id ? { ...plan, sourceBounds: roi.preview.bounds } : plan,
   )
+  const [opacity, setOpacity] = useState(50)
+  const reconstructing = reconstructionVisible(sprite)
+  const tileCell = reconstructionCell(sprite.settings, sprite.sourceCanvas, cell)
+  const tileFill = useTileFill({
+    jobId,
+    sourceImageId,
+    sprite,
+    plans,
+    cell: tileCell,
+    enabled: reconstructing,
+  })
   return (
     <section className={styles.panel} aria-label="제작 계획 검수">
       <h2 className={styles.title}>제작 계획 검수</h2>
@@ -227,8 +241,48 @@ export function SpritePlanReview({
           격자 칸 너비는 0보다 크고 원본 너비 {sprite.sourceCanvas.width}px 이하여야 합니다.
         </p>
       ) : null}
+      {reconstructing ? (
+        <>
+          <label className={styles.field}>
+            재구성 투명도 {opacity}%
+            <input
+              className="w-full accent-primary focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+              type="range"
+              aria-label="재구성 투명도"
+              aria-valuetext={`${opacity}%`}
+              min="0"
+              max="100"
+              step="1"
+              value={opacity}
+              onChange={(e) => setOpacity(Number(e.target.value))}
+            />
+          </label>
+          {tileFill.status === 'loading' ? (
+            <p role="status" className={styles.hint}>
+              재구성 계산 중…
+            </p>
+          ) : null}
+          {tileFill.error ? (
+            <p role="alert" className={styles.error}>
+              {tileFill.error}
+            </p>
+          ) : null}
+        </>
+      ) : null}
       <PartsOverlay
         sourceImageId={sourceImageId}
+        underlay={
+          reconstructing && tileFill.status === 'ready' ? (
+            <SpriteReconstructionLayer
+              jobId={jobId}
+              sprite={sprite}
+              plans={displayPlans}
+              fill={tileFill.fill}
+              cell={tileCell}
+              opacity={opacity}
+            />
+          ) : null
+        }
         frameRef={roi.frameRef}
         selection={{ selectedId: roi.selectedId, onSelect: roi.setSelectedId }}
         editing={{ preview: roi.preview, onPointerHandleDown: roi.onPointerHandleDown }}

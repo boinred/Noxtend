@@ -52,6 +52,8 @@ export interface PartsOverlayProps {
   action?: { label: string; onClick: (partId: string) => void }
   /** 프레임 위에 얹을 것 — 검수 화면이 그리는 중인 사각형을 여기 넣는다. */
   children?: ReactNode
+  /** 원본 바로 위·상자 아래에 까는 것. 클릭을 받지 않는다 — 2D 재구성 층. */
+  underlay?: ReactNode
   /** 프레임에 얹는 마우스 처리 — 검수 화면의 드래그. */
   frameProps?: HTMLAttributes<HTMLDivElement> & { 'data-testid'?: string }
   /** 드래그 좌표를 픽셀→0~1 로 바꾸려면 프레임의 실제 크기를 재야 한다. */
@@ -183,6 +185,7 @@ export function PartsOverlay({
   scene = null,
   action,
   children,
+  underlay,
   frameProps,
   frameRef,
   alwaysShowBoxes = false,
@@ -228,6 +231,11 @@ export function PartsOverlay({
             draggable={false}
             data-testid="overlay-image"
           />
+          {underlay ? (
+            <div className="pointer-events-none absolute inset-0" data-testid="overlay-underlay">
+              {underlay}
+            </div>
+          ) : null}
 
           {/* 수평선 — 지면에 물체를 놓는 기준이다. 좌표가 맞는지 볼 때 가장 먼저 보는 선 */}
           {scene ? (
