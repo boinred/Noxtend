@@ -129,7 +129,8 @@ public sealed class SpriteCommandsHandler(IJobRepository jobs, JobOrchestrator o
         resolver.Modifiers.Add(info =>
         {
             if (info.Type == typeof(SpriteAssetPlan))
-                info.Properties.Single(p => p.Name == nameof(SpriteAssetPlan.Role)).ShouldSerialize = (_, value) => value is not null;
+                foreach (var name in new[] { nameof(SpriteAssetPlan.Role), nameof(SpriteAssetPlan.Placements) })
+                    info.Properties.Single(p => p.Name == name).ShouldSerialize = (_, value) => value is not null;
         });
         return new() { TypeInfoResolver = resolver };
     }

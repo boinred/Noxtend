@@ -68,6 +68,24 @@ public sealed class SpriteGenerationTests
         Assert.Empty(job.Sprites.Images);
     }
 
+    [Fact]
+    public async Task GeneratePrompt_AssetJsonExcludesPlacements()
+    {
+        var provider = new CapturingProvider();
+        var f = new PipelineFixture(imageProvider: provider);
+        var job = await PrepareRole(f, SpriteAssetRole.Object);
+        var plan = job.Sprites!.Assets.Single().Plan;
+        Assert.True(job.ReplaceSpritePlan([plan with { Placements = [new(0, 0, .5, .5), new(.5, .5, .5, .5)] }],
+            new(.5), [], job.Sprites.ReviewRevision).IsSuccess);
+        var task = Assert.Single(job.PlanSpriteFrames(job.ApproveSpritePlan(job.Sprites.ReviewRevision).Value!, Guid.NewGuid()));
+        Assert.NotNull(task.SpriteInput!.Plan.Placements);
+        Assert.Equal(RunTaskOutcome.Succeeded, await f.RunSpriteGeneration.HandleAsync(task.Id, default));
+        using var asset = JsonDocument.Parse(Assert.Single(provider.Requests).Prompt.Split('\n')[2]);
+        Assert.False(asset.RootElement.TryGetProperty("placements", out _));
+        Assert.Equal("object", asset.RootElement.GetProperty("role").GetString());
+        Assert.Equal(plan.Name, asset.RootElement.GetProperty("name").GetString());
+    }
+
     private static async Task<PipelineJob> PrepareRole(PipelineFixture f, SpriteAssetRole role)
     {
         var command = await SpriteAnalysisTests.Prepare(f);

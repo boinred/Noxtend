@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using Microsoft.Extensions.Logging;
 using Noxtend.Application.Common;
 using Noxtend.Application.Generation;
@@ -20,7 +21,15 @@ public sealed class RunSpriteGenerationTaskHandler(
     ILogger<RunSpriteGenerationTaskHandler> logger) : ITaskHandler
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
-    { Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) } };
+    {
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
+        // 재구성 자리는 생성 입력 아님
+        TypeInfoResolver = new DefaultJsonTypeInfoResolver { Modifiers = { info =>
+        {
+            if (info.Type == typeof(SpriteAssetPlan))
+                info.Properties.Single(p => p.Name == "placements").ShouldSerialize = (_, value) => value is not null;
+        } } },
+    };
 
     public async Task<RunTaskOutcome> HandleAsync(Guid taskId, CancellationToken ct)
     {
@@ -84,7 +93,7 @@ public sealed class RunSpriteGenerationTaskHandler(
         var variables = new Dictionary<string, string>
         {
             ["settings"] = JsonSerializer.Serialize(settings, Json),
-            ["asset"] = JsonSerializer.Serialize(plan with { Role = role }, Json),
+            ["asset"] = JsonSerializer.Serialize(plan with { Role = role, Placements = null }, Json),
             ["frame"] = JsonSerializer.Serialize(new { index = input.FrameIndex, count = plan.Loop ? plan.FrameCount : 1,
                 phase, input.BaseImageId, generationCanvas, anchor = SpriteRules.Anchor(role, outputCanvas), input.Transform }, Json),
             ["sourceCanvas"] = JsonSerializer.Serialize(sourceCanvas, Json),

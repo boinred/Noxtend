@@ -948,6 +948,33 @@ public sealed class SpritePersistenceTests(SqlServerFixture sql)
     }
 
     [Fact]
+    public async Task PlanJson_WithoutPlacements_ReadsNullAndRoundTrips()
+    {
+        await using var db = Context();
+        await db.Database.MigrateAsync();
+        var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "fake",
+            new(SpriteView.SideView, SpriteOutputKind.Tiles), new(800, 600), new(1024, 1024), Now).Value!;
+        var obj = new SpriteAssetPlan(Guid.NewGuid(), "object", 0, new(0, 0, .5, .5), true, Role: SpriteAssetRole.Object);
+        Assert.True(job.ReplaceSpritePlan([obj], new(.5), [new(1024, 1024)], 0).IsSuccess);
+        db.Jobs.Add(job);
+        await db.SaveChangesAsync();
+        var placed = obj with { Placements = [new(0, 0, .5, .5), new(.25, .5, .5, .5)] };
+        Assert.True(job.ReplaceSpritePlan([placed], new(.5), [], job.Sprites!.ReviewRevision).Value);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+        var restored = (await new EfJobRepository(db).GetAsync(job.Id, default))!;
+        Assert.True(placed == restored.Sprites!.Assets.Single().Plan);
+        var legacyPlan = System.Text.Json.Nodes.JsonNode.Parse(SpriteJsonSerializer.Serialize(obj))!.AsObject();
+        Assert.True(legacyPlan["value"]!.AsObject().Remove("placements"));
+        var oldPlanJson = legacyPlan.ToJsonString();
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE SpriteAssets SET PlanJson = {oldPlanJson} WHERE Id = {obj.Id}");
+        db.ChangeTracker.Clear();
+        restored = (await new EfJobRepository(db).GetAsync(job.Id, default))!;
+        Assert.Null(restored.Sprites!.Assets.Single().Plan.Placements);
+        Assert.True(obj == restored.Sprites.Assets.Single().Plan);
+    }
+
+    [Fact]
     public void StoredPlan_ValidatesIndividualFieldsWithoutInventingLayerSettings()
     {
         var plan = new SpriteAssetPlan(Guid.NewGuid(), "object", 0, new(0, 0, .5, .5), true, Role: SpriteAssetRole.Object);

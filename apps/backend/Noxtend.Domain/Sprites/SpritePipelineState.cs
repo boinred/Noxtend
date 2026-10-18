@@ -1,3 +1,5 @@
+using Noxtend.Domain.Job;
+
 namespace Noxtend.Domain.Sprites;
 
 public sealed class SpritePipelineState
@@ -111,6 +113,7 @@ public sealed class SpriteAsset
             ResetFrames();
         }
     }
+    internal void ReplacePlacements(IReadOnlyList<Bounds>? placements) => Plan = Plan with { Placements = placements };
     private void ResetFrames()
     {
         var count = Plan.Loop ? Plan.FrameCount : 1;
