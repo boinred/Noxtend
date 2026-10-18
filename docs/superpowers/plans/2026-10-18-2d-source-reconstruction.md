@@ -511,15 +511,32 @@ git commit -m "docs: record 2D source reconstruction implementation"
 | 7 | `20bdfb4..d46bf13` | 수정 1회: 생성 기준·자리 상자가 정확히 겹치면 zIndex 동률로 자리가 항상 위 → 선택한 상자를 위로 |
 | 8 | `d46bf13..516a39d` | 승인 |
 
-결정(Ruling): 워커 오류는 `{ error: { name, message } }`이고 `RangeError` 이름으로 칸 상한 문구를 고른다. T5~T6 사이 Frontend 계약 테스트 1건 적색을 허용했다(T5는 Backend만 검증). 모든 작업은 경로를 지정해 stage한다(`git rm` 포함). T2 리뷰 Minor 중 표시 이미지 로딩 실패의 무음 처리는 스펙의 "빠진 에셋을 숨기지 않는다"에 따라 Important로 올렸다. 원경 배경은 `SpriteRules.Validate`가 최대 1개로 보장하므로 다중 배경 처리는 하지 않는다. 스펙의 8px 오프셋 탐색은 유지했다(큰 칸·최대 원본은 5초 시간 초과 문구로 드러난다). T3의 계획 지시 테스트 삭제는 유지하되 기하 단언을 추가했다. 옛 비교 패널 기록 한 줄 대체 안내는 Task 9에서 `docs/verification/2026-10-16-2d-source-compare.md`에 추가했다. `sprite-roles.server.md`의 자리 설명은 T6가 맡았다.
+결정(Ruling, 원장의 전부):
 
-남은 minor(이월, 수정하지 않음):
+- P1: 워커 오류는 `{ error: { name, message } }`이고 `RangeError` 이름으로 칸 상한 문구를 고른다(Error 하위 클래스는 `postMessage`로 전달되지 않는다).
+- P2: Task 6이 `tests/e2e/sprites-reconstruction.spec.ts`를 고칠 수 있다(계획의 커밋 목록에는 있고 Files 머리글에서 빠진 것은 오기).
+- P3: T5~T6 사이 Frontend 계약 테스트 1건 적색을 허용했다(T5는 Backend만 검증, T6이 녹색으로 되돌림).
+- P4: 모든 작업은 경로를 지정해 stage한다(삭제는 `git rm`, 일괄 stage는 에이전트 훅이 막는다).
+- 서브에이전트 커밋 트레일러는 실제로 작성한 모델(Sonnet)을 적고 `conventions.md`도 고쳤다.
+- T2: 리뷰 Minor 중 오브젝트·레이어 `<image>` 로딩 실패의 무음 빈칸은 스펙의 "빠진 에셋을 숨기지 않는다"에 따라 Important로 올렸다. 원경 배경은 `SpriteRules.Validate`가 최대 1개로 보장하고 파서가 `Validate`를 부르므로 다중 배경 처리는 하지 않는다. 스펙의 8px 오프셋 탐색은 유지했다(큰 칸·최대 원본은 5초 시간 초과 문구로 드러나고 편집은 계속 가능하며, 고치려면 coarse-to-fine 탐색이 필요해 사용자 판단 사항이다).
+- T3: Step 1의 `rg` "출력 없음"은 `apps/frontend`에만 적용한다(`docs/xHuman`에는 계획이 유지하라고 한 옛 "2D 원본 비교 확인" 줄과 대체 안내가 남는다). 계획 지시 테스트 삭제는 유지하되 배경·오브젝트 `<image>`의 기하 단언을 기존 E2E에 추가한다. 옛 비교 패널 기록의 대체 안내 한 줄은 Task 9 문서 작업에서 추가했다.
+- T5: `sprite-roles.server.md`의 자리 설명은 fixture를 읽는 Task 6이 맡았다.
 
-- 재구성: 같은 key의 일시 오류는 재시도하지 않고(A→B→A도 재계산), 밀려난 effect가 이미지를 먼저 decode한다. 타일 `<image>`는 메모이즈·`onError`가 없고 이미지 조회가 훅·층에 중복된다. `fetchImageBlob`의 `mode`·`cache`·`!ok` 단위 테스트가 없다(가장 권할 후속). `cache: 'reload'`는 매 계산마다 재다운로드하며 이전 요청을 중단하지 않는다. 4096² 원본 래스터는 메인 스레드 long task 70~82ms, 멈춘 이미지 요청은 "계산 중"으로 남는다. `outputKind: 'layers'` 전체 캔버스 분기 테스트가 없다.
-- 자리 편집: 자리 상자가 `BOX_COLORS` 슬롯을 하나 더 쓴다. 겹친 선택 상자 위에서 반대편 칩 클릭은 가로채인다(카드 버튼·키보드는 가능). 선택이 없으면 겹친 상자는 DOM 순서로 고른다. `SpritePlanReview.tsx`는 529 → 737줄이며 자리 컨트롤 추출이 후보다. reader는 빈 배열 `[]`을 받아 아무것도 그리지 않는다. Fake의 자리 전용 저장 판정은 `JSON.stringify` 키 순서에 의존한다. 일부 E2E는 `exports[].isCurrent`·`status`·정렬 누락을 직접 단언하지 않는다.
-- Backend: `SpriteJsonSerializer` 읽기 검증은 `Placements`를 확인하지 않는다. `"placements"` 문자열과 `with { Placements = null }` 이중 장치, `SpriteAssetPlan.Equals`에 "새 필드는 Equals에 추가" 주석이 없다. 변경 전 fingerprint 원문이 `SpriteApiTests`·`SpriteCommandTests`에 중복이고 `Assert.Equal(first.TaskIds, replay.TaskIds)`는 빈 목록 비교다.
-- V5: 분할 지시가 반복되지 않는 큰 구조물에 모호할 수 있다(반복 벽·울타리로 좁히고 출력 크기 계산식을 쓰는 안은 실모델 평가가 필요). 파서는 asset별 `placements` 혼재를 받는다. V5 payload의 OpenAI 회귀 테스트가 없다. V5 migration "수정된 시드" 테스트는 System만 바꾼다.
-- 이번에 관찰한 기존 경고: 작업 화면 콘솔에 `Encountered two children with the same key` 1건(키는 작업 ID). `SpriteStudioScreen.tsx`의 `SpriteFrameReview`·`SpriteExport`가 같은 fragment에서 `key={job.id}`를 공유하며 `c780385`에도 있어 이 변경이 만든 것이 아니다.
+남은 minor(이월, 수정하지 않음). 원장의 `minor (deferred)` 전부이며 수정 라운드에서 해소된 항목은 뺐다.
+
+- T1: 칸 상한 `RangeError`가 뒤쪽 오프셋에서 나면 앞 오프셋의 거리 계산을 끝낸 뒤에야 드러난다(모든 오프셋 격자를 먼저 검사하는 안). 테스트 주석 "4px 표본이면 grid4부터 거리 0"은 부정확하다(grid2도 0점이고 먼저 나열된 grid4가 동률 규칙으로 이긴다).
+- T2 재구성 훅·층: 같은 key는 A→B→A·`enabled` 토글에서 다시 계산하고 일시 오류도 재시도하지 않는다. 밀려난 effect가 `done` 확인 전에 이미지를 decode·`getImageData`한다. 타일 `<image>` 그룹은 메모이즈되지 않아 미리보기·슬라이더 프레임마다 최대 4,096노드를 재조정하고 `onError`도 없다. 기준 이미지 조회가 훅·층에 중복이고 도메인에는 비공개 `baseImageId`가 있다. `ImageBitmap.close()`가 `getContext`가 null이거나 `drawImage`가 던지면 건너뛴다. `cache: 'reload'`는 key가 바뀔 때마다 다시 받고 밀려난 요청을 중단하지 않는다. `fetchImageBlob`은 `ApiError`가 아닌 일반 `Error`를 던지고, `mode: 'cors'`·`cache: 'reload'`·`!ok` 던짐을 고정하는 단위 테스트가 없다(`client.test.ts` 하니스가 있어 가장 권할 후속). 4096² 원본 래스터가 메인 스레드 long task 70~82ms를 만들고 타이머가 워커 전송 시점에 시작해 이미지 요청이 멈추면 "계산 중"으로 남는다.
+- T2 사용자에게 보일 수 있는 것: `useTileFill.ts`의 `worker.onerror`가 워커의 원문 영문 오류 message를 그대로 표시할 수 있다. `tileFill.worker.ts` 3행 주석의 전제도 부정확하다(내장 Error는 structured clone으로 전달된다).
+- T2 테스트: `outputKind: 'layers'` 전체 캔버스 분기(T3 리뷰에서도 지적)와 같은 오브젝트 아래쪽 y 정렬(시드 저장 순서가 이미 정렬 순서)을 가르는 테스트가 없다. planReview 테스트는 phase 조건과 이미지 조건을 구분하지 못한다.
+- `SpritePlanReview.tsx`는 T2에서 529 → 583줄, T7에서 737줄이 되었다(오브젝트 자리 컨트롤 약 60줄 JSX가 추출 후보).
+- T4 Backend: `SpriteJsonSerializer`의 읽기·쓰기 검증은 `Placements`를 확인하지 않는다(`[null]`·0/21개·범위 밖 값이 DB에서 읽힘, 쓰기는 `SpriteRules`가 막음). `RunSpriteGenerationTaskHandler`가 `"placements"` 문자열과 `with { Placements = null }` 이중 장치를 쓴다(`ShouldSerialize` 하나가 더 명확). 직접 정의한 `SpriteAssetPlan.Equals`에 "새 필드는 Equals에 추가" 주석이 없다. 신규 행의 `"placements":null`은 이전 이미지가 읽지 못한다(아래 롤백·배포 주의).
+- T5: 변경 전 fingerprint 원문 JSON이 `SpriteApiTests`·`SpriteCommandTests`에 중복이다. `Assert.Equal(first.TaskIds, replay.TaskIds)`는 빈 목록 둘의 비교다.
+- T6: E2E `saving only placements…`가 `exports[].isCurrent`·작업 `status`를 직접 단언하지 않는다. 그리기 순서 E2E는 아래쪽 y 정렬 누락을 감지하지 못한다(시드 저장 순서가 정렬 순서). reader가 `[]`를 받아 `placementsOf([])`가 아무것도 그리지 않는다(서버는 금지, 정책 테스트 없음). Fake의 자리 전용 저장 판정이 `JSON.stringify` 키 순서에 의존한다.
+- T7: 자리 상자가 `BOX_COLORS` 슬롯을 하나 더 써서 같은 대상의 생성 기준과 자리 색이 다르고 뒤 대상 색이 밀린다. 상자 zIndex를 두 배로 한 뒤 칩(`z-[2]`)이 정확히 겹친 선택 상자에 가려져 반대편 칩 클릭이 가로채인다(카드 버튼·키보드는 가능, 칩 z를 올릴 수 있음). 선택이 없으면 정확히 겹친 상자는 DOM 순서로 정해져 첫 클릭이 자리 1을 고른다.
+- T8: 분할 지시가 반복되지 않는 큰 구조물에 모호해 조용히 잘못된 구간 계획을 낼 수 있다(반복 벽·울타리로 좁히고 출력 크기 계산식을 쓰는 안, 실모델 평가 필요, 사용자 판단 사항). 파서가 asset별 `placements` 혼재를 받는다(무해). V5 schema의 OpenAI payload 회귀가 없다(`OpenAiSpriteSchemaTests`는 V4만). V5 migration "수정된 시드" 테스트가 System만 바꾼다. 테스트 이름 "…OnlyOnTheTileObject"가 모호하고 V3의 "A roof is not a tile"이 V5 규칙과 중복이다.
+- T9: `SpriteStudioScreen.tsx`의 기존 React 중복 key 경고(`SpriteFrameReview`·`SpriteExport`가 `key={job.id}` 공유, `c780385`에도 있음). `sprite-roles.server.md` 기준 revision 줄이 두 revision(`c2dc3f9` + `b3e5b79` 재생성)을 함께 보인다.
+
+수정 라운드에서 이미 해소: T1 int32 누적·반 칸 생략 단순화(제거), T3 지도 문구 3건, T7 Fake `inside()`의 null 원소 TypeError(400으로 정리).
 
 #### 재구성 계산 측정(Task 1·2)
 
@@ -533,7 +550,7 @@ Node 26 순수 `fillTiles`(타일 8종, 원경 포함, 4px 표본) 1536×1024 is
 | 4096×4096, 칸 132(상한 근처) | 2,781ms | 4,000 | 표시, long task 69ms 1건 |
 | 4096×4096, 칸 256 | 5초 | 0 | 시간 초과 문구 |
 
-상한 안에서 화면은 멈추지 않았다. 계산 시간은 오프셋 수 × 원본 표본 수 × 후보 수에 비례해 큰 칸·최대 원본에서 5초를 넘는다(Node 순수 계산: 1536×1024 칸 512px 8.5초, 4096×4096 칸 132px 9.1초). 큰 칸 작업은 coarse-to-fine 탐색 등 별도 판단이 필요하다.
+상한 안에서 화면은 멈추지 않았다. 계산 시간은 오프셋 수 × 원본 표본 수 × 후보 수에 비례해 큰 칸·최대 원본에서 5초를 넘는다(Node 순수 계산, 타일 8종 + 원경 배경: 1536×1024 칸 512px 8.5초, 4096×4096 칸 132px 9.1초. 브라우저 합성의 2,781ms는 타일 3종·원경 없음이라 후보 수가 달라 같은 입력끼리의 모순이 아니다). 큰 칸 작업은 coarse-to-fine 탐색 등 별도 판단이 필요하다.
 
 #### Task 9 검증 (기준 `516a39d`, 작업 트리 변경은 문서뿐)
 
@@ -548,14 +565,14 @@ Node 26 순수 `fillTiles`(타일 8종, 원경 포함, 4px 표본) 1536×1024 is
 
 유료 smoke와 실제 AI 공급자는 호출하지 않았다.
 
-계약 리뷰(`api-breaking-change-detector`, 읽기 전용): `SpriteContracts.cs`의 `SpriteAssetPlanRequest.Placements`(요청과 응답 공용, 선택·nullable)와 클라이언트 `types.ts`의 `placements: Bounds[] | null`·`spriteApi.ts` 직렬화를 양방향으로 대조했다. 확인된 결함은 없다. 서버는 응답에 `placements`를 항상 쓰고(`null` 또는 배열) reader는 키 누락을 null로 읽어 변경 전 서버 응답도 받는다. 클라이언트는 항상 키를 보내고 서버는 생략·`null`을 같은 fingerprint로 본다. 도메인 범위 규칙(`InsideSource`: 유한·양수 크기·원본 안)은 클라이언트 `inside`와 같고 1~20개·오브젝트 한정은 서버만 판정하며 위반은 400 `SPRITE_PLAN_INVALID`다. 클라이언트는 이 코드로 분기하지 않고 서버 메시지를 표시한다. 정적 탐색으로 본 위험은 둘이다. 첫째, 변경 전 서버는 `Disallow`라 `placements` 키를 보내는 새 SWA를 API보다 먼저 배포하면 모든 계획 저장이 바인딩 오류(400)다(API 먼저). 둘째, `placements` 키를 모르는 이전 클라이언트가 저장하면 오브젝트 자리가 null로 돌아간다(자리 전용 저장이라 재생성은 없다).
+계약 리뷰(`api-breaking-change-detector`, 읽기 전용): `SpriteContracts.cs`의 `SpriteAssetPlanRequest.Placements`(요청과 응답 공용, 선택·nullable)와 클라이언트 `types.ts`의 `placements: Bounds[] | null`·`spriteApi.ts` 직렬화를 양방향으로 대조했다. 확인된 결함은 없다. 서버는 응답에 `placements`를 항상 쓰고(`null` 또는 배열) reader는 키 누락을 null로 읽어 변경 전 서버 응답도 받는다. 클라이언트는 항상 키를 보내고 서버는 생략·`null`을 같은 fingerprint로 본다. 도메인 범위 규칙(`InsideSource`: 유한·양수 크기·원본 안)은 클라이언트 `inside`와 같고 1~20개·오브젝트 한정은 서버만 판정하며 위반은 400 `SPRITE_PLAN_INVALID`다. 클라이언트는 이 코드로 분기하지 않고 서버 메시지를 표시한다. 정적 탐색으로 본 위험은 둘이다. 첫째, 배포 순서(변경 전 서버는 `Disallow`라 새 SWA가 먼저 나가면 계획 저장이 바인딩 오류 400, 아래 롤백·배포 주의). 둘째, `placements` 키를 모르는 이전 클라이언트가 저장하면 오브젝트 자리가 null로 돌아간다(자리 전용 저장이라 재생성은 없다).
 
 연결 검증: 서버가 실제 `JobResponse.From`·`SpriteResponse.From`과 `ApiJson.Configure`로 만든 `sprite-roles.server.json`(`SpriteApiTests.ServerRolesFixture_MatchesActualResponseMapperAndJsonOptions`, `b3e5b79`에서 재생성, 이번 전체 회귀에서 `516a39d` 기준 일치 확인)을 `spriteContract.test.ts`가 실제 `getJob` → `apiRequest` → reader로 읽는다(20개 통과, 포함 항목: object 자리 배열 2개·backdrop·tile·구형 job의 `placements: null`, 키 생략 시 null, 잘못된 값 거부, `updateSpritePlan`이 요청 fixture와 같은 본문을 쓰고 `placements: null`을 명시). 서버 쪽은 `ServerRolesFixture_*`와 `JsonBinding_*` 필터 32개가 통과했고(요청 fixture 바인딩·null/비유한 원소 400·생략/null 재생·값 재전송 충돌) 요청 경로를 덮는다.
 
-화면 관찰(스크래치 `t9/*.png`, 저장소 밖): Fake E2E(`completed`, isometric 타일) 1440px·390px, light·dark 4조합에서 재구성 50%·100%, 자리 선택·추가, 오브젝트 카드를 확인했다. 가로 넘침 없음(`scrollWidth` 1440/390), 자리 버튼·`자리 추가`·`선택한 자리 삭제`는 390px에서 줄바꿈되어 겹치지 않고, 선택한 자리에만 손잡이가 보이며 점선/실선 구분이 light·dark 모두 읽힌다. 선택하지 않은 상자·칩은 불투명도 0.32로 흐려져 대비가 낮고 같은 앵커의 칩이 겹쳐 쌓인다(둘 다 기존 오버레이 동작). 390px 지도는 작아 자리 손잡이가 서로 닿는다. 로컬 실제 작업 `300f237d`는 조회만 했다(비 GET 요청 0건, 폴링 외 클릭 없음). 변경 전 Docker API라 응답에 `placements` 키가 없고 reader가 null로 읽었으며 타일 8종 413칸이 표시됐고(계산 중 표시→층 571~946ms, dev), 자리 UI는 타일 대상에 나오지 않았고 ROI 박스 8개, 가로 넘침 없음이었다.
+화면 관찰(스크래치 `t9/*.png`, 저장소 밖): Fake E2E(`completed`, isometric 타일) 1440px·390px, light·dark 4조합에서 재구성 50%·100%, 자리 선택·추가, 오브젝트 카드를 확인했다. 가로 넘침 없음(`scrollWidth` 1440/390), 자리 버튼·`자리 추가`·`선택한 자리 삭제`는 390px에서 줄바꿈되어 겹치지 않고, 선택한 자리에만 손잡이가 보이며 점선/실선 구분이 light·dark 모두 읽힌다. 선택하지 않은 상자·칩은 불투명도 0.32로 흐려져 대비가 낮고 같은 앵커의 칩이 겹쳐 쌓인다(둘 다 기존 오버레이 동작). 390px 지도는 작아 자리 손잡이가 서로 닿는다. 로컬 실제 작업 `300f237d`는 읽기 전용으로 관찰했다(비 GET 요청 0건, 클릭·입력 없이 페이지만 열었고 작업 상세 폴링 GET만 발생). 변경 전 Docker API라 응답에 `placements` 키가 없고 reader가 null로 읽었으며 타일 8종 413칸이 표시됐고(계산 중 표시→층 571~946ms, dev), 자리 UI는 타일 대상에 나오지 않았고 ROI 박스 8개, 가로 넘침 없음이었다.
 
 Azure(정의 확인 vs 미확인): `deploy/azure/main.bicep`의 API는 `siteConfig.cors.allowedOrigins`에 SWA 기본 호스트명만 넣고 `supportCredentials: false`이며 `app.UseCors`는 Development에서만 돌기 때문에 플랫폼 CORS에 의존한다는 주석이 있다(정의상 확인). 이미지 응답(`SpriteJobsController.DownloadAsync`)은 `Cache-Control: private, max-age=31536000, immutable`이고 `Vary`를 쓰지 않는다. 플랫폼 CORS가 이미지 응답에도 `Access-Control-Allow-Origin`·`Vary: Origin`을 붙이는지, 커스텀 도메인 사용 시 허용 목록이 맞는지는 실행하지 않았으므로 미확인이다. 재구성은 `mode: 'cors'`·`cache: 'reload'`로 읽으므로 `Vary` 부재가 캐시 오염을 일으키지는 않지만 ACAO 부재면 픽셀 읽기가 실패하고 "이미지를 불러오지 못했습니다"로 드러난다.
 
-미확인: 실제 모델의 V5 분석 품질(자리 정확도·벽 분류·1024px 분할), OpenAI strict 모드의 중첩 `anyOf`·`minItems`/`maxItems`와 Gemini `type: null` 수락, 실제 SQL Server에서의 V5 migration 적용, Azure 운영 CORS, Docker 재배포(하지 않음, 로컬 API는 변경 전 이미지), 실제 Backend와 자리 저장 end-to-end.
+미확인: 실제 모델의 V5 분석 품질(자리 정확도·벽 분류·1024px 분할), OpenAI strict 모드의 중첩 `anyOf`·`minItems`/`maxItems`와 Gemini `type: null` 수락, 배포 DB(Azure·운영 SQL Server)에서의 V5 migration 적용(격리 SQL 컨테이너 테스트는 통과), Azure 운영 CORS, Docker 재배포(하지 않음, 로컬 API는 변경 전 이미지), 실제 Backend와 자리 저장 end-to-end.
 
 롤백·배포 주의: 변경 후 API가 새로 쓰는 `PlanJson`·`SpriteInputJson`에는 `"placements":null`이 들어간다. 변경 전 이미지는 `UnmappedMemberHandling.Disallow`라 이 행을 읽지 못한다. API 이미지를 되돌리려면 새 행의 `placements` 키를 먼저 처리해야 하고, 배포는 API → SWA 순서로 한다.
