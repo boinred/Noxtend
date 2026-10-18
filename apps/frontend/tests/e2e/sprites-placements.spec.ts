@@ -173,6 +173,54 @@ test('clicking the second placement deletes only that placement', async ({ page 
   expect(savedObject(records).sourceBounds).toEqual(ROI)
 })
 
+for (const kind of ['generation', 'placement'] as const)
+  test(`dragging inside exactly overlapping boxes moves only the selected ${kind} box`, async ({
+    page,
+  }) => {
+    const records: Records = []
+    await installFakeApi(page, { sprites: { seed: 'baseReview', settings, records } })
+    await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+    const body = await page.evaluate(
+      (id) => fetch(`/api/jobs/${id}`).then((response) => response.json()),
+      SPRITE_IDS.job,
+    )
+    const object = (body.data.sprite.assets as { plan: SavedPlan }[]).find(
+      (asset) => asset.plan.role === 'object',
+    )!
+    // 저장된 자리 없는 오브젝트, 자리 상자가 ROI 와 완전히 겹침
+    object.plan.placements = null
+    await page.route(`**/api/jobs/${SPRITE_IDS.job}`, (route) =>
+      route.request().method() === 'GET' ? route.fulfill({ json: body }) : route.fallback(),
+    )
+    await page.reload()
+    const review = reviewOf(page)
+    const button = review.getByRole('button', {
+      name: kind === 'generation' ? '생성 기준 선택 3' : '자리 1 선택 3',
+      exact: true,
+    })
+    await button.click()
+    const at = await frameOf(page)
+    const start = at(0.25, 0.25)
+    const end = at(0.35, 0.3)
+    await page.mouse.move(start.x, start.y)
+    await page.mouse.down()
+    await page.mouse.move(end.x, end.y)
+    await page.mouse.up()
+    // 겹친 상자 중 선택한 상자를 끌고 선택 유지
+    await expect(button).toHaveAttribute('aria-pressed', 'true')
+    await review.getByRole('button', { name: '계획 저장', exact: true }).click()
+    await expect.poll(() => records.filter((r) => r.path.endsWith('/plan')).length).toBe(1)
+    const saved = savedObject(records, object.plan.id)
+    const moved = kind === 'generation' ? saved.sourceBounds : saved.placements![0]!
+    expect(moved.x).toBeCloseTo(0.1, 2)
+    expect(moved.y).toBeCloseTo(0.05, 2)
+    expect(moved.w).toBe(ROI.w)
+    expect(moved.h).toBe(ROI.h)
+    // 다른 상자는 끌기 전 좌표, 자리 복사본은 생성 기준을 따라가지 않음
+    if (kind === 'generation') expect(saved.placements).toEqual([ROI])
+    else expect(saved.sourceBounds).toEqual(ROI)
+  })
+
 test('overlapping source and placement boxes are keyboard selectable', async ({ page }) => {
   const records: Records = []
   await installFakeApi(page, { sprites: { seed: 'baseReview', settings, records } })

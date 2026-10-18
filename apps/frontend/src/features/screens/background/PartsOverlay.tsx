@@ -306,13 +306,20 @@ export function PartsOverlay({
                           ? {
                               pointerEvents: 'auto' as const,
                               touchAction: 'none',
+                              // 작은 상자 우선, 같은 크기면 선택한 상자 우선(끌기 중 선택 전환 방지)
                               zIndex:
-                                1 +
-                                placed.filter(({ part: other }) =>
-                                  other.placements.some(
-                                    (candidate) => candidate.w * candidate.h > raw.w * raw.h,
-                                  ),
-                                ).length,
+                                2 *
+                                  (1 +
+                                    placed.filter(({ part: other }) =>
+                                      other.placements.some(
+                                        (candidate) => candidate.w * candidate.h > raw.w * raw.h,
+                                      ),
+                                    ).length) +
+                                (isShown &&
+                                (selection.selectedOrdinal === undefined ||
+                                  selection.selectedOrdinal === index)
+                                  ? 1
+                                  : 0),
                             }
                           : {}),
                         // 지목한 것만 제 색으로. 스물다섯 개가 전부 진하면 어느 것을 보고
@@ -386,7 +393,10 @@ export function PartsOverlay({
                                 left: `${(box.x + box.w * handle.x) * 100}%`,
                                 top: `${(box.y + box.h * handle.y) * 100}%`,
                                 cursor: handle.cursor,
-                                ...(selection ? { touchAction: 'none', zIndex: 30 } : {}),
+                                // 모든 상자보다 위
+                                ...(selection
+                                  ? { touchAction: 'none', zIndex: 2 * placed.length + 4 }
+                                  : {}),
                               }}
                               onMouseDown={
                                 editing.onPointerHandleDown ? undefined : down(handle.id)

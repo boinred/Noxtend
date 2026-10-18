@@ -926,7 +926,8 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
           // 서버 SpriteRules 자리 규칙
           if (plans.some((plan) => plan.placements != null && plan.role !== 'object'))
             return fail(route, 400, '오브젝트만 자리를 가질 수 있습니다', 'SPRITE_PLAN_INVALID')
-          const inside = (b: { x: number; y: number; w: number; h: number }) =>
+          const inside = (b: { x: number; y: number; w: number; h: number } | null) =>
+            b !== null &&
             [b.x, b.y, b.w, b.h].every(Number.isFinite) &&
             b.x >= 0 &&
             b.y >= 0 &&
