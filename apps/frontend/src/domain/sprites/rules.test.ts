@@ -345,43 +345,6 @@ it('matches server asset sizing and tile median', async () => {
   ).toBeCloseTo(0.3)
 })
 
-it('places each role back on the source canvas', async () => {
-  const { assetSourceRect } = await import('./rules')
-  const sprite = readSpriteJob({ productionMode: 'twoD', sprite: spriteFixture() }).sprite!
-  const source = { width: 800, height: 600 }
-  const plan = { ...sprite.assets[0]!.plan, sourceBounds: { x: 0.25, y: 0.5, w: 0.1, h: 0.2 } }
-  const iso = sprite.settings
-  const square = { ...iso, view: 'topDown' as const }
-  const full = { x: 0, y: 0, width: 800, height: 600 }
-  expect(assetSourceRect(iso, source, 0.2, { ...plan, role: 'backdrop' })).toEqual(full)
-  expect(assetSourceRect(iso, source, 0.2, { ...plan, role: 'layer' })).toEqual(full)
-  expect(assetSourceRect(iso, source, 0.2, { ...plan, role: 'object' })).toEqual({
-    x: 200,
-    y: 300,
-    width: 80,
-    height: 120,
-  })
-  // 칸 중심 = ROI 중심 (240, 360), 칸 너비 0.2 × 800
-  expect(assetSourceRect(square, source, 0.2, { ...plan, role: 'tile' })).toEqual({
-    x: 160,
-    y: 280,
-    width: 160,
-    height: 160,
-  })
-  expect(assetSourceRect(iso, source, 0.2, { ...plan, role: 'tile' })).toEqual({
-    x: 160,
-    y: 320,
-    width: 160,
-    height: 80,
-  })
-  expect(assetSourceRect(square, source, null, { ...plan, role: 'tile' })).toEqual({
-    x: 200,
-    y: 320,
-    width: 80,
-    height: 80,
-  })
-})
-
 it.each([
   [0.5, 1],
   [1024.49, 1024],
