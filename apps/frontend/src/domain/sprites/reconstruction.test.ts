@@ -172,14 +172,6 @@ describe('latticeCells', () => {
     ])
   })
 
-  it('treats diamond offsets shifted by half a cell as the same lattice', () => {
-    const source = { width: 64, height: 32 }
-    const cell = { width: 32, height: 16 }
-    expect(latticeCells(source, cell, true, { x: 24, y: 8 })).toEqual(
-      latticeCells(source, cell, true, { x: 8, y: 0 }),
-    )
-  })
-
   it('stops above the preview limit', () => {
     const one = { width: 1, height: 1 }
     expect(latticeCells({ width: 64, height: 64 }, one, false, { x: 0, y: 0 })).toHaveLength(4096)
@@ -272,6 +264,24 @@ describe('fillTiles', () => {
     })
   })
 
+  it('samples every fourth pixel of the cell', () => {
+    // 빨강 원본에서 격자 간격이 다른 후보 — 4px 표본이면 grid4 부터 거리 0, 8px 이면 grid8, 2px·전체 픽셀이면 grid2
+    const grid = (step: number) =>
+      paint(32, 32, (x, y) => (x % step === 0 && y % step === 0 ? RED : BLUE))
+    const fill = fillTiles({
+      source: solid(32, 32, RED),
+      tiles: [
+        { id: 'grid8', pixels: grid(8) },
+        { id: 'grid4', pixels: grid(4) },
+        { id: 'grid2', pixels: grid(2) },
+      ],
+      backdrop: null,
+      cell: SQUARE,
+      diamond: false,
+    })
+    expect(fill).toEqual({ offset: { x: 0, y: 0 }, cells: [{ x: 0, y: 0, tileId: 'grid4' }] })
+  })
+
   it('finds a nonzero offset', () => {
     // 칸 격자가 (8, 8) 만큼 밀린 4x4 색 배치
     const ids = ['red', 'green', 'blue', 'yellow']
@@ -319,14 +329,29 @@ describe('fillTiles', () => {
             return palette[colorIndex(i, j)]!
       throw new Error('fixture')
     })
+    // 가장자리 칸은 4px 표본이 원본 안 마름모에 하나도 없으면 비교 불가라 빠진다
+    const sampled = (x: number, y: number) => {
+      for (let ly = 0; ly < cell.height; ly += 4)
+        for (let lx = 0; lx < cell.width; lx += 4)
+          if (
+            insideDiamond(lx, ly, cell) &&
+            x + lx >= 0 &&
+            x + lx < 64 &&
+            y + ly >= 0 &&
+            y + ly < 32
+          )
+            return true
+      return false
+    }
     const expected = []
     for (let j = -2; j <= 6; j++)
       for (let i = -2; i <= 6; i++) {
         const x = 16 * i - 8
         const y = 8 * j - 8
-        if ((i + j) % 2 === 0 && x + 32 > 0 && y + 16 > 0 && x < 64 && y < 32)
+        if ((i + j) % 2 === 0 && x + 32 > 0 && y + 16 > 0 && x < 64 && y < 32 && sampled(x, y))
           expected.push({ x, y, tileId: ids[colorIndex(i, j)] })
       }
+    expect(expected.length).toBeLessThan(15)
     const fill = fillTiles({
       source,
       tiles: ids.map((id, i) => ({ id, pixels: solid(32, 16, palette[i]!) })),

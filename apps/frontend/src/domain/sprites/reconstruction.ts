@@ -35,6 +35,8 @@ const OFFSET_STEP = 8
 const ZONES_X = 4
 const ZONES_Y = 2
 const MIN_ALPHA = 128
+// 칸 좌표가 이 간격의 배수인 점만 표본
+const SAMPLE_STEP = 4
 
 // 타일 픽셀과 1:1 로 맞추는 정수 px 칸
 export function reconstructionCell(
@@ -169,36 +171,21 @@ function distance(
       let cr = 0
       let cg = 0
       let cb = 0
-      for (let y = y0; y < y1; y++) {
-        const xa = Math.max(x0, layout.left[y]!)
+      for (let y = Math.ceil(y0 / SAMPLE_STEP) * SAMPLE_STEP; y < y1; y += SAMPLE_STEP) {
+        const xa = Math.ceil(Math.max(x0, layout.left[y]!) / SAMPLE_STEP) * SAMPLE_STEP
         const xb = Math.min(x1, layout.right[y]!)
         let si = ((cy + y) * source.width + cx + xa) * 4
         let ci = (base + y * stride + xa) * 4
-        // 행 단위 int32 누적(double 누적보다 빠름)
-        let rn = 0
-        let rsr = 0
-        let rsg = 0
-        let rsb = 0
-        let rcr = 0
-        let rcg = 0
-        let rcb = 0
-        for (let x = xa; x < xb; x++, si += 4, ci += 4) {
+        for (let x = xa; x < xb; x += SAMPLE_STEP, si += SAMPLE_STEP * 4, ci += SAMPLE_STEP * 4) {
           if (c[ci + 3]! < MIN_ALPHA) continue
-          rn = (rn + 1) | 0
-          rsr = (rsr + s[si]!) | 0
-          rsg = (rsg + s[si + 1]!) | 0
-          rsb = (rsb + s[si + 2]!) | 0
-          rcr = (rcr + c[ci]!) | 0
-          rcg = (rcg + c[ci + 1]!) | 0
-          rcb = (rcb + c[ci + 2]!) | 0
+          n++
+          sr += s[si]!
+          sg += s[si + 1]!
+          sb += s[si + 2]!
+          cr += c[ci]!
+          cg += c[ci + 1]!
+          cb += c[ci + 2]!
         }
-        n += rn
-        sr += rsr
-        sg += rsg
-        sb += rsb
-        cr += rcr
-        cg += rcg
-        cb += rcb
       }
       if (n === 0) continue
       const dr = (sr - cr) / n
@@ -239,12 +226,9 @@ export function fillTiles(input: {
   if (backdrop) candidates.push({ id: null, pixels: backdrop, anchored: true })
   const layout = layoutOf(cell, diamond)
 
-  // 다이아몬드는 (W/2, H/2) 이동이 같은 격자라 아래쪽 절반 오프셋 생략
-  const halved = diamond && cell.width % 16 === 0 && cell.height % 16 === 0
-  const offsetEnd = halved ? cell.height / 2 : cell.height
   let best: TileFill | null = null
   let bestMean = Infinity
-  for (let oy = 0; oy < offsetEnd; oy += OFFSET_STEP)
+  for (let oy = 0; oy < cell.height; oy += OFFSET_STEP)
     for (let ox = 0; ox < cell.width; ox += OFFSET_STEP) {
       const picked: TileCell[] = []
       let sum = 0
