@@ -266,6 +266,36 @@ export function placementsOf(plan: SpriteAssetPlan): Bounds[] {
   return plan.placements ?? [plan.sourceBounds]
 }
 
+// 서버 규칙과 같은 오브젝트 자리 상한
+export const MAX_PLACEMENTS = 20
+
+// 저장된 자리 없는 오브젝트는 이전 ROI 를 자리로 고정, 자리는 생성 기준을 따라가지 않음
+export function moveGenerationBox(
+  plan: SpriteAssetPlan,
+  bounds: Bounds,
+  settings: SpriteSettings,
+): SpriteAssetPlan {
+  const pinned = assetRole(settings, plan) === 'object' && plan.placements === null
+  return {
+    ...plan,
+    sourceBounds: bounds,
+    placements: pinned ? [plan.sourceBounds] : plan.placements,
+  }
+}
+
+// 선택한 자리 또는 마지막 자리를 오른쪽 아래로 옮긴 복사본, 원본 안에 맞춤
+export function addPlacement(plan: SpriteAssetPlan, ordinal: number | null): SpriteAssetPlan {
+  const placements = placementsOf(plan)
+  const from = placements[ordinal ?? placements.length - 1]!
+  // 반복 복사의 부동소수 꼬리가 정밀 입력에 보이지 않게 반올림
+  const shift = (start: number, size: number) =>
+    Math.max(0, Math.min(Math.round((start + 0.02) * 1e6) / 1e6, 1 - size))
+  return {
+    ...plan,
+    placements: [...placements, { ...from, x: shift(from.x, from.w), y: shift(from.y, from.h) }],
+  }
+}
+
 export function placementRects(
   plan: SpriteAssetPlan,
   source: SpriteCanvas,

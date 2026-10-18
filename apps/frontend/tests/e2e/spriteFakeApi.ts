@@ -923,6 +923,32 @@ export async function installSpriteFakeApi(page: Page, options: SpriteFakeOption
               '결과 유형에 허용되지 않는 에셋 역할입니다',
               'SPRITE_PLAN_INVALID',
             )
+          // 서버 SpriteRules 자리 규칙
+          if (plans.some((plan) => plan.placements != null && plan.role !== 'object'))
+            return fail(route, 400, '오브젝트만 자리를 가질 수 있습니다', 'SPRITE_PLAN_INVALID')
+          const inside = (b: { x: number; y: number; w: number; h: number }) =>
+            [b.x, b.y, b.w, b.h].every(Number.isFinite) &&
+            b.x >= 0 &&
+            b.y >= 0 &&
+            b.w > 0 &&
+            b.h > 0 &&
+            b.x + b.w <= 1 &&
+            b.y + b.h <= 1
+          if (
+            plans.some(
+              (plan) =>
+                plan.placements != null &&
+                (plan.placements.length < 1 ||
+                  plan.placements.length > 20 ||
+                  !plan.placements.every(inside)),
+            )
+          )
+            return fail(
+              route,
+              400,
+              '오브젝트 자리는 원본 내부 영역 1~20개여야 합니다',
+              'SPRITE_PLAN_INVALID',
+            )
           if (
             plans.some(
               (plan) =>

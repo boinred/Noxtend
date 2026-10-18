@@ -41,10 +41,21 @@ export interface OverlayPart {
    * 길어져 서로 덮는다.
    */
   label?: ReactNode
+  /** 2D 오브젝트의 생성 기준(실선)·자리(점선) 구분, 미지정 시 기존 실선 */
+  boxKind?: 'source' | 'placement'
 }
 
 export interface PartsOverlayProps {
-  selection?: { selectedId: string | null; onSelect: (id: string) => void }
+  /**
+   * `onSelectPlacement` 지정 시 누른 배치 번호 전달·`selectedOrdinal` 배치에만 손잡이,
+   * 미지정 시 지목한 파츠의 배치 전부
+   */
+  selection?: {
+    selectedId: string | null
+    onSelect: (id: string) => void
+    selectedOrdinal?: number
+    onSelectPlacement?: (id: string, ordinal: number) => void
+  }
   sourceImageId: string
   parts: OverlayPart[]
   scene?: SceneSpec | null
@@ -273,7 +284,9 @@ export function PartsOverlay({
                           ? (event) => {
                               if (!event.isPrimary || event.button !== 0) return
                               event.stopPropagation()
-                              selection.onSelect(part.id)
+                              if (selection.onSelectPlacement)
+                                selection.onSelectPlacement(part.id, index)
+                              else selection.onSelect(part.id)
                               editing?.onPointerHandleDown?.(part.id, index, box, 'body', event)
                             }
                           : undefined
@@ -281,12 +294,14 @@ export function PartsOverlay({
                       data-shown={isShown || alwaysShowBoxes}
                       data-testid="overlay-box"
                       data-part={part.name}
+                      data-kind={part.boxKind}
                       style={{
                         left: `${box.x * 100}%`,
                         top: `${box.y * 100}%`,
                         width: `${box.w * 100}%`,
                         height: `${box.h * 100}%`,
                         borderColor: color,
+                        ...(part.boxKind === 'placement' ? { borderStyle: 'dashed' as const } : {}),
                         ...(selection
                           ? {
                               pointerEvents: 'auto' as const,
@@ -314,6 +329,11 @@ export function PartsOverlay({
               */}
                 {editing && isShown
                   ? part.placements.map((raw, index) => {
+                      if (
+                        selection?.selectedOrdinal !== undefined &&
+                        index !== selection.selectedOrdinal
+                      )
+                        return null
                       const box =
                         editing.preview &&
                         editing.preview.partId === part.id &&

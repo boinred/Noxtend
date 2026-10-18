@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Bounds } from '../job/types'
 import {
+  addPlacement,
   fillTiles,
   latticeCells,
+  moveGenerationBox,
   placementRects,
   placementsOf,
   reconstructionCell,
@@ -558,6 +560,78 @@ describe('placementRects', () => {
       { x: 400, y: 150, width: 200, height: 300 },
       { x: 0, y: 0, width: 400, height: 300 },
     ])
+  })
+})
+
+describe('moveGenerationBox', () => {
+  const before = { x: 0, y: 0, w: 0.5, h: 0.5 }
+  const after = { x: 0.25, y: 0.25, w: 0.5, h: 0.5 }
+
+  it('moveGenerationBox keeps null placements at the previous bounds', () => {
+    const moved = moveGenerationBox(objectPlan(before), after, settingsOf('isometric'))
+    expect(moved.sourceBounds).toEqual(after)
+    expect(moved.placements).toEqual([before])
+  })
+
+  it('moves only the source bounds when placements are stored or the role is not object', () => {
+    const placements = [{ x: 0.5, y: 0, w: 0.25, h: 0.5 }]
+    const stored = moveGenerationBox(
+      { ...objectPlan(before), placements },
+      after,
+      settingsOf('isometric'),
+    )
+    expect(stored.sourceBounds).toEqual(after)
+    expect(stored.placements).toEqual(placements)
+    const tile = moveGenerationBox(planOf('tile', 'tile', before), after, settingsOf('isometric'))
+    expect(tile.sourceBounds).toEqual(after)
+    expect(tile.placements).toBeNull()
+  })
+})
+
+describe('addPlacement', () => {
+  it('copies the last placement shifted right and down', () => {
+    const plan = {
+      ...objectPlan({ x: 0, y: 0, w: 0.5, h: 0.5 }),
+      placements: [
+        { x: 0.1, y: 0.1, w: 0.2, h: 0.2 },
+        { x: 0.25, y: 0.25, w: 0.25, h: 0.25 },
+      ],
+    }
+    expect(addPlacement(plan, null).placements).toEqual([
+      ...plan.placements,
+      { x: 0.27, y: 0.27, w: 0.25, h: 0.25 },
+    ])
+  })
+
+  it('copies the selected placement and the source bounds when none are stored', () => {
+    const plan = {
+      ...objectPlan({ x: 0.5, y: 0.25, w: 0.25, h: 0.25 }),
+      placements: [
+        { x: 0.25, y: 0.5, w: 0.25, h: 0.25 },
+        { x: 0, y: 0, w: 0.25, h: 0.25 },
+      ],
+    }
+    expect(addPlacement(plan, 0).placements!.at(-1)).toEqual({ x: 0.27, y: 0.52, w: 0.25, h: 0.25 })
+    expect(addPlacement({ ...plan, placements: null }, null).placements).toEqual([
+      { x: 0.5, y: 0.25, w: 0.25, h: 0.25 },
+      { x: 0.52, y: 0.27, w: 0.25, h: 0.25 },
+    ])
+  })
+
+  it('rounds repeated copies to clean coordinates', () => {
+    let plan = objectPlan({ x: 0, y: 0, w: 0.25, h: 0.25 })
+    for (let i = 0; i < 19; i++) plan = addPlacement(plan, null)
+    expect(plan.placements!.at(-1)).toEqual({ x: 0.38, y: 0.38, w: 0.25, h: 0.25 })
+  })
+
+  it('keeps the copy inside the source', () => {
+    const plan = objectPlan({ x: 0.75, y: 0.5, w: 0.25, h: 0.5 })
+    expect(addPlacement(plan, null).placements!.at(-1)).toEqual({
+      x: 0.75,
+      y: 0.5,
+      w: 0.25,
+      h: 0.5,
+    })
   })
 })
 

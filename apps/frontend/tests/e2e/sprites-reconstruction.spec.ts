@@ -337,7 +337,8 @@ test('timed out and superseded workers cannot publish results', async ({ page })
   await expect.poll(() => tileWorkers(page).length).toBe(0)
   await release(page)
   await expect(layer).toHaveCount(0)
-  await expect(review.getByTestId('overlay-box')).toHaveCount(3)
+  // 생성 기준 3·오브젝트 자리 2
+  await expect(review.getByTestId('overlay-box')).toHaveCount(5)
 
   // 화면 이탈 시 종료
   await page.clock.resume()
