@@ -144,6 +144,48 @@ internal static class SeedPrompts
         }
         """;
 
+    public static (string System, string User, string Schema, string Note) AnalyzeSpritesV5()
+    {
+        var previous = AnalyzeSpritesV4();
+        var schema = System.Text.Json.Nodes.JsonNode.Parse(previous.Schema)!;
+        var asset = schema["properties"]!["assets"]!["items"]!;
+        asset["required"]!.AsArray().Add("placements");
+        // OpenAI 호환을 위해 grid 와 같은 anyOf null 합집합
+        asset["properties"]!["placements"] = new System.Text.Json.Nodes.JsonObject
+        {
+            ["anyOf"] = new System.Text.Json.Nodes.JsonArray(
+                new System.Text.Json.Nodes.JsonObject { ["type"] = "null" },
+                new System.Text.Json.Nodes.JsonObject
+                {
+                    ["type"] = "array", ["minItems"] = 1, ["maxItems"] = 20,
+                    ["items"] = asset["properties"]!["sourceBounds"]!.DeepClone(),
+                }),
+        };
+        return (SpriteAnalyzeSystemV2 + "\n" + SpriteAnalyzeRulesV5, previous.User, schema.ToJsonString(),
+            "이미지 기반 2D 배경 역할·격자·자리 분석 v5");
+    }
+
+    // V3 규칙에서 벽을 타일 정의에서 빼고 오브젝트의 모든 자리·긴 구조물 분할을 더한 개정
+    private const string SpriteAnalyzeRulesV5 = """
+        Every asset requires role. For layers use layer only and root grid: null.
+        For tiles classify each asset as tile, backdrop or object. Tile means a ground cell that
+        covers wide areas with repeatable edges (ground, water, roads, sidewalks); use one representative cell. A name
+        containing tile does not make a non-repeatable asset a tile. Backdrop means a continuous distant landscape (sky, mountains,
+        skyline) and is opaque, at most one, with the smallest order. Object means a standing structure or
+        standalone item on transparent background: building, building facade, standing wall, fence, tree, rock, bridge, roof,
+        awning, tank, pole, shrub or sign. A standing wall, fence, building facade, roof or awning is an object, never a tile.
+        A roof is not a tile; a skyline is not a tile. Object must always require transparency; backdrop never does.
+        For each object, return every position where the object appears in placements (at most 20), each
+        {x, y, w, h} in the same 0~1 ratios as sourceBounds. sourceBounds is the clearest one of those positions.
+        Use placements: null for every layer, tile and backdrop asset.
+        Objects are scaled so one ground cell is settings.tileWidth px wide, and each side of an object's output
+        must not exceed 1024px. A structure that would exceed 1024px, such as a long wall or fence, must be split:
+        choose one repeating segment as the object and list the segments in placements.
+        Root grid is required for tiles: {cellWidth: number}. cellWidth is the width of one
+        ground cell divided by original image width, not object bounds or pixels. For a
+        256px-wide ground cell in a 1024px-wide image use {cellWidth:0.25}; 0 < cellWidth <= 1.
+        """;
+
     public static (string System, string User, string Schema, string Note) AnalyzeSpritesV4()
     {
         var previous = AnalyzeSpritesV3();

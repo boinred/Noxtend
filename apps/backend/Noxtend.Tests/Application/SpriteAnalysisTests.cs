@@ -165,6 +165,108 @@ public sealed class SpriteAnalysisTests
             new(SpriteView.Isometric, SpriteOutputKind.Tiles), new(24, 16)).ErrorCode);
     }
 
+    private static string MixedJsonWithPlacements(string backdrop, string tile, string obj) => $$"""
+        {"view":"isometric","outputKind":"tiles","grid":{"cellWidth":0.5},"assets":[
+        {"name":"sky","role":"backdrop","order":0,"sourceBounds":{"x":0,"y":0,"w":1,"h":0.5},
+        "requiresTransparency":false,"loop":false,"frameCount":8,"fps":8,"motionNotes":"","placements":{{backdrop}}},
+        {"name":"floor","role":"tile","order":1,"sourceBounds":{"x":0,"y":0,"w":0.5,"h":0.5},
+        "requiresTransparency":true,"loop":false,"frameCount":8,"fps":8,"motionNotes":"","placements":{{tile}}},
+        {"name":"wall","role":"object","order":2,"sourceBounds":{"x":0,"y":0,"w":0.5,"h":0.5},
+        "requiresTransparency":true,"loop":false,"frameCount":8,"fps":8,"motionNotes":"","placements":{{obj}}}]}
+        """;
+
+    private const string TwoPlacements =
+        """[{"x":0,"y":0,"w":0.25,"h":0.25},{"x":0.5,"y":0.5,"w":0.25,"h":0.25}]""";
+
+    private static readonly SpriteSettings IsometricTiles = new(SpriteView.Isometric, SpriteOutputKind.Tiles);
+
+    [Fact]
+    public void Parse_AcceptsResponsesWithAndWithoutPlacements()
+    {
+        // V4 형식 응답 — 자리 속성 없음
+        var legacy = SpritePlanParser.Parse(MixedJson, IsometricTiles, new(24, 16));
+        Assert.True(legacy.IsSuccess, legacy.ErrorMessage);
+        Assert.All(legacy.Value!.Assets, a => Assert.Null(a.Placements));
+
+        var nulls = SpritePlanParser.Parse(MixedJsonWithPlacements("null", "null", "null"), IsometricTiles, new(24, 16));
+        Assert.True(nulls.IsSuccess, nulls.ErrorMessage);
+        Assert.All(nulls.Value!.Assets, a => Assert.Null(a.Placements));
+
+        var placed = SpritePlanParser.Parse(MixedJsonWithPlacements("null", "null", TwoPlacements), IsometricTiles, new(24, 16));
+        Assert.True(placed.IsSuccess, placed.ErrorMessage);
+        Assert.Null(placed.Value!.Assets[0].Placements);
+        Assert.Null(placed.Value.Assets[1].Placements);
+        Assert.Equal(new[] { new Bounds(0, 0, 0.25, 0.25), new Bounds(0.5, 0.5, 0.25, 0.25) },
+            placed.Value.Assets[2].Placements);
+    }
+
+    [Theory]
+    [InlineData("tile", "오브젝트만 자리를 가질 수 있습니다")]
+    [InlineData("backdrop", "오브젝트만 자리를 가질 수 있습니다")]
+    [InlineData("tooMany", "오브젝트 자리는 원본 내부 영역 1~20개여야 합니다")]
+    [InlineData("empty", "오브젝트 자리는 원본 내부 영역 1~20개여야 합니다")]
+    [InlineData("outside", "오브젝트 자리는 원본 내부 영역 1~20개여야 합니다")]
+    public void Parse_RejectsPlacementsThatViolateDomainRules(string scenario, string message)
+    {
+        var json = scenario switch
+        {
+            "tile" => MixedJsonWithPlacements("null", TwoPlacements, "null"),
+            "backdrop" => MixedJsonWithPlacements(TwoPlacements, "null", "null"),
+            "tooMany" => MixedJsonWithPlacements("null", "null",
+                "[" + string.Join(",", Enumerable.Repeat("""{"x":0,"y":0,"w":0.1,"h":0.1}""", 21)) + "]"),
+            "empty" => MixedJsonWithPlacements("null", "null", "[]"),
+            _ => MixedJsonWithPlacements("null", "null", """[{"x":0.9,"y":0,"w":0.25,"h":0.25}]"""),
+        };
+        var result = SpritePlanParser.Parse(json, IsometricTiles, new(24, 16));
+        Assert.Equal(ErrorCode.SpritePlanInvalid, result.ErrorCode);
+        Assert.Equal(message, result.ErrorMessage);
+    }
+
+    [Fact]
+    public void Parse_AcceptsTwentyPlacements()
+    {
+        var twenty = "[" + string.Join(",", Enumerable.Repeat("""{"x":0,"y":0,"w":0.1,"h":0.1}""", 20)) + "]";
+        var result = SpritePlanParser.Parse(MixedJsonWithPlacements("null", "null", twenty), IsometricTiles, new(24, 16));
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+        Assert.Equal(20, result.Value!.Assets[2].Placements!.Count);
+    }
+
+    [Theory]
+    [InlineData("""[{"x":0,"y":0,"w":0.25}]""")]
+    [InlineData("""[{"x":0,"y":0,"w":0.25,"h":0.25,"extra":1}]""")]
+    [InlineData("""[{"x":0,"y":0,"w":"0.25","h":0.25}]""")]
+    [InlineData("""{"x":0,"y":0,"w":0.25,"h":0.25}""")]
+    [InlineData("""[null]""")]
+    public void Parse_RejectsMalformedPlacements(string placements)
+    {
+        var result = SpritePlanParser.Parse(MixedJsonWithPlacements("null", "null", placements), IsometricTiles, new(24, 16));
+        Assert.Equal(ErrorCode.SpritePlanInvalid, result.ErrorCode);
+    }
+
+    [Theory]
+    [InlineData("tiles", 3)]
+    [InlineData("layers", 1)]
+    public async Task FakeAnalysis_ReturnsParsablePlanWithTwoPlacementsOnlyOnTheTileObject(string outputKind, int count)
+    {
+        var settings = new SpriteSettings(SpriteView.Isometric, outputKind == "tiles" ? SpriteOutputKind.Tiles : SpriteOutputKind.Layers);
+        var context = LlmCallContext.ForTask(Guid.NewGuid(), Guid.NewGuid(), TaskKind.AnalyzeSprites,
+            Guid.NewGuid(), Guid.NewGuid(), "fake");
+        var result = await FakeLlmProvider.Succeeding().CompleteAsync(new LlmRequest(context, "",
+            $$"""{"view":"isometric","outputKind":"{{outputKind}}"}""", [], "{}"), Ct);
+        var plan = SpritePlanParser.Parse(result.RawJson, settings, new(24, 16));
+        Assert.True(plan.IsSuccess, plan.ErrorMessage);
+        Assert.Equal(count, plan.Value!.Assets.Count);
+        var placed = plan.Value.Assets.Where(a => a.Placements is not null).ToList();
+        if (outputKind == "tiles")
+        {
+            var only = Assert.Single(placed);
+            Assert.Equal(SpriteAssetRole.Object, only.Role);
+            Assert.Equal(2, only.Placements!.Count);
+            Assert.Contains(only.SourceBounds, only.Placements);
+        }
+        else Assert.Empty(placed);
+    }
+
     [Fact]
     public void Parser_PreservesRolesGridAndBounds()
     {

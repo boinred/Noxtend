@@ -34,10 +34,17 @@ public static class SpritePlanParser
             var plans = new List<SpriteAssetPlan>();
             foreach (var asset in assets.EnumerateArray())
             {
-                RequireProperties(asset, "name", "role", "order", "sourceBounds", "requiresTransparency", "loop", "frameCount", "fps", "motionNotes");
+                // V5 이전 프롬프트 응답에는 placements 가 없다
+                JsonElement placementValue = default;
+                var hasPlacements = asset.ValueKind == JsonValueKind.Object && asset.TryGetProperty("placements", out placementValue);
+                RequireProperties(asset, hasPlacements ? [.. AssetProperties, "placements"] : AssetProperties);
                 if (asset.GetProperty("frameCount").GetInt32() is not (4 or 8)) return Invalid();
-                var bounds = asset.GetProperty("sourceBounds");
-                RequireProperties(bounds, "x", "y", "w", "h");
+                IReadOnlyList<Bounds>? placements = null;
+                if (hasPlacements && placementValue.ValueKind != JsonValueKind.Null)
+                {
+                    if (placementValue.ValueKind != JsonValueKind.Array) return Invalid();
+                    placements = placementValue.EnumerateArray().Select(ReadBounds).ToList().AsReadOnly();
+                }
                 var role = asset.GetProperty("role").GetString() switch
                 {
                     "layer" => SpriteAssetRole.Layer,
@@ -47,11 +54,10 @@ public static class SpritePlanParser
                     _ => throw new JsonException("알 수 없는 역할"),
                 };
                 plans.Add(new(Guid.NewGuid(), asset.GetProperty("name").GetString()!, asset.GetProperty("order").GetInt32(),
-                    new Bounds(bounds.GetProperty("x").GetDouble(), bounds.GetProperty("y").GetDouble(),
-                        bounds.GetProperty("w").GetDouble(), bounds.GetProperty("h").GetDouble()),
+                    ReadBounds(asset.GetProperty("sourceBounds")),
                     asset.GetProperty("requiresTransparency").GetBoolean(), asset.GetProperty("loop").GetBoolean(),
                     asset.GetProperty("frameCount").GetInt32(), asset.GetProperty("fps").GetInt32(),
-                    asset.GetProperty("motionNotes").GetString()!, role));
+                    asset.GetProperty("motionNotes").GetString()!, role, placements));
             }
             var validation = SpriteRules.Validate(settings, source, plans, grid);
             return validation.IsSuccess ? Result<SpriteAnalysisPlan>.Ok(new(plans.AsReadOnly(), grid))
@@ -61,6 +67,16 @@ public static class SpritePlanParser
         {
             return Invalid();
         }
+    }
+
+    private static readonly string[] AssetProperties =
+        ["name", "role", "order", "sourceBounds", "requiresTransparency", "loop", "frameCount", "fps", "motionNotes"];
+
+    private static Bounds ReadBounds(JsonElement bounds)
+    {
+        RequireProperties(bounds, "x", "y", "w", "h");
+        return new(bounds.GetProperty("x").GetDouble(), bounds.GetProperty("y").GetDouble(),
+            bounds.GetProperty("w").GetDouble(), bounds.GetProperty("h").GetDouble());
     }
 
     private static void RequireProperties(JsonElement value, params string[] expected)

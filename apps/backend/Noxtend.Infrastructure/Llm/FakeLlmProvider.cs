@@ -111,7 +111,11 @@ public sealed class FakeLlmProvider : ILlmProvider
                 name = role, role, order,
                 sourceBounds = new { x = 0.0, y = 0.0, w = role == "tile" || role == "object" ? 0.5 : 1, h = 0.5 },
                 requiresTransparency = role == "object" || role == "tile" && view == "isometric",
-                loop = false, frameCount = 8, fps = 8, motionNotes = "" }) });
+                loop = false, frameCount = 8, fps = 8, motionNotes = "",
+                // 오브젝트의 모든 자리 — 첫 자리가 sourceBounds, 둘 다 원본 안쪽
+                placements = role == "object"
+                    ? new[] { new { x = 0.0, y = 0.0, w = 0.5, h = 0.5 }, new { x = 0.5, y = 0.5, w = 0.5, h = 0.5 } }
+                    : null }) });
     }
 
     /// <summary>
