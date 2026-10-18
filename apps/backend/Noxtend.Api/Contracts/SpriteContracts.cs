@@ -48,16 +48,22 @@ public sealed record SpritePlanRequest(Guid RequestId, int ExpectedRevision, IRe
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SpriteAssetPlanRequest(Guid Id, string Name, int Order, SpriteBoundsRequest? SourceBounds,
-    bool RequiresTransparency, bool Loop = false, int FrameCount = 8, int Fps = 8, string MotionNotes = "", string? Role = null)
+    bool RequiresTransparency, bool Loop = false, int FrameCount = 8, int Fps = 8, string MotionNotes = "", string? Role = null,
+    IReadOnlyList<SpriteBoundsRequest>? Placements = null)
 {
+    // 범위·개수·역할 규칙은 도메인 검증이 맡고 여기서는 null 원소와 비유한 좌표만 차단
     public SpriteAssetPlan? ToDomain()
-        => Id != Guid.Empty && SourceBounds is { } bounds
-            && double.IsFinite(bounds.X) && double.IsFinite(bounds.Y)
-            && double.IsFinite(bounds.W) && double.IsFinite(bounds.H)
+        => Id != Guid.Empty && SourceBounds is { } bounds && Finite(bounds)
+            && (Placements is null || Placements.All(Finite))
             && Role is null or "layer" or "tile" or "backdrop" or "object"
             ? new(Id, Name, Order, new Bounds(bounds.X, bounds.Y, bounds.W, bounds.H),
                 RequiresTransparency, Loop, FrameCount, Fps, MotionNotes,
-                Role is null ? null : Enum.Parse<SpriteAssetRole>(Role, true)) : null;
+                Role is null ? null : Enum.Parse<SpriteAssetRole>(Role, true),
+                Placements?.Select(p => new Bounds(p.X, p.Y, p.W, p.H)).ToArray()) : null;
+
+    private static bool Finite(SpriteBoundsRequest? bounds)
+        => bounds is not null && double.IsFinite(bounds.X) && double.IsFinite(bounds.Y)
+            && double.IsFinite(bounds.W) && double.IsFinite(bounds.H);
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -120,7 +126,8 @@ public sealed record SpriteAssetResponse(Guid Id, SpriteAssetPlanRequest Plan, i
         var plan = asset.Plan;
         return new(asset.Id, new(plan.Id, plan.Name, plan.Order,
                 new(plan.SourceBounds.X, plan.SourceBounds.Y, plan.SourceBounds.W, plan.SourceBounds.H),
-                plan.RequiresTransparency, plan.Loop, plan.FrameCount, plan.Fps, plan.MotionNotes, JobResponse.Wire(SpriteRules.RoleOf(state.Settings, plan))),
+                plan.RequiresTransparency, plan.Loop, plan.FrameCount, plan.Fps, plan.MotionNotes, JobResponse.Wire(SpriteRules.RoleOf(state.Settings, plan)),
+                plan.Placements?.Select(p => new SpriteBoundsRequest(p.X, p.Y, p.W, p.H)).ToArray()),
             asset.PlanRevision, new(asset.Anchor.X, asset.Anchor.Y), asset.ApprovedBaseImageId,
             asset.Approval is { } approval ? new(approval.PlanRevision,
                 SpriteApprovedAssetResponse.From(approval.Snapshot)) : null,
