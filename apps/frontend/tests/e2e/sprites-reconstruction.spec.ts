@@ -28,30 +28,47 @@ test('reconstruction follows opacity after plan approval', async ({ page }) => {
   await expect(images).toHaveAttribute('opacity', '0.8')
   await expect(images.locator('image[data-tile-id]').first()).toHaveAttribute('width', '320')
   await expect(images.locator('image[data-asset-id]')).toHaveCount(2) // 원경 배경 1·오브젝트 자리 1
-  const { data } = await page.evaluate(
-    (id) => fetch(`/api/jobs/${id}`).then((response) => response.json()),
-    SPRITE_IDS.job,
-  )
-  const idOf = (role: string) =>
-    (data.sprite.assets as { id: string; plan: { role: string } }[]).find(
-      (asset) => asset.plan.role === role,
-    )!.id
-  // 원경 배경은 ROI가 아닌 원본 전체, 오브젝트는 자기 ROI
-  for (const [role, rect] of [
-    ['backdrop', { x: 0, y: 0, width: 320, height: 180 }],
-    ['object', { x: 0, y: 0, width: 160, height: 90 }],
-  ] as const)
-    for (const [name, value] of Object.entries(rect))
-      await expect(images.locator(`image[data-asset-id="${idOf(role)}"]`)).toHaveAttribute(
-        name,
-        String(value),
-      )
   // 재구성 층이 ROI 선택을 막지 않음
   const image = review.getByTestId('overlay-image')
   await image.scrollIntoViewIfNeeded()
   const frame = (await image.boundingBox())!
   await page.mouse.click(frame.x + frame.width * 0.1, frame.y + frame.height * 0.1)
   await expect(review.getByTestId('overlay-handle')).toHaveCount(8)
+})
+
+test('backdrop fills the source canvas while objects keep their own ROI', async ({ page }) => {
+  await installFakeApi(page, { sprites: { seed: 'baseReview', settings } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const body = await page.evaluate(
+    (id) => fetch(`/api/jobs/${id}`).then((response) => response.json()),
+    SPRITE_IDS.job,
+  )
+  const assets = body.data.sprite.assets as {
+    id: string
+    plan: { role: string; sourceBounds: Record<string, number> }
+  }[]
+  const backdrop = assets.find((asset) => asset.plan.role === 'backdrop')!
+  const object = assets.find((asset) => asset.plan.role === 'object')!
+  // 시드의 원경 배경 ROI는 원본 전체와 같아 응답에서만 어긋나게 바꿈
+  backdrop.plan.sourceBounds = { x: 0.25, y: 0.25, w: 0.5, h: 0.5 }
+  object.plan.sourceBounds = { x: 0.25, y: 0.5, w: 0.5, h: 0.5 }
+  await page.route(`**/api/jobs/${SPRITE_IDS.job}`, (route) =>
+    route.request().method() === 'GET' ? route.fulfill({ json: body }) : route.fallback(),
+  )
+  await page.reload()
+  const images = page
+    .getByRole('region', { name: '제작 계획 검수' })
+    .getByRole('img', { name: '원본 재구성' })
+    .getByTestId('reconstruction-images')
+  for (const [asset, rect] of [
+    [backdrop, { x: 0, y: 0, width: 320, height: 180 }],
+    [object, { x: 80, y: 90, width: 160, height: 90 }],
+  ] as const)
+    for (const [name, value] of Object.entries(rect))
+      await expect(images.locator(`image[data-asset-id="${asset.id}"]`)).toHaveAttribute(
+        name,
+        String(value),
+      )
 })
 
 test('missing base images show dashed outlines regardless of opacity', async ({ page }) => {
