@@ -575,4 +575,34 @@ Azure(정의 확인 vs 미확인): `deploy/azure/main.bicep`의 API는 `siteConf
 
 미확인: 실제 모델의 V5 분석 품질(자리 정확도·벽 분류·1024px 분할), OpenAI strict 모드의 중첩 `anyOf`·`minItems`/`maxItems`와 Gemini `type: null` 수락, 배포 DB(Azure·운영 SQL Server)에서의 V5 migration 적용(격리 SQL 컨테이너 테스트는 통과), Azure 운영 CORS, Docker 재배포(하지 않음, 로컬 API는 변경 전 이미지), 실제 Backend와 자리 저장 end-to-end.
 
-롤백·배포 주의: 변경 후 API가 새로 쓰는 `PlanJson`·`SpriteInputJson`에는 `"placements":null`이 들어간다. 변경 전 이미지는 `UnmappedMemberHandling.Disallow`라 이 행을 읽지 못한다. API 이미지를 되돌리려면 새 행의 `placements` 키를 먼저 처리해야 하고, 배포는 API → SWA 순서로 한다.
+롤백·배포 주의: 변경 후 API가 새로 쓰는 `PlanJson`·`SpriteInputJson`에는 `"placements":null`이 들어간다. 변경 전 이미지는 `UnmappedMemberHandling.Disallow`라 이 행을 읽지 못한다. API 이미지를 되돌리려면 새 행의 `placements` 키를 먼저 처리해야 하고, 배포는 API → SWA 순서로 한다. (최종 수정에서 null 키 생략으로 바꿨다. 현재 절차는 아래 [롤백 절차](#롤백-절차))
+
+### 2026-10-18 최종 수정
+
+전체 브랜치 리뷰(기준 `7f2b44e`) 뒤 수정이다.
+
+#### 롤백 절차
+
+이 절차는 문서로만 정했고 실제 DB·배포에서 실행하지 않았다. 이미지 rollback은 DB migration을 되돌리지 않는다([배포 지침](../../../deploy/AGENTS.md)).
+
+전제: 이 수정 이후 이미지는 `Placements`가 null이면 `SpriteAssets.PlanJson`·`Tasks.SpriteInputJson`(`value.plan`)에 `placements` 키를 쓰지 않으므로 자리 없는 행은 변경 전 이미지도 읽는다. 값이 있는 `placements`(V5 분석의 오브젝트 자리·사용자가 저장한 자리)는 변경 전 이미지가 `UnmappedMemberHandling.Disallow`로 읽지 못해 그 작업 조회·처리가 JSON 오류로 실패한다. V5 프롬프트가 활성인 채 이미지를 되돌리면 변경 전 `SpritePlanParser`가 V5 응답(필수 `placements`)을 모두 거부해 분석이 유료 재호출 끝에 실패한다.
+
+1. 변경 후 이미지가 떠 있는 동안 2D 분석 프롬프트를 V4로 되돌린다. 경로는 기존 프롬프트 활성화 API `POST /api/prompts/versions/c7000000-0000-4000-8000-000000000004/activate`(`PromptsController.ActivateAsync` → `ActivatePromptVersionHandler`, 같은 단계·카테고리의 활성 V5를 내리고 V4를 켬)이며, 화면은 `/admin/prompts` 격자의 2D 배경 분석(`AnalyzeSprites`) × Background 칸 → 버전 이력의 V4 행 `이 버전 켜기`다. `GET /api/prompts/AnalyzeSprites/versions?category=Background`로 V4 ID가 활성인지 확인한다. 분석은 실행 시점의 활성 프롬프트를 읽으므로(`RunSpriteAnalysisTaskHandler`) 이후 호출은 V4를 쓴다. V4가 수정돼 있어 V5가 추가되지 않았거나 운영자가 다른 버전을 켰다면 이 단계는 필요 없다. V5 migration Down은 쓰지 않는다. 저장소에 `dotnet-ef` 도구 manifest·migration bundle이 없고, Down은 V5 행을 지워 그 행을 가리키는 `LlmCalls.PromptVersionId`(FK 없음)의 프롬프트 원문을 잃는다.
+2. 값이 있는 자리 행을 센다.
+
+   ```sql
+   SELECT COUNT(*) FROM SpriteAssets WHERE PlanJson LIKE N'%"placements"%';
+   SELECT COUNT(*) FROM Tasks WHERE SpriteInputJson LIKE N'%"placements"%';
+   ```
+
+3. 둘 다 0이면 이미지를 되돌린다. Frontend도 되돌린다면 SWA를 먼저 되돌린다(새 SWA는 `placements` 키를 항상 보내 변경 전 API에서 계획 저장이 400).
+4. 0이 아니면 기본은 roll-forward(변경 후 이미지 유지)다. 변경 전 이미지가 꼭 필요하면 DB 백업과 사용자 승인 뒤 명시적 정리를 한다. 정리는 저장된 자리를 버리고(오브젝트는 `sourceBounds` 한 자리로 돌아간다) 키만 지운 뒤 3단계로 간다.
+
+   ```sql
+   UPDATE SpriteAssets SET PlanJson = JSON_MODIFY(PlanJson, '$.value.placements', NULL)
+   WHERE PlanJson LIKE N'%"placements"%';
+   UPDATE Tasks SET SpriteInputJson = JSON_MODIFY(SpriteInputJson, '$.value.plan.placements', NULL)
+   WHERE SpriteInputJson LIKE N'%"placements"%';
+   ```
+
+   lax 모드 `JSON_MODIFY`의 NULL은 키를 지운다. 일회용 SQL Server 2022 컨테이너(`mcr.microsoft.com/mssql/server:2022-latest`, 로컬 `deploy/k8s/mssql.yaml`과 같은 이미지)에서 자리 배열·명시적 null·키 없음 행과 NULL 열로 확인했고 실제 DB에는 실행하지 않았다.

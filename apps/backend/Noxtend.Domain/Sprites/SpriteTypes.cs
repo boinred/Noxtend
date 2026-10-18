@@ -24,6 +24,7 @@ public sealed record SpriteAssetPlan(Guid Id, string Name, int Order, Bounds Sou
     string MotionNotes = "", SpriteAssetRole? Role = null, IReadOnlyList<Bounds>? Placements = null)
 {
     // 자리 목록은 참조 대신 순서 있는 값 비교
+    // 새 필드 추가 시 Equals·GetHashCode 동시 갱신
     public bool Equals(SpriteAssetPlan? other)
         => other is not null && Id == other.Id && Name == other.Name && Order == other.Order
             && SourceBounds == other.SourceBounds && RequiresTransparency == other.RequiresTransparency

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using Noxtend.Domain.Job;
 using Noxtend.Domain.Sprites;
 
@@ -13,7 +14,20 @@ internal static class SpriteJsonSerializer
         RespectNullableAnnotations = true,
         RespectRequiredConstructorParameters = true,
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+        TypeInfoResolver = CreateResolver(),
     };
+
+    // 이전 API 이미지 읽기 호환용 null 자리 목록 생략
+    private static DefaultJsonTypeInfoResolver CreateResolver()
+    {
+        var resolver = new DefaultJsonTypeInfoResolver();
+        resolver.Modifiers.Add(info =>
+        {
+            if (info.Type == typeof(SpriteAssetPlan))
+                info.Properties.Single(p => p.Name == "placements").ShouldSerialize = (_, value) => value is not null;
+        });
+        return resolver;
+    }
 
     public static string Serialize<T>(T value)
     {
