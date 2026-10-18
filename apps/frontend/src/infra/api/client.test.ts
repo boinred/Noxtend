@@ -5,7 +5,7 @@
  * 서버 오류와 같은 타입으로 나와야 훅이 한 가지 분기만 갖는다.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, API_ERROR_CODES, apiRequest } from './client'
+import { ApiError, API_ERROR_CODES, apiRequest, fetchImageBlob } from './client'
 
 function mockResponse(status: number, body: unknown): Response {
   return {
@@ -121,5 +121,27 @@ describe('apiRequest', () => {
     // 직접 지정하면 boundary 가 빠져 서버가 본문을 파싱하지 못한다
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit
     expect(init.headers).toBeUndefined()
+  })
+})
+
+describe('fetchImageBlob', () => {
+  it('no-cors 캐시를 건너뛰고 CORS 로 받는다', async () => {
+    const blob = new Blob(['png'])
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ status: 200, ok: true, blob: async () => blob } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchImageBlob('/api/jobs/job-1/sprites/images/image-1')).resolves.toBe(blob)
+    expect(fetchMock).toHaveBeenCalledWith('/api/jobs/job-1/sprites/images/image-1', {
+      mode: 'cors',
+      cache: 'reload',
+    })
+  })
+
+  it('실패 응답은 본문 대신 오류로 끝낸다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 500, ok: false } as Response))
+
+    await expect(fetchImageBlob('/api/uploads/upload-1/image')).rejects.toThrow('이미지 응답 500')
   })
 })

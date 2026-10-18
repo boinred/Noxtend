@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Noxtend.Domain.Job;
 using Noxtend.Domain.Llm;
@@ -54,6 +55,64 @@ public sealed class SeedPromptVariableTests
         }
         Assert.DoesNotContain("\"oneOf\"", v4.Schema);
         Assert.Equal(2, document.RootElement.GetProperty("properties").GetProperty("grid").GetProperty("anyOf").GetArrayLength());
+    }
+
+    [Fact]
+    public void SpriteAnalyzeV5KeepsV4VariablesAndAddsNullablePlacements()
+    {
+        var v4 = SeedPrompts.AnalyzeSpritesV4();
+        var v5 = SeedPrompts.AnalyzeSpritesV5();
+        var used = Placeholder.Matches(v5.System + v5.User).Select(m => m.Groups[1].Value);
+        Assert.Equal(PromptTemplate.AllowedVariables(LlmOperationKind.AnalyzeSprites).Order(), used.Order());
+        Assert.Equal(v4.User, v5.User);
+        Assert.Equal("이미지 기반 2D 배경 역할·격자·자리 분석 v5", v5.Note);
+
+        using var document = JsonDocument.Parse(v5.Schema);
+        foreach (var (_, node) in ObjectsIn(document.RootElement, "$"))
+        {
+            Assert.False(node.GetProperty("additionalProperties").GetBoolean());
+            Assert.Equal(node.GetProperty("properties").EnumerateObject().Select(p => p.Name).Order(),
+                node.GetProperty("required").EnumerateArray().Select(p => p.GetString()).Order());
+        }
+        Assert.DoesNotContain("\"oneOf\"", v5.Schema);
+        var asset = document.RootElement.GetProperty("properties").GetProperty("assets").GetProperty("items");
+        Assert.Contains("placements", asset.GetProperty("required").EnumerateArray().Select(x => x.GetString()));
+
+        // 자리 외 V4 계약은 그대로
+        var withoutPlacements = JsonNode.Parse(v5.Schema)!;
+        var assetNode = withoutPlacements["properties"]!["assets"]!["items"]!;
+        assetNode["properties"]!.AsObject().Remove("placements");
+        var required = assetNode["required"]!.AsArray();
+        required.Remove(required.Single(x => x!.GetValue<string>() == "placements"));
+        Assert.Equal(v4.Schema, withoutPlacements.ToJsonString());
+
+        var union = asset.GetProperty("properties").GetProperty("placements").GetProperty("anyOf");
+        Assert.Equal(2, union.GetArrayLength());
+        Assert.Equal("null", union[0].GetProperty("type").GetString());
+        var list = union[1];
+        Assert.Equal("array", list.GetProperty("type").GetString());
+        Assert.Equal(1, list.GetProperty("minItems").GetInt32());
+        Assert.Equal(20, list.GetProperty("maxItems").GetInt32());
+        Assert.Equal(asset.GetProperty("properties").GetProperty("sourceBounds").GetRawText(), list.GetProperty("items").GetRawText());
+    }
+
+    [Fact]
+    public void SpriteAnalyzeV5MovesWallsToObjectsAndAsksForEveryPlacement()
+    {
+        var v4 = SeedPrompts.AnalyzeSpritesV4().System;
+        var v5 = SeedPrompts.AnalyzeSpritesV5().System;
+        Assert.Contains("Every asset requires role.", v5);
+        Assert.Contains("cellWidth", v5);
+        Assert.Contains("A roof is not a tile", v5);
+        Assert.DoesNotContain("walls, water, roads", v5);
+        Assert.DoesNotContain("Use one representative instance", v5);
+        Assert.Contains("(ground, water, roads, sidewalks)", v5);
+        Assert.Contains("standing wall, fence, building facade, roof or awning is an object", v5);
+        Assert.Contains("every position where the object appears in placements (at most 20)", v5);
+        Assert.Contains("sourceBounds is the clearest one", v5);
+        Assert.Contains("1024px", v5);
+        Assert.Contains("one repeating segment as the object and list the segments in placements", v5);
+        Assert.NotEqual(v4, v5);
     }
 
     [Fact]

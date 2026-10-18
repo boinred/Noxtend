@@ -41,10 +41,21 @@ export interface OverlayPart {
    * 길어져 서로 덮는다.
    */
   label?: ReactNode
+  /** 2D 오브젝트의 생성 기준(실선)·자리(점선) 구분, 미지정 시 기존 실선 */
+  boxKind?: 'source' | 'placement'
 }
 
 export interface PartsOverlayProps {
-  selection?: { selectedId: string | null; onSelect: (id: string) => void }
+  /**
+   * `onSelectPlacement` 지정 시 누른 배치 번호 전달·`selectedOrdinal` 배치에만 손잡이,
+   * 미지정 시 지목한 파츠의 배치 전부
+   */
+  selection?: {
+    selectedId: string | null
+    onSelect: (id: string) => void
+    selectedOrdinal?: number
+    onSelectPlacement?: (id: string, ordinal: number) => void
+  }
   sourceImageId: string
   parts: OverlayPart[]
   scene?: SceneSpec | null
@@ -52,6 +63,8 @@ export interface PartsOverlayProps {
   action?: { label: string; onClick: (partId: string) => void }
   /** 프레임 위에 얹을 것 — 검수 화면이 그리는 중인 사각형을 여기 넣는다. */
   children?: ReactNode
+  /** 원본 바로 위·상자 아래에 까는 것. 클릭을 받지 않는다 — 2D 재구성 층. */
+  underlay?: ReactNode
   /** 프레임에 얹는 마우스 처리 — 검수 화면의 드래그. */
   frameProps?: HTMLAttributes<HTMLDivElement> & { 'data-testid'?: string }
   /** 드래그 좌표를 픽셀→0~1 로 바꾸려면 프레임의 실제 크기를 재야 한다. */
@@ -183,6 +196,7 @@ export function PartsOverlay({
   scene = null,
   action,
   children,
+  underlay,
   frameProps,
   frameRef,
   alwaysShowBoxes = false,
@@ -228,6 +242,11 @@ export function PartsOverlay({
             draggable={false}
             data-testid="overlay-image"
           />
+          {underlay ? (
+            <div className="pointer-events-none absolute inset-0" data-testid="overlay-underlay">
+              {underlay}
+            </div>
+          ) : null}
 
           {/* 수평선 — 지면에 물체를 놓는 기준이다. 좌표가 맞는지 볼 때 가장 먼저 보는 선 */}
           {scene ? (
@@ -265,7 +284,9 @@ export function PartsOverlay({
                           ? (event) => {
                               if (!event.isPrimary || event.button !== 0) return
                               event.stopPropagation()
-                              selection.onSelect(part.id)
+                              if (selection.onSelectPlacement)
+                                selection.onSelectPlacement(part.id, index)
+                              else selection.onSelect(part.id)
                               editing?.onPointerHandleDown?.(part.id, index, box, 'body', event)
                             }
                           : undefined
@@ -273,23 +294,32 @@ export function PartsOverlay({
                       data-shown={isShown || alwaysShowBoxes}
                       data-testid="overlay-box"
                       data-part={part.name}
+                      data-kind={part.boxKind}
                       style={{
                         left: `${box.x * 100}%`,
                         top: `${box.y * 100}%`,
                         width: `${box.w * 100}%`,
                         height: `${box.h * 100}%`,
                         borderColor: color,
+                        ...(part.boxKind === 'placement' ? { borderStyle: 'dashed' as const } : {}),
                         ...(selection
                           ? {
                               pointerEvents: 'auto' as const,
                               touchAction: 'none',
+                              // 작은 상자 우선, 같은 크기면 선택한 상자 우선(끌기 중 선택 전환 방지)
                               zIndex:
-                                1 +
-                                placed.filter(({ part: other }) =>
-                                  other.placements.some(
-                                    (candidate) => candidate.w * candidate.h > raw.w * raw.h,
-                                  ),
-                                ).length,
+                                2 *
+                                  (1 +
+                                    placed.filter(({ part: other }) =>
+                                      other.placements.some(
+                                        (candidate) => candidate.w * candidate.h > raw.w * raw.h,
+                                      ),
+                                    ).length) +
+                                (isShown &&
+                                (selection.selectedOrdinal === undefined ||
+                                  selection.selectedOrdinal === index)
+                                  ? 1
+                                  : 0),
                             }
                           : {}),
                         // 지목한 것만 제 색으로. 스물다섯 개가 전부 진하면 어느 것을 보고
@@ -306,6 +336,11 @@ export function PartsOverlay({
               */}
                 {editing && isShown
                   ? part.placements.map((raw, index) => {
+                      if (
+                        selection?.selectedOrdinal !== undefined &&
+                        index !== selection.selectedOrdinal
+                      )
+                        return null
                       const box =
                         editing.preview &&
                         editing.preview.partId === part.id &&
@@ -358,7 +393,10 @@ export function PartsOverlay({
                                 left: `${(box.x + box.w * handle.x) * 100}%`,
                                 top: `${(box.y + box.h * handle.y) * 100}%`,
                                 cursor: handle.cursor,
-                                ...(selection ? { touchAction: 'none', zIndex: 30 } : {}),
+                                // 모든 상자보다 위
+                                ...(selection
+                                  ? { touchAction: 'none', zIndex: 2 * placed.length + 4 }
+                                  : {}),
                               }}
                               onMouseDown={
                                 editing.onPointerHandleDown ? undefined : down(handle.id)
@@ -449,6 +487,8 @@ export function PartsOverlay({
                     marginTop: 0,
                     marginLeft: flip ? -2 : 2,
                     flexDirection: flip ? 'row-reverse' : 'row',
+                    // 모든 상자보다 위, 손잡이보다 아래
+                    ...(selection ? { zIndex: 2 * placed.length + 3 } : {}),
                   }}
                 >
                   <button

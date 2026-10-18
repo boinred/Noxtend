@@ -691,6 +691,102 @@ public sealed class SpriteLifecycleTests
         Assert.Equal(job.Sprites.Transform, input.Transform);
     }
 
+    [Fact]
+    public void SpriteAssetPlan_EqualityComparesPlacementsByValue()
+    {
+        var plan = Plan() with { Placements = [new(0, 0, .5, .5), new(.5, .5, .5, .5)] };
+        var same = plan with { Placements = [new(0, 0, .5, .5), new(.5, .5, .5, .5)] };
+        Assert.True(plan == same);
+        Assert.True(plan.Equals((object)same));
+        Assert.Equal(plan.GetHashCode(), same.GetHashCode());
+        Assert.False(plan == plan with { Placements = [new(.5, .5, .5, .5), new(0, 0, .5, .5)] });
+        Assert.False(plan == plan with { Placements = [new(0, 0, .5, .5), new(.5, .5, .5, .4)] });
+        Assert.False(plan == plan with { Placements = [new(0, 0, .5, .5)] });
+        Assert.False(plan with { Placements = null } == plan with { Placements = [] });
+        Assert.False(plan == same with { Name = "다른 이름" });
+        Assert.True(plan with { Placements = null } == plan with { Placements = null });
+    }
+
+    [Fact]
+    public void ReplaceSpritePlan_PlacementsOnly_KeepsApprovalExportsAndCompletion()
+    {
+        var (job, obj) = CompletedObject();
+        var asset = job.Sprites!.Assets.Single();
+        var approval = asset.Approval;
+        var baseId = asset.ApprovedBaseImageId;
+        var frames = asset.Frames.Select(f => f.CurrentImageId).ToArray();
+        var (status, phase, completedAt, revision) = (job.Status, job.Sprites.Phase, job.CompletedAt, Revision(job));
+        var moved = obj with { Placements = [new(0, 0, .5, .5), new(.5, .5, .5, .5)] };
+        Assert.True(job.ReplaceSpritePlan([moved], new(.5), [], revision).Value);
+        Assert.Equal(revision + 1, Revision(job));
+        Assert.True(moved == asset.Plan);
+        Assert.Same(asset, job.Sprites.Assets.Single());
+        Assert.Same(approval, asset.Approval);
+        Assert.Equal(baseId, asset.ApprovedBaseImageId);
+        Assert.Equal(1, asset.PlanRevision);
+        Assert.Equal(frames, asset.Frames.Select(f => f.CurrentImageId));
+        Assert.True(job.Sprites.Exports.Single().IsCurrent);
+        Assert.Equal(JobStatus.Succeeded, status);
+        Assert.Equal(status, job.Status);
+        Assert.Equal(phase, job.Sprites.Phase);
+        Assert.Equal(completedAt, job.CompletedAt);
+        Assert.False(job.ReplaceSpritePlan([moved], new(.5), [], Revision(job)).Value);
+    }
+
+    [Fact]
+    public void ReplaceSpritePlan_PlacementsWithRename_UsesExistingRules()
+    {
+        var (job, obj) = CompletedObject();
+        var asset = job.Sprites!.Assets.Single();
+        Assert.True(job.ReplaceSpritePlan([obj with { Name = "새 이름", Placements = [new(0, 0, .5, .5)] }],
+            new(.5), [], Revision(job)).Value);
+        Assert.Null(asset.Approval);
+        Assert.False(job.Sprites.Exports.Single().IsCurrent);
+        Assert.Equal(JobStatus.PendingReview, job.Status);
+        Assert.Null(job.CompletedAt);
+        Assert.Equal("새 이름", asset.Plan.Name);
+        Assert.Single(asset.Plan.Placements!);
+    }
+
+    [Fact]
+    public void ReplaceSpritePlan_PlacementsOnly_KeepsRunningTaskCurrent()
+    {
+        var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "fake",
+            new(SpriteView.SideView, SpriteOutputKind.Tiles), new(800, 600), new(1024, 1024), Now).Value!;
+        var obj = Plan() with { Role = SpriteAssetRole.Object, RequiresTransparency = true, SourceBounds = new(0, 0, .5, .5) };
+        Assert.True(job.ReplaceSpritePlan([obj], new(.5), [new(1024, 1024)], 0).IsSuccess);
+        var input = Assert.Single(job.ApproveSpritePlan(Revision(job)).Value!);
+        var task = job.PlanTask(TaskKind.GenerateSprite, job.Tasks.Count);
+        job.BindSpriteFrame(task.Id, input);
+        task.Claim(Now, TimeSpan.FromMinutes(2));
+        var revision = Revision(job);
+        Assert.True(job.ReplaceSpritePlan([obj with { Placements = [new(.5, .5, .5, .5)] }], new(.5), [], revision).Value);
+        Assert.Equal(revision + 1, Revision(job));
+        Assert.True(job.IsCurrentTask(task));
+        Assert.False(task.IsTerminal);
+        Assert.Equal(JobStatus.Running, job.Status);
+        Assert.True(job.TryAttachSpriteImage(SpriteImage.Create(task.Id, input, "sprites/image.png", Now)));
+    }
+
+    private static (PipelineJob Job, SpriteAssetPlan Plan) CompletedObject()
+    {
+        var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "fake",
+            new(SpriteView.SideView, SpriteOutputKind.Tiles), new(800, 600), new(1024, 1024), Now).Value!;
+        var obj = Plan() with { Role = SpriteAssetRole.Object, RequiresTransparency = true, SourceBounds = new(0, 0, .5, .5) };
+        Assert.True(job.ReplaceSpritePlan([obj], new(.5), [new(1024, 1024)], 0).IsSuccess);
+        Complete(job, Assert.Single(job.ApproveSpritePlan(Revision(job)).Value!));
+        Assert.True(job.ApproveSpriteBases([obj.Id], Revision(job)).IsSuccess);
+        var input = job.CaptureSpriteExport([obj.Id], Revision(job)).Value!;
+        var task = job.PlanTask(TaskKind.PackSprites, job.Tasks.Count);
+        task.BindSpriteExport(input);
+        task.Claim(Now, TimeSpan.FromMinutes(2));
+        Assert.True(job.TryAttachSpriteExport(SpriteExport.Create(task.Id, input,
+            new(input.SchemaVersion, job.Id, ProductionMode.TwoD, input, "topLeft", "pixels", []), "export.zip", Now)));
+        task.Succeed(Now);
+        job.ReconcileFromTasks(Now);
+        return (job, obj);
+    }
+
     private static (PipelineJob Job, SpriteAssetPlan First, SpriteAssetPlan Second) ApprovedPair()
     {
         var (job, first) = Planned();

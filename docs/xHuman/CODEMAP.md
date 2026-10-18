@@ -2,7 +2,7 @@
 
 AI 에이전트가 작업에 필요한 코드와 테스트를 찾는 첫 안내서다. 사람용 소개는 루트 `README.md`에 있다. 탐색 출발점일 뿐 코드 분석을 대신하지 않는다. 수정 전에는 실제 선언·호출·테스트를 확인하고, 작업 규칙은 [AGENTS.md](../../AGENTS.md)를 따른다.
 
-마지막 확인: 2026-10-14, 2D 에셋 역할 경로는 Backend `99094b9`·Frontend `0362628`로 확인. 2026-10-13, 2D 원본 준비 경로는 revision `0385d0e`로 확인. 모델·단가 수집 경로는 2026-10-09 revision `7862b8b`. 나머지 영역의 기준은 각 지도에 기록한다.
+마지막 확인: 2026-10-18, 2D 오브젝트 자리·재구성 경로(자리 전용 저장·`placements` 계약·계획 검수 화면·`AnalyzeSpritesV5`)는 `516a39d` + 이 변경으로 확인. 2026-10-14, 2D 에셋 역할 경로는 Backend `99094b9`·Frontend `0362628`로 확인. 2026-10-13, 2D 원본 준비 경로는 revision `0385d0e`로 확인. 모델·단가 수집 경로는 2026-10-09 revision `7862b8b`. 나머지 영역의 기준은 각 지도에 기록한다.
 
 ## 저장소 구성
 
@@ -24,7 +24,7 @@ AI 에이전트가 작업에 필요한 코드와 테스트를 찾는 첫 안내�
 | --- | --- |
 | Backend 계층·작업 흐름·2D sprite·HTTP 계약 | [backend.md](backend.md) |
 | 2D 원본 준비(프롬프트 초안·보완·원본 후보 생성·선택) | Backend [backend.md](backend.md), 공정·재시도 [job-execution.md](job-execution.md), 프롬프트 [providers-and-prompts.md](providers-and-prompts.md), 화면 [frontend.md](frontend.md). 계약을 바꾸면 backend.md와 frontend.md 양쪽 |
-| 2D 에셋 역할·격자·개별 캔버스·manifest v2 | [backend.md](backend.md), [job-execution.md](job-execution.md), [providers-and-prompts.md](providers-and-prompts.md), [frontend.md](frontend.md). [실행·검증 기록](../superpowers/plans/2026-10-14-2d-asset-roles.md#실행-기록) |
+| 2D 에셋 역할·격자·개별 캔버스·manifest v2·오브젝트 자리·원본 재구성 | [backend.md](backend.md)(`Placements` 저장·검증·자리 전용 저장), [job-execution.md](job-execution.md), [providers-and-prompts.md](providers-and-prompts.md)(`AnalyzeSpritesV5`), [frontend.md](frontend.md)(자리 편집·계획 검수 재구성 층). 계약을 바꾸면 backend.md와 frontend.md 양쪽. 실행·검증 기록: [역할](../superpowers/plans/2026-10-14-2d-asset-roles.md#실행-기록), [자리·재구성](../superpowers/plans/2026-10-18-2d-source-reconstruction.md#실행-기록) |
 | 작업 접수·큐·Worker·재시도·SQL·Blob·migration·3D 메시 | [job-execution.md](job-execution.md) |
 | 텍스트·이미지 공급자, 프롬프트 버전, 호출 기록·비용, 공식 모델·단가 수집·선택 적용, 공급자 설정 API | [providers-and-prompts.md](providers-and-prompts.md) |
 | 프롬프트 회귀·AI 출력 품질 비교 | [prompt-evaluation.md](prompt-evaluation.md), [agentic-eval](../../.agents/skills/agentic-eval/SKILL.md) |

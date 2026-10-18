@@ -1,4 +1,5 @@
 using Noxtend.Domain.Common;
+using Noxtend.Domain.Job;
 
 namespace Noxtend.Domain.Sprites;
 
@@ -56,12 +57,7 @@ public static class SpriteRules
         var totalFrames = 0;
         foreach (var asset in assets)
         {
-            var bounds = asset.SourceBounds;
-            if (string.IsNullOrWhiteSpace(asset.Name) || bounds is null
-                || !double.IsFinite(bounds.X) || !double.IsFinite(bounds.Y)
-                || !double.IsFinite(bounds.W) || !double.IsFinite(bounds.H)
-                || bounds.X < 0 || bounds.Y < 0 || bounds.W <= 0 || bounds.H <= 0
-                || bounds.X + bounds.W > 1 || bounds.Y + bounds.H > 1)
+            if (string.IsNullOrWhiteSpace(asset.Name) || !InsideSource(asset.SourceBounds))
             {
                 return Result<bool>.Fail(ErrorCode.SpritePlanInvalid, "대상 이름과 원본 내부의 유한한 영역이 필요합니다");
             }
@@ -77,6 +73,14 @@ public static class SpriteRules
                 ? role != SpriteAssetRole.Layer : role == SpriteAssetRole.Layer))
             {
                 return Result<bool>.Fail(ErrorCode.SpritePlanInvalid, "결과 유형에 허용되지 않는 에셋 역할입니다");
+            }
+            if (asset.Placements is not null && role != SpriteAssetRole.Object)
+            {
+                return Result<bool>.Fail(ErrorCode.SpritePlanInvalid, "오브젝트만 자리를 가질 수 있습니다");
+            }
+            if (asset.Placements is { } placements && (placements.Count is < 1 or > 20 || !placements.All(InsideSource)))
+            {
+                return Result<bool>.Fail(ErrorCode.SpritePlanInvalid, "오브젝트 자리는 원본 내부 영역 1~20개여야 합니다");
             }
 
             var needsTransparency = role == SpriteAssetRole.Layer && asset.Order != backmost
@@ -110,6 +114,12 @@ public static class SpriteRules
             ? Result<bool>.Ok(true)
             : Result<bool>.Fail(ErrorCode.SpritePlanInvalid, "기준 이미지를 포함해 최대 64프레임까지 승인할 수 있습니다");
     }
+
+    private static bool InsideSource(Bounds? bounds)
+        => bounds is not null && double.IsFinite(bounds.X) && double.IsFinite(bounds.Y)
+            && double.IsFinite(bounds.W) && double.IsFinite(bounds.H)
+            && bounds.X >= 0 && bounds.Y >= 0 && bounds.W > 0 && bounds.H > 0
+            && bounds.X + bounds.W <= 1 && bounds.Y + bounds.H <= 1;
 
     public static SpriteAssetRole RoleOf(SpriteSettings settings, SpriteAssetPlan plan)
         => plan.Role ?? (settings.OutputKind == SpriteOutputKind.Layers ? SpriteAssetRole.Layer : SpriteAssetRole.Tile);

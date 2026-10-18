@@ -1,3 +1,4 @@
+using Noxtend.Domain.Common;
 using Noxtend.Domain.Job;
 using Noxtend.Domain.Sprites;
 
@@ -258,6 +259,41 @@ public sealed class SpriteRulesTests
         Assert.False(SpriteRules.Validate(tiles, Source, [obj with { RequiresTransparency = false }], new(1)).IsSuccess);
         Assert.False(SpriteRules.Validate(tiles, Source, [backdrop with { RequiresTransparency = true }], new(1)).IsSuccess);
         Assert.Equal("격자 칸 너비가 필요합니다", SpriteRules.Validate(tiles, Source, [obj]).ErrorMessage);
+    }
+
+    [Fact]
+    public void Validate_ObjectPlacements_AcceptsOneToTwentyInsideSource()
+    {
+        var tiles = Layers with { OutputKind = SpriteOutputKind.Tiles };
+        var obj = Plan() with { Role = SpriteAssetRole.Object, SourceBounds = new(0, 0, .5, .5) };
+        var inside = new Bounds(.5, .5, .5, .5);
+        Assert.True(SpriteRules.Validate(tiles, Source, [obj], new(.5)).IsSuccess);
+        Assert.True(SpriteRules.Validate(tiles, Source, [obj with { Placements = [inside] }], new(.5)).IsSuccess);
+        Assert.True(SpriteRules.Validate(tiles, Source,
+            [obj with { Placements = Enumerable.Repeat(inside, 20).ToArray() }], new(.5)).IsSuccess);
+        IReadOnlyList<Bounds>[] invalid = [[], Enumerable.Repeat(inside, 21).ToArray(), [new(double.NaN, 0, .5, .5)],
+            [inside, new(.6, 0, .5, .5)], [new(-.1, 0, .5, .5)], [new(0, 0, 0, .5)], [new(0, 0, .5, -.1)], [null!]];
+        foreach (var placements in invalid)
+        {
+            var result = SpriteRules.Validate(tiles, Source, [obj with { Placements = placements }], new(.5));
+            Assert.Equal(ErrorCode.SpritePlanInvalid, result.ErrorCode);
+            Assert.Equal("오브젝트 자리는 원본 내부 영역 1~20개여야 합니다", result.ErrorMessage);
+        }
+    }
+
+    [Theory]
+    [InlineData(SpriteOutputKind.Tiles, SpriteAssetRole.Tile)]
+    [InlineData(SpriteOutputKind.Tiles, SpriteAssetRole.Backdrop)]
+    [InlineData(SpriteOutputKind.Layers, SpriteAssetRole.Layer)]
+    public void Validate_RejectsPlacementsOnNonObjectRoles(SpriteOutputKind kind, SpriteAssetRole role)
+    {
+        var settings = Layers with { OutputKind = kind };
+        SpriteGrid? grid = kind == SpriteOutputKind.Layers ? null : new(1);
+        var plan = Plan() with { Role = role, RequiresTransparency = role != SpriteAssetRole.Backdrop };
+        Assert.True(SpriteRules.Validate(settings, Source, [plan], grid).IsSuccess);
+        var result = SpriteRules.Validate(settings, Source, [plan with { Placements = [new(0, 0, 1, 1)] }], grid);
+        Assert.Equal(ErrorCode.SpritePlanInvalid, result.ErrorCode);
+        Assert.Equal("오브젝트만 자리를 가질 수 있습니다", result.ErrorMessage);
     }
 
     [Theory]

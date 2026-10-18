@@ -2,30 +2,38 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { resizeBounds, sameBounds } from '../background/boxDrag'
 import type { Bounds } from '@/domain/job/types'
 import type { SpriteAssetPlan } from '@/domain/sprites/types'
-import type { OverlayHandle } from '../background/PartsOverlay'
+import type { OverlayHandle, OverlayPart } from '../background/PartsOverlay'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 
 export function useSpriteRoiEditor({
   plans,
+  parts,
   lockedIds,
   disabled,
   revision,
   onCommit,
 }: {
   plans: SpriteAssetPlan[]
+  // 선택 유효성 기준, draft plans 의 오버레이 상자
+  parts: Pick<OverlayPart, 'id' | 'placements'>[]
   lockedIds: string
   disabled: boolean
   revision: string
-  onCommit: (id: string, bounds: Bounds) => void
+  onCommit: (partId: string, ordinal: number, bounds: Bounds) => void
 }) {
   const frameRef = useRef<HTMLDivElement>(null)
   const cancelRef = useRef<(() => void) | null>(null)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selected, setSelected] = useState<{ partId: string; ordinal: number } | null>(null)
   const [preview, setPreview] = useState<{
     partId: string
     ordinal: number
     bounds: Bounds
   } | null>(null)
+  // 역할 변경·대상 삭제·서버 계획 교체로 사라진 상자 선택 해제
+  const valid =
+    selected !== null &&
+    parts.some((part) => part.id === selected.partId && selected.ordinal < part.placements.length)
+  if (selected !== null && !valid) setSelected(null)
 
   // 잠금·서버 재조회·정밀 입력 변경 뒤 늦은 드래그 확정 방지
   useLayoutEffect(() => {
@@ -40,7 +48,7 @@ export function useSpriteRoiEditor({
     handle: OverlayHandle,
     event: ReactPointerEvent,
   ) {
-    setSelectedId(partId)
+    setSelected({ partId, ordinal })
     const frame = frameRef.current
     const image = frame?.querySelector('img')
     const rect = frame?.getBoundingClientRect()
@@ -94,7 +102,7 @@ export function useSpriteRoiEditor({
     function finish(e: PointerEvent) {
       if (e.pointerId !== pointerId) return
       cleanup()
-      if (!sameBounds(origin, next)) onCommit(partId, next)
+      if (!sameBounds(origin, next)) onCommit(partId, ordinal, next)
     }
     cancelRef.current = cancel
     document.addEventListener('pointermove', move)
@@ -103,9 +111,9 @@ export function useSpriteRoiEditor({
     document.addEventListener('keydown', key)
     window.addEventListener('blur', cancel)
   }
-  function select(id: string) {
+  function select(partId: string, ordinal: number) {
     cancelRef.current?.()
-    setSelectedId(id)
+    setSelected({ partId, ordinal })
   }
-  return { frameRef, selectedId, setSelectedId: select, preview, onPointerHandleDown }
+  return { frameRef, selected: valid ? selected : null, select, preview, onPointerHandleDown }
 }

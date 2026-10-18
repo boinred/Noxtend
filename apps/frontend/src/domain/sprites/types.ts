@@ -46,6 +46,8 @@ export interface SpriteAssetPlan {
   name: string
   order: number
   sourceBounds: Bounds
+  // 오브젝트 자리 목록, null 은 sourceBounds 한 자리
+  placements: Bounds[] | null
   requiresTransparency: boolean
   loop: boolean
   frameCount: number
@@ -247,6 +249,10 @@ function readAnchor(value: unknown): void {
   const anchor = record(value)
   requireShape(finite(anchor.x) && finite(anchor.y))
 }
+function readBounds(value: unknown): void {
+  const bounds = record(value)
+  requireShape(finite(bounds.x) && finite(bounds.y) && finite(bounds.w) && finite(bounds.h))
+}
 function readPlan(value: unknown, defaultRole: SpriteAssetRole): void {
   const plan = record(value)
   if (plan.role === undefined) plan.role = defaultRole
@@ -262,8 +268,9 @@ function readPlan(value: unknown, defaultRole: SpriteAssetRole): void {
       plan.fps <= 30 &&
       typeof plan.motionNotes === 'string',
   )
-  const bounds = record(plan.sourceBounds)
-  requireShape(finite(bounds.x) && finite(bounds.y) && finite(bounds.w) && finite(bounds.h))
+  readBounds(plan.sourceBounds)
+  if (plan.placements === undefined) plan.placements = null
+  if (plan.placements !== null) items(plan.placements, readBounds)
 }
 function readApprovedAsset(value: unknown): void {
   const asset = record(value)

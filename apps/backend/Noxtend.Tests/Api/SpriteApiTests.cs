@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
@@ -521,6 +522,100 @@ public sealed class SpriteApiTests
         Receipt(await Sprites(f).UpdatePlanAsync(job.Id, request, default));
         Assert.Equal(request.Grid?.CellWidth, job.Sprites!.Grid?.CellWidth);
         Assert.Equal(request.Assets!.Select(a => a.Role), SpriteResponse.From(job.Sprites).Assets.Select(a => a.Plan.Role));
+        Assert.Equal(request.Assets!.Select(a => a.Placements), SpriteResponse.From(job.Sprites).Assets.Select(a => a.Plan.Placements));
+    }
+
+    private const string TwoPlacements = """[{"x":0,"y":0,"w":0.125,"h":0.125},{"x":0.5,"y":0.25,"w":0.125,"h":0.125}]""";
+
+    [Fact]
+    public async Task JsonBinding_PlanRequestPlacements_MapsToDomain()
+    {
+        var f = new PipelineFixture();
+        var job = await TilesJob(f);
+        Receipt(await UpdatePlan(f, job, PlacementsPlanJson(Guid.NewGuid(), TwoPlacements)));
+        Bounds[] expected = [new(0, 0, .125, .125), new(.5, .25, .125, .125)];
+        Assert.Equal(expected, job.Sprites!.Assets.Single(a => a.Plan.Role == SpriteAssetRole.Object).Plan.Placements);
+        Assert.Null(job.Sprites.Assets.Single(a => a.Plan.Role is null).Plan.Placements);
+        // 응답은 저장값 그대로: 자리 없는 에셋은 null
+        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(SpriteResponse.From(job.Sprites), ServerJson()));
+        var plans = doc.RootElement.GetProperty("assets").EnumerateArray().Select(a => a.GetProperty("plan")).ToArray();
+        Assert.Equal(JsonValueKind.Null, plans[0].GetProperty("placements").ValueKind);
+        Assert.Equal(2, plans[1].GetProperty("placements").GetArrayLength());
+        Assert.Equal(.5, plans[1].GetProperty("placements")[1].GetProperty("x").GetDouble());
+    }
+
+    [Theory]
+    [InlineData("[null]")]
+    [InlineData("""[{"x":0,"y":0,"w":0.125,"h":0.125},null]""")]
+    [InlineData("""[{"x":1e400,"y":0,"w":0.125,"h":0.125}]""")]
+    [InlineData("""[{"x":"NaN","y":0,"w":0.125,"h":0.125}]""")]
+    public async Task JsonBinding_PlanRequestPlacementsWithNullElementOrNonfiniteNumber_Is400(string placements)
+    {
+        var f = new PipelineFixture();
+        var job = await TilesJob(f);
+        var queue = f.Queue.Enqueued.Count;
+        var binding = await Bind<SpritePlanRequest>(PlacementsPlanJson(Guid.NewGuid(), placements));
+        Assert.False(binding.HasError);
+        var result = await Sprites(f).UpdatePlanAsync(job.Id, (SpritePlanRequest)binding.Model!, default);
+        Status(result, 400);
+        Assert.Equal(ErrorCode.SpritePlanInvalid, DataError(result));
+        Assert.Equal(0, job.Sprites!.ReviewRevision);
+        Assert.Empty(job.Sprites.Assets);
+        Assert.Empty(job.Sprites.Requests);
+        Assert.Equal(queue, f.Queue.Enqueued.Count);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("null")]
+    public async Task JsonBinding_OmittedAndNullPlacementsReplayLegacyReceipt(string? placements)
+    {
+        var f = new PipelineFixture();
+        var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "fake",
+            new(SpriteView.SideView, SpriteOutputKind.Layers), new(800, 600), new(1024, 1024), f.Clock.Now).Value!;
+        await f.Jobs.AddAsync(job, default);
+        var plan = new SpriteAssetPlan(Guid.NewGuid(), "legacy", 0, new(0, 0, 1, 1), false);
+        Assert.True(job.ReplaceSpritePlan([plan], 0).IsSuccess);
+        var revision = job.Sprites!.ReviewRevision;
+        var requestId = Guid.NewGuid();
+        // 자리 필드 도입 전 fingerprint 원문 고정
+        var legacy = $$"""{"kind":1,"JobId":"{{job.Id}}","assetId":null,"index":null,"ExpectedRevision":0,"body":[{"Id":"{{plan.Id}}","Name":"legacy","Order":0,"SourceBounds":{"X":0,"Y":0,"W":1,"H":1},"RequiresTransparency":false,"Loop":false,"FrameCount":8,"Fps":8,"MotionNotes":""}]}""";
+        var stored = new SpriteReceipt(job.Id, job.Status, revision, []);
+        job.AcceptSpriteRequest(SpriteAcceptedRequest.Create(requestId, job.Id, SpriteRequestKind.UpdatePlan,
+            Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(legacy))), stored));
+        var tail = placements is null ? "" : $$""","placements":{{placements}}""";
+        var json = $$"""{"requestId":"{{requestId}}","expectedRevision":0,"assets":[{"id":"{{plan.Id}}","name":"legacy","order":0,"sourceBounds":{"x":0,"y":0,"w":1,"h":1},"requiresTransparency":false{{tail}}}]}""";
+        var replay = Receipt(await UpdatePlan(f, job, json));
+        Assert.Equal(job.Id, replay.Id);
+        Assert.Equal(revision, replay.Revision);
+        Assert.Empty(replay.TaskIds);
+        Assert.Equal(revision, job.Sprites.ReviewRevision);
+        Assert.Null(job.Sprites.Assets.Single().Plan.Placements);
+    }
+
+    [Fact]
+    public async Task JsonBinding_PlacementsResendReplaysAndChangedValuesConflict()
+    {
+        var f = new PipelineFixture();
+        var job = await TilesJob(f);
+        var requestId = Guid.NewGuid();
+        var first = Receipt(await UpdatePlan(f, job, PlacementsPlanJson(requestId, TwoPlacements)));
+        var revision = job.Sprites!.ReviewRevision;
+        var replay = Receipt(await UpdatePlan(f, job, PlacementsPlanJson(requestId, TwoPlacements)));
+        Assert.Equal(first.Revision, replay.Revision);
+        Assert.Equal(first.TaskIds, replay.TaskIds);
+        Assert.Equal(revision, job.Sprites.ReviewRevision);
+        foreach (var changed in new string?[] {
+            """[{"x":0.5,"y":0.25,"w":0.125,"h":0.125},{"x":0,"y":0,"w":0.125,"h":0.125}]""",
+            """[{"x":0,"y":0,"w":0.125,"h":0.125},{"x":0.5,"y":0.25,"w":0.125,"h":0.25}]""",
+            "null", null })
+        {
+            var result = await UpdatePlan(f, job, PlacementsPlanJson(requestId, changed));
+            Status(result, 409);
+            Assert.Equal(ErrorCode.SpriteRequestConflict, DataError(result));
+        }
+        Assert.Equal(revision, job.Sprites.ReviewRevision);
+        Assert.Equal(2, job.Sprites.Assets.Single(a => a.Plan.Role == SpriteAssetRole.Object).Plan.Placements!.Count);
     }
 
     [Theory]
@@ -552,7 +647,8 @@ public sealed class SpriteApiTests
         SpriteAssetPlan[] plans = [
             new(FixedId(11), "배경", 0, new(0, 0, 1, 1), false, Role: SpriteAssetRole.Backdrop),
             new(FixedId(12), "타일", 1, new(0, 0, .25, .25), true, Role: SpriteAssetRole.Tile),
-            new(FixedId(13), "오브젝트", 2, new(0, 0, .125, .25), true, Role: SpriteAssetRole.Object),
+            new(FixedId(13), "오브젝트", 2, new(0, 0, .125, .25), true, Role: SpriteAssetRole.Object,
+                Placements: [new(.5, .25, .125, .25), new(.25, .5, .125, .25)]),
         ];
         Assert.True(mixed.ReplaceSpritePlan(plans, new(.1), [new(1024, 1024)], 0).IsSuccess);
         var legacy = FixtureJob(2, SpriteOutputKind.Layers);
@@ -635,6 +731,26 @@ public sealed class SpriteApiTests
             new(SpriteView.SideView, kind), new(800, 600), new(1024, 1024), FixtureNow).Value!;
         Set(job, nameof(PipelineJob.Id), FixedId(id));
         return job;
+    }
+    private static async Task<PipelineJob> TilesJob(PipelineFixture f)
+    {
+        var command = await SpriteAnalysisTests.Prepare(f);
+        var job = PipelineJob.CreateSprites(command.UploadId!.Value, command.ImageProviderConfigId, command.ImageModel,
+            new(SpriteView.SideView, SpriteOutputKind.Tiles), new(800, 600), new(1024, 1024), f.Clock.Now).Value!;
+        await f.Jobs.AddAsync(job, default);
+        return job;
+    }
+    // placements가 null이면 필드 생략, 문자열이면 JSON 값 그대로
+    private static string PlacementsPlanJson(Guid requestId, string? placements)
+    {
+        var tail = placements is null ? "" : $$""","placements":{{placements}}""";
+        return $$"""{"requestId":"{{requestId}}","expectedRevision":0,"grid":null,"assets":[{"id":"{{FixedId(71)}}","name":"tile","order":0,"sourceBounds":{"x":0,"y":0,"w":0.25,"h":0.25},"requiresTransparency":true,"role":"tile"},{"id":"{{FixedId(72)}}","name":"object","order":1,"sourceBounds":{"x":0,"y":0,"w":0.125,"h":0.125},"requiresTransparency":true,"role":"object"{{tail}}}]}""";
+    }
+    private static async Task<IActionResult> UpdatePlan(PipelineFixture f, PipelineJob job, string json)
+    {
+        var binding = await Bind<SpritePlanRequest>(json);
+        Assert.False(binding.HasError);
+        return await Sprites(f).UpdatePlanAsync(job.Id, (SpritePlanRequest)binding.Model!, default);
     }
     private static JsonSerializerOptions ServerJson()
     {

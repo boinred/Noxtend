@@ -167,6 +167,16 @@ public sealed partial class PipelineJob
         var validation = SpriteRules.Validate(state.Settings, state.SourceCanvas, plans, grid);
         if (!validation.IsSuccess) return validation;
         plans = plans.Select(p => SpriteRules.NormalizeRole(state.Settings, p)).ToArray();
+        // 자리만 바뀐 저장은 승인·현재 ZIP·완료 상태 유지
+        var placementsOnly = state.Grid == grid && state.Assets.Count == plans.Count
+            && plans.All(p => state.Assets.Any(a => a.Plan == p with { Placements = a.Plan.Placements }))
+            && plans.Any(p => !state.Assets.Any(a => a.Plan == p));
+        if (placementsOnly)
+        {
+            foreach (var plan in plans) state.Assets.Single(a => a.Id == plan.Id).ReplacePlacements(plan.Placements);
+            state.Touch([]);
+            return Result<bool>.Ok(true);
+        }
         if (SpritePlanNeedsGenerationSizes(plans, grid) && (generationSizes.Count == 0
             || generationSizes.Any(size => size.Width <= 0 || size.Height <= 0)))
             return Result<bool>.Fail(ErrorCode.JobImageModelUnavailable, "확인된 생성 크기가 필요합니다");

@@ -106,10 +106,10 @@ public sealed class SpriteAnalyzePromptV4MigrationTests(SqlServerFixture sql)
     }
 
     [Fact]
-    public async Task FreshDatabase_EndsWithSupportedV4Schema()
+    public async Task MigratedToV4_EndsWithSupportedV4Schema()
     {
         await using var db = Context();
-        await db.Database.MigrateAsync();
+        await db.Database.MigrateAsync(Current);
         var prompt = Assert.Single(await Active(db));
         Assert.Equal(SeedPrompts.AnalyzeSpritesV4().Schema, prompt.JsonSchema);
         Assert.DoesNotContain("\"oneOf\"", prompt.JsonSchema);

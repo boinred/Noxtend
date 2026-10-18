@@ -67,7 +67,8 @@
               "frameCount": 8,
               "fps": 8,
               "motionNotes": "",
-              "role": "backdrop"
+              "role": "backdrop",
+              "placements": null
             },
             "planRevision": 1,
             "anchor": {
@@ -106,7 +107,8 @@
               "frameCount": 8,
               "fps": 8,
               "motionNotes": "",
-              "role": "tile"
+              "role": "tile",
+              "placements": null
             },
             "planRevision": 1,
             "anchor": {
@@ -145,7 +147,21 @@
               "frameCount": 8,
               "fps": 8,
               "motionNotes": "",
-              "role": "object"
+              "role": "object",
+              "placements": [
+                {
+                  "x": 0.5,
+                  "y": 0.25,
+                  "w": 0.125,
+                  "h": 0.25
+                },
+                {
+                  "x": 0.25,
+                  "y": 0.5,
+                  "w": 0.125,
+                  "h": 0.25
+                }
+              ]
             },
             "planRevision": 1,
             "anchor": {
@@ -246,7 +262,8 @@
               "frameCount": 8,
               "fps": 8,
               "motionNotes": "",
-              "role": "layer"
+              "role": "layer",
+              "placements": null
             },
             "planRevision": 1,
             "anchor": {
@@ -345,7 +362,8 @@
               "frameCount": 8,
               "fps": 8,
               "motionNotes": "",
-              "role": "tile"
+              "role": "tile",
+              "placements": null
             },
             "planRevision": 1,
             "anchor": {

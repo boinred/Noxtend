@@ -183,6 +183,38 @@ describe('sprite wire boundary', () => {
     expect(() => readSpriteJob({ productionMode: 'twoD', sprite })).toThrow()
   })
 
+  describe('plan placements', () => {
+    const readPlacements = (placements?: unknown) => {
+      const sprite = spriteFixture()
+      const plan = sprite.assets[0]!.plan as Record<string, unknown>
+      if (placements !== undefined) plan.placements = placements
+      return readSpriteJob({ productionMode: 'twoD', sprite }).sprite!.assets[0]!.plan.placements
+    }
+    it('normalizes a missing field to null', () => {
+      expect(readPlacements()).toBeNull()
+    })
+    it('keeps an explicit null', () => {
+      expect(readPlacements(null)).toBeNull()
+    })
+    it('keeps a valid list as is', () => {
+      const placements = [
+        { x: 0.1, y: 0.2, w: 0.3, h: 0.4 },
+        { x: 0.5, y: 0.5, w: 0.25, h: 0.25 },
+      ]
+      expect(readPlacements(placements)).toEqual(placements)
+    })
+    it.each([
+      [[{ x: 0, y: 0, w: 1 }]],
+      [[null]],
+      ['x'],
+      [[{ x: 0, y: 0, w: 1, h: Infinity }]],
+      [[{ x: 0, y: 0, w: 1, h: Number.NaN }]],
+      [[{ x: 0, y: 0, w: 1, h: '1' }]],
+    ])('rejects malformed placements %j', (placements) => {
+      expect(() => readPlacements(placements)).toThrow()
+    })
+  })
+
   it('reads a sourceDraft job with a null sourceImageId and its source draft', () => {
     const sprite = draftFixture()
     const job = readSpriteJob({ productionMode: 'twoD', sourceImageId: null, sprite })
@@ -343,43 +375,6 @@ it('matches server asset sizing and tile median', async () => {
       settings,
     ),
   ).toBeCloseTo(0.3)
-})
-
-it('places each role back on the source canvas', async () => {
-  const { assetSourceRect } = await import('./rules')
-  const sprite = readSpriteJob({ productionMode: 'twoD', sprite: spriteFixture() }).sprite!
-  const source = { width: 800, height: 600 }
-  const plan = { ...sprite.assets[0]!.plan, sourceBounds: { x: 0.25, y: 0.5, w: 0.1, h: 0.2 } }
-  const iso = sprite.settings
-  const square = { ...iso, view: 'topDown' as const }
-  const full = { x: 0, y: 0, width: 800, height: 600 }
-  expect(assetSourceRect(iso, source, 0.2, { ...plan, role: 'backdrop' })).toEqual(full)
-  expect(assetSourceRect(iso, source, 0.2, { ...plan, role: 'layer' })).toEqual(full)
-  expect(assetSourceRect(iso, source, 0.2, { ...plan, role: 'object' })).toEqual({
-    x: 200,
-    y: 300,
-    width: 80,
-    height: 120,
-  })
-  // 칸 중심 = ROI 중심 (240, 360), 칸 너비 0.2 × 800
-  expect(assetSourceRect(square, source, 0.2, { ...plan, role: 'tile' })).toEqual({
-    x: 160,
-    y: 280,
-    width: 160,
-    height: 160,
-  })
-  expect(assetSourceRect(iso, source, 0.2, { ...plan, role: 'tile' })).toEqual({
-    x: 160,
-    y: 320,
-    width: 160,
-    height: 80,
-  })
-  expect(assetSourceRect(square, source, null, { ...plan, role: 'tile' })).toEqual({
-    x: 200,
-    y: 320,
-    width: 80,
-    height: 80,
-  })
 })
 
 it.each([

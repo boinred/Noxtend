@@ -1,5 +1,7 @@
 # 2D 원본 비교 패널 — 통합 기록
 
+이 패널(`SpriteSourceCompare.tsx`)은 [계획 검수 재구성](../superpowers/plans/2026-10-18-2d-source-reconstruction.md)으로 대체되어 제거됐다. 아래는 측정 당시 기록이며 현재 구현을 설명하지 않는다.
+
 ## 범위
 
 - 2D 작업 화면의 `SpritePreview` 아래에 원본 비교 패널(`SpriteSourceCompare.tsx`)을 추가한다. 원본 위에 각 대상의 현재 기준 이미지를 원본 px 좌표로 다시 배치하고 투명도 슬라이더로 비교한다.

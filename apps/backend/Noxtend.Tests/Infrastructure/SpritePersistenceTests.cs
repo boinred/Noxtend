@@ -948,6 +948,41 @@ public sealed class SpritePersistenceTests(SqlServerFixture sql)
     }
 
     [Fact]
+    public async Task PlanJson_OmitsNullPlacementsAndRoundTripsBoth()
+    {
+        await using var db = Context();
+        await db.Database.MigrateAsync();
+        var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "fake",
+            new(SpriteView.SideView, SpriteOutputKind.Tiles), new(800, 600), new(1024, 1024), Now).Value!;
+        var obj = new SpriteAssetPlan(Guid.NewGuid(), "object", 0, new(0, 0, .5, .5), true, Role: SpriteAssetRole.Object);
+        Assert.True(job.ReplaceSpritePlan([obj], new(.5), [new(1024, 1024)], 0).IsSuccess);
+        db.Jobs.Add(job);
+        await db.SaveChangesAsync();
+        async Task<System.Text.Json.Nodes.JsonObject> StoredPlan() => System.Text.Json.Nodes.JsonNode.Parse(
+            await db.Database.SqlQuery<string>($"SELECT PlanJson AS Value FROM SpriteAssets WHERE Id = {obj.Id}").SingleAsync())!["value"]!.AsObject();
+        async Task<SpriteAssetPlan> Restored()
+        {
+            await using var read = Context();
+            return (await new EfJobRepository(read).GetAsync(job.Id, default))!.Sprites!.Assets.Single().Plan;
+        }
+        Assert.False((await StoredPlan()).ContainsKey("placements"));
+        Assert.True(obj == await Restored());
+        var layered = Planned();
+        Assert.DoesNotContain("placements", SpriteJsonSerializer.Serialize(layered.ApproveSpritePlan(layered.Sprites!.ReviewRevision).Value![0]));
+        var placed = obj with { Placements = [new(0, 0, .5, .5), new(.25, .5, .5, .5)] };
+        Assert.True(job.ReplaceSpritePlan([placed], new(.5), [], job.Sprites!.ReviewRevision).Value);
+        await db.SaveChangesAsync();
+        Assert.Equal(2, (await StoredPlan())["placements"]!.AsArray().Count);
+        Assert.True(placed == await Restored());
+        // null 생략 이전 이미지가 쓴 명시적 null
+        var explicitNull = System.Text.Json.Nodes.JsonNode.Parse(SpriteJsonSerializer.Serialize(obj))!.AsObject();
+        explicitNull["value"]!.AsObject()["placements"] = null;
+        var explicitNullJson = explicitNull.ToJsonString();
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE SpriteAssets SET PlanJson = {explicitNullJson} WHERE Id = {obj.Id}");
+        Assert.True(obj == await Restored());
+    }
+
+    [Fact]
     public void StoredPlan_ValidatesIndividualFieldsWithoutInventingLayerSettings()
     {
         var plan = new SpriteAssetPlan(Guid.NewGuid(), "object", 0, new(0, 0, .5, .5), true, Role: SpriteAssetRole.Object);

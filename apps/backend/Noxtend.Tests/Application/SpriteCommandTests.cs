@@ -7,6 +7,8 @@ using Noxtend.Domain.Ports;
 using Noxtend.Infrastructure.Mesh;
 using Noxtend.Infrastructure.Image;
 using System.IO.Compression;
+using System.Security.Cryptography;
+using System.Text;
 using Noxtend.Domain.Common;
 using Noxtend.Domain.Job;
 using Noxtend.Domain.Sprites;
@@ -539,6 +541,57 @@ public sealed class SpriteCommandTests
         Assert.Equal(first.Value, duplicate.Value);
         Assert.Equal(ErrorCode.SpriteRequestConflict,
             (await f.SpriteCommands.UpdatePlanAsync(context, [plan], new(.5), default)).ErrorCode);
+    }
+
+    [Fact]
+    public async Task UpdatePlan_ReplaysPrePlacementsReceipt()
+    {
+        var f = new PipelineFixture();
+        var job = PipelineJob.CreateSprites(Guid.NewGuid(), Guid.NewGuid(), "fake",
+            new(SpriteView.SideView, SpriteOutputKind.Layers), new(800, 600), new(1024, 1024), f.Clock.Now).Value!;
+        await f.Jobs.AddAsync(job, default);
+        var plan = new SpriteAssetPlan(Guid.NewGuid(), "legacy", 0, new(0, 0, 1, 1), false);
+        Assert.True(job.ReplaceSpritePlan([plan], 0).IsSuccess);
+        var revision = job.Sprites!.ReviewRevision;
+        var context = new SpriteCommandContext(job.Id, Guid.NewGuid(), 0);
+        // 자리 필드 도입 전 fingerprint 원문 고정
+        var legacy = $$"""{"kind":1,"JobId":"{{job.Id}}","assetId":null,"index":null,"ExpectedRevision":0,"body":[{"Id":"{{plan.Id}}","Name":"legacy","Order":0,"SourceBounds":{"X":0,"Y":0,"W":1,"H":1},"RequiresTransparency":false,"Loop":false,"FrameCount":8,"Fps":8,"MotionNotes":""}]}""";
+        var receipt = new SpriteReceipt(job.Id, job.Status, revision, []);
+        job.AcceptSpriteRequest(SpriteAcceptedRequest.Create(context.RequestId, job.Id, SpriteRequestKind.UpdatePlan,
+            Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(legacy))), receipt));
+        var replay = await f.SpriteCommands.UpdatePlanAsync(context, [plan], default);
+        Assert.True(replay.IsSuccess, replay.ErrorMessage);
+        Assert.Equal(revision, replay.Value!.Revision);
+        Assert.Equal(revision, job.Sprites.ReviewRevision);
+    }
+
+    [Fact]
+    public async Task UpdatePlan_FingerprintIncludesPlacementValuesAndOrder()
+    {
+        var f = new PipelineFixture();
+        var command = await SpriteAnalysisTests.Prepare(f);
+        var job = PipelineJob.CreateSprites(command.UploadId!.Value, command.ImageProviderConfigId, command.ImageModel,
+            new(SpriteView.SideView, SpriteOutputKind.Tiles), new(800, 600), new(1024, 1024), f.Clock.Now).Value!;
+        await f.Jobs.AddAsync(job, default);
+        var tile = new SpriteAssetPlan(Guid.NewGuid(), "tile", 0, new(0, 0, .25, .25), true);
+        var obj = tile with { Id = Guid.NewGuid(), Name = "object", Order = 1, Role = SpriteAssetRole.Object };
+        Assert.True((await f.SpriteCommands.UpdatePlanAsync(Context(job), [tile, obj], null, default)).IsSuccess);
+        var context = Context(job);
+        Bounds[] placements = [new(0, 0, .25, .25), new(.5, .5, .25, .25)];
+        var first = await f.SpriteCommands.UpdatePlanAsync(context, [tile, obj with { Placements = placements }], null, default);
+        Assert.True(first.IsSuccess, first.ErrorMessage);
+        var revision = job.Sprites!.ReviewRevision;
+        var duplicate = await f.SpriteCommands.UpdatePlanAsync(context,
+            [obj with { Placements = [new(0, 0, .25, .25), new(.5, .5, .25, .25)] }, tile], null, default);
+        Assert.Equal(first.Value, duplicate.Value);
+        Assert.Equal(revision, job.Sprites.ReviewRevision);
+        Assert.Equal(ErrorCode.SpriteRequestConflict, (await f.SpriteCommands.UpdatePlanAsync(context,
+            [tile, obj with { Placements = [placements[1], placements[0]] }], null, default)).ErrorCode);
+        Assert.Equal(ErrorCode.SpriteRequestConflict, (await f.SpriteCommands.UpdatePlanAsync(context,
+            [tile, obj with { Placements = [placements[0], new(.5, .5, .25, .3)] }], null, default)).ErrorCode);
+        Assert.Equal(ErrorCode.SpriteRequestConflict,
+            (await f.SpriteCommands.UpdatePlanAsync(context, [tile, obj], null, default)).ErrorCode);
+        Assert.Equal(revision, job.Sprites.ReviewRevision);
     }
 
     internal static SpriteCommandContext Context(PipelineJob job) => new(job.Id, Guid.NewGuid(), job.Sprites!.ReviewRevision);

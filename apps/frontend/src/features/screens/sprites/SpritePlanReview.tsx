@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useSpriteRoiEditor } from './useSpriteRoiEditor'
+import { useTileFill } from './useTileFill'
+import { SpriteReconstructionLayer } from './SpriteReconstructionLayer'
 import {
   Select,
   SelectContent,
@@ -11,14 +13,38 @@ import type { JobTask } from '@/domain/job/types'
 import { Button } from '@/components/ui/button'
 import { backgroundStyles } from '../background/backgroundStyles'
 import { PartsOverlay } from '../background/PartsOverlay'
+import type { OverlayPart } from '../background/PartsOverlay'
 import { useUpdateSpritePlan, useApproveSpritePlan } from '@/app/queries/useSprites'
 import { useModelPrices } from '@/app/queries/useTuning'
 import { apiErrorMessage, apiErrorStatus } from '@/app/queries/errors'
 import { assetRole, assetOutputSize, cellWidthOf } from '@/domain/sprites/rules'
 import { spriteRoleLabel } from '@/domain/sprites/labels'
+import {
+  addPlacement,
+  MAX_PLACEMENTS,
+  moveGenerationBox,
+  placementsOf,
+  reconstructionCell,
+  reconstructionVisible,
+} from '@/domain/sprites/reconstruction'
+import type { Bounds } from '@/domain/job/types'
 import type { SpriteGrid } from '@/domain/sprites/types'
 import type { SpriteState, SpriteAssetPlan } from '@/domain/sprites/types'
 import { spriteStyles as styles } from './spriteStyles'
+
+// 오브젝트 자리 상자 id 접미사, 생성 기준 상자는 plan.id
+const PLACEMENTS = ':placements'
+const PRESSED =
+  'aria-pressed:border-primary aria-pressed:bg-primary/12 aria-pressed:text-foreground'
+const canonical = ({ x, y, w, h }: Bounds) => ({ x, y, w, h })
+const inside = ({ x, y, w, h }: Bounds) =>
+  [x, y, w, h].every(Number.isFinite) &&
+  x >= 0 &&
+  y >= 0 &&
+  w > 0 &&
+  h > 0 &&
+  x + w <= 1 &&
+  y + h <= 1
 
 export function SpritePlanReview({
   jobId,
@@ -47,12 +73,8 @@ export function SpritePlanReview({
           role: assetRole(sprite.settings, p),
           name: p.name,
           order: p.order,
-          sourceBounds: {
-            x: p.sourceBounds.x,
-            y: p.sourceBounds.y,
-            w: p.sourceBounds.w,
-            h: p.sourceBounds.h,
-          },
+          sourceBounds: canonical(p.sourceBounds),
+          placements: p.placements === null ? null : p.placements.map(canonical),
           requiresTransparency: p.requiresTransparency,
           loop: p.loop,
           frameCount: p.frameCount,
@@ -120,7 +142,6 @@ export function SpritePlanReview({
     count > 64 ||
     new Set(plans.map((p) => p.order)).size !== plans.length ||
     plans.some((p) => {
-      const { x, y, w, h } = p.sourceBounds
       const transparent =
         assetRole(sprite.settings, p) === 'object' ||
         (assetRole(sprite.settings, p) === 'layer' && p.order !== backmost) ||
@@ -133,13 +154,11 @@ export function SpritePlanReview({
         (p.loop && ![4, 8].includes(p.frameCount)) ||
         p.motionNotes.length > 500 ||
         !Number.isSafeInteger(p.order) ||
-        ![x, y, w, h].every(Number.isFinite) ||
-        x < 0 ||
-        y < 0 ||
-        w <= 0 ||
-        h <= 0 ||
-        x + w > 1 ||
-        y + h > 1 ||
+        !inside(p.sourceBounds) ||
+        (p.placements !== null &&
+          (p.placements.length < 1 ||
+            p.placements.length > MAX_PLACEMENTS ||
+            !p.placements.every(inside))) ||
         (transparent && !p.requiresTransparency) ||
         (assetRole(sprite.settings, p) === 'backdrop' && p.requiresTransparency)
       )
@@ -148,8 +167,44 @@ export function SpritePlanReview({
   function context() {
     return { jobId, requestId: crypto.randomUUID(), expectedRevision: draft.revision }
   }
-  function edit(id: string, patch: Partial<SpriteAssetPlan>) {
-    setPlans((current) => current.map((p) => (p.id === id ? { ...p, ...patch } : p)))
+  function edit(
+    id: string,
+    patch: Partial<SpriteAssetPlan> | ((plan: SpriteAssetPlan) => SpriteAssetPlan),
+  ) {
+    setPlans((current) =>
+      current.map((p) =>
+        p.id !== id ? p : typeof patch === 'function' ? patch(p) : { ...p, ...patch },
+      ),
+    )
+  }
+  // 생성 기준 상자는 재생성 입력, 자리 상자는 배치만
+  function withBox(plan: SpriteAssetPlan, partId: string, ordinal: number, bounds: Bounds) {
+    if (partId === plan.id) return moveGenerationBox(plan, bounds, sprite.settings)
+    if (partId !== plan.id + PLACEMENTS) return plan
+    return { ...plan, placements: placementsOf(plan).map((b, i) => (i === ordinal ? bounds : b)) }
+  }
+  function overlayParts(source: SpriteAssetPlan[]): OverlayPart[] {
+    return source.flatMap((plan, index) => {
+      const role = assetRole(sprite.settings, plan)
+      const generation: OverlayPart = {
+        id: plan.id,
+        name: plan.name,
+        label: `${index + 1}. ${plan.name}${tiles ? ` · ${spriteRoleLabel(role)}` : ''}`,
+        placements: [plan.sourceBounds],
+        boxKind: 'source',
+      }
+      if (role !== 'object') return [generation]
+      return [
+        generation,
+        {
+          id: plan.id + PLACEMENTS,
+          name: plan.name,
+          label: `${index + 1}. ${plan.name} · 자리`,
+          placements: placementsOf(plan),
+          boxKind: 'placement',
+        },
+      ]
+    })
   }
   function isActive(id: string) {
     return (
@@ -166,17 +221,37 @@ export function SpritePlanReview({
   }
   const roi = useSpriteRoiEditor({
     plans,
+    parts: overlayParts(plans),
     lockedIds: plans
       .filter((plan) => isActive(plan.id))
-      .map((plan) => plan.id)
+      .flatMap((plan) => [plan.id, plan.id + PLACEMENTS])
       .join(','),
     disabled: busy,
     revision: `${draft.revision}:${sprite.reviewRevision}`,
-    onCommit: (id, sourceBounds) => edit(id, { sourceBounds }),
+    onCommit: (partId, ordinal, bounds) =>
+      setPlans((current) => current.map((plan) => withBox(plan, partId, ordinal, bounds))),
   })
-  const displayPlans = plans.map((plan) =>
-    roi.preview?.partId === plan.id ? { ...plan, sourceBounds: roi.preview.bounds } : plan,
+  const preview = roi.preview
+  const displayPlans = preview
+    ? plans.map((plan) => withBox(plan, preview.partId, preview.ordinal, preview.bounds))
+    : plans
+  const [opacity, setOpacity] = useState(50)
+  const [failedImages, setFailedImages] = useState<string[]>([])
+  const imagesFailed = sprite.assets.some((asset) =>
+    asset.frames.some(
+      (frame) => frame.index === 0 && failedImages.includes(frame.currentImageId ?? ''),
+    ),
   )
+  const reconstructing = reconstructionVisible(sprite)
+  const tileCell = reconstructionCell(sprite.settings, sprite.sourceCanvas, cell)
+  const tileFill = useTileFill({
+    jobId,
+    sourceImageId,
+    sprite,
+    plans,
+    cell: tileCell,
+    enabled: reconstructing,
+  })
   return (
     <section className={styles.panel} aria-label="제작 계획 검수">
       <h2 className={styles.title}>제작 계획 검수</h2>
@@ -227,17 +302,78 @@ export function SpritePlanReview({
           격자 칸 너비는 0보다 크고 원본 너비 {sprite.sourceCanvas.width}px 이하여야 합니다.
         </p>
       ) : null}
+      {reconstructing ? (
+        <>
+          <label className={styles.field}>
+            재구성 투명도 {opacity}%
+            <input
+              className="w-full accent-primary focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+              type="range"
+              aria-label="재구성 투명도"
+              aria-valuetext={`${opacity}%`}
+              min="0"
+              max="100"
+              step="1"
+              value={opacity}
+              onChange={(e) => setOpacity(Number(e.target.value))}
+            />
+          </label>
+          {tileFill.status === 'loading' ? (
+            <p role="status" className={styles.hint}>
+              재구성 계산 중…
+            </p>
+          ) : null}
+          {tileFill.error ? (
+            <p role="alert" className={styles.error}>
+              {tileFill.error}
+            </p>
+          ) : null}
+          {imagesFailed ? (
+            <p role="alert" className={styles.error}>
+              재구성 이미지 일부를 불러오지 못했습니다
+            </p>
+          ) : null}
+          {imagesFailed || tileFill.retryable ? (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFailedImages([])
+                tileFill.retry()
+              }}
+            >
+              재구성 다시 계산
+            </Button>
+          ) : null}
+        </>
+      ) : null}
       <PartsOverlay
         sourceImageId={sourceImageId}
+        underlay={
+          reconstructing && tileFill.status === 'ready' ? (
+            <SpriteReconstructionLayer
+              jobId={jobId}
+              sprite={sprite}
+              plans={displayPlans}
+              fill={tileFill.fill}
+              cell={tileCell}
+              opacity={opacity}
+              failedImageIds={failedImages}
+              onImageError={(id) =>
+                setFailedImages((current) => (current.includes(id) ? current : [...current, id]))
+              }
+            />
+          ) : null
+        }
         frameRef={roi.frameRef}
-        selection={{ selectedId: roi.selectedId, onSelect: roi.setSelectedId }}
+        selection={{
+          selectedId: roi.selected?.partId ?? null,
+          selectedOrdinal: roi.selected?.ordinal,
+          // 칩은 같은 상자 묶음의 선택한 자리 유지
+          onSelect: (id) => roi.select(id, roi.selected?.partId === id ? roi.selected.ordinal : 0),
+          onSelectPlacement: roi.select,
+        }}
         editing={{ preview: roi.preview, onPointerHandleDown: roi.onPointerHandleDown }}
-        parts={displayPlans.map((plan, index) => ({
-          id: plan.id,
-          name: plan.name,
-          label: `${index + 1}. ${plan.name}${tiles ? ` · ${spriteRoleLabel(assetRole(sprite.settings, plan))}` : ''}`,
-          placements: [plan.sourceBounds],
-        }))}
+        parts={overlayParts(displayPlans)}
         alwaysShowBoxes
       />
       <p className={styles.hint}>
@@ -246,19 +382,27 @@ export function SpritePlanReview({
       <div className={styles.stack}>
         {displayPlans.map((p, index) => {
           const active = isActive(p.id)
+          const object = assetRole(sprite.settings, p) === 'object'
+          const placementsId = p.id + PLACEMENTS
+          const placements = placementsOf(p)
+          const selectedHere =
+            roi.selected?.partId === p.id || roi.selected?.partId === placementsId
+          // 선택한 자리 번호, null 은 생성 기준
+          const ordinal = roi.selected?.partId === placementsId ? roi.selected.ordinal : null
+          const bounds = ordinal === null ? p.sourceBounds : placements[ordinal]!
           return (
             <fieldset
               key={p.id}
               disabled={busy || active}
-              className={`${styles.asset} ${roi.selectedId === p.id ? 'border-primary bg-primary/5' : ''}`}
+              className={`${styles.asset} ${selectedHere ? 'border-primary bg-primary/5' : ''}`}
               data-testid="sprite-plan-card"
             >
               <legend className="sr-only">대상 설정 {index + 1}</legend>
               <button
                 type="button"
                 aria-label={`대상 선택 ${index + 1}`}
-                aria-pressed={roi.selectedId === p.id}
-                onClick={() => roi.setSelectedId(p.id)}
+                aria-pressed={selectedHere}
+                onClick={() => roi.select(p.id, 0)}
                 className="min-w-0 rounded text-left focus-visible:outline-2 focus-visible:outline-primary"
               >
                 <span className="block break-words font-semibold">
@@ -278,12 +422,15 @@ export function SpritePlanReview({
                     value={assetRole(sprite.settings, p)}
                     disabled={busy || active}
                     onValueChange={(value) =>
-                      edit(p.id, {
+                      edit(p.id, (plan) => ({
+                        ...plan,
                         role: value as SpriteAssetPlan['role'],
                         requiresTransparency:
                           value === 'object' ||
                           (value === 'tile' && sprite.settings.view === 'isometric'),
-                      })
+                        // 서버는 오브젝트 외 자리 거부
+                        placements: value === 'object' ? plan.placements : null,
+                      }))
                     }
                   >
                     <SelectTrigger id={`sprite-role-${p.id}`}>
@@ -324,27 +471,98 @@ export function SpritePlanReview({
                   />
                 </label>
               </div>
+              {object ? (
+                <div className="flex min-w-0 flex-col gap-2">
+                  <p className={styles.hint}>
+                    생성 기준(실선)을 바꾸면 다시 생성합니다. 자리(점선)는 재생성 없이 배치만
+                    바꿉니다.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={PRESSED}
+                      aria-label={`생성 기준 선택 ${index + 1}`}
+                      aria-pressed={roi.selected?.partId === p.id}
+                      onClick={() => roi.select(p.id, 0)}
+                    >
+                      생성 기준
+                    </Button>
+                    {placements.map((_, k) => (
+                      <Button
+                        key={k}
+                        variant="outline"
+                        size="sm"
+                        className={PRESSED}
+                        aria-label={`자리 ${k + 1} 선택 ${index + 1}`}
+                        aria-pressed={ordinal === k}
+                        onClick={() => roi.select(placementsId, k)}
+                      >
+                        자리 {k + 1}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={placements.length >= MAX_PLACEMENTS}
+                      onClick={() => {
+                        edit(p.id, (plan) => addPlacement(plan, ordinal))
+                        roi.select(placementsId, placements.length)
+                      }}
+                    >
+                      자리 추가 {index + 1}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      disabled={ordinal === null || placements.length <= 1}
+                      onClick={() => {
+                        if (ordinal === null) return
+                        edit(p.id, (plan) => ({
+                          ...plan,
+                          placements: placementsOf(plan).filter((_, i) => i !== ordinal),
+                        }))
+                        // 같은 번호의 다음 자리, 없으면 마지막 자리
+                        roi.select(placementsId, Math.min(ordinal, placements.length - 2))
+                      }}
+                    >
+                      선택한 자리 삭제 {index + 1}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
               <details className="min-w-0">
                 <summary className="cursor-pointer text-sm text-muted-foreground">
                   정밀 조정 {index + 1}
                 </summary>
+                {object ? (
+                  <p className={`mt-2 ${styles.hint}`}>
+                    {ordinal === null ? '생성 기준' : `자리 ${ordinal + 1}`} 좌표
+                  </p>
+                ) : null}
                 <fieldset className="mt-2 grid grid-cols-2 gap-2">
                   {(['x', 'y', 'w', 'h'] as const).map((axis) => (
                     <label key={axis} className={styles.field}>
                       {{ x: 'X 위치', y: 'Y 위치', w: '너비', h: '높이' }[axis]}
                       <input
                         className={backgroundStyles.input}
-                        aria-label={`ROI ${axis} ${index + 1}`}
+                        aria-label={`${ordinal === null ? 'ROI' : `자리 ${ordinal + 1} ROI`} ${axis} ${index + 1}`}
                         type="number"
                         min="0"
                         max="1"
                         step="0.01"
-                        value={Number.isFinite(p.sourceBounds[axis]) ? p.sourceBounds[axis] : ''}
-                        onChange={(e) =>
-                          edit(p.id, {
-                            sourceBounds: { ...p.sourceBounds, [axis]: e.target.valueAsNumber },
-                          })
-                        }
+                        value={Number.isFinite(bounds[axis]) ? bounds[axis] : ''}
+                        onChange={(e) => {
+                          const value = e.target.valueAsNumber
+                          edit(p.id, (plan) =>
+                            withBox(plan, ordinal === null ? p.id : placementsId, ordinal ?? 0, {
+                              ...bounds,
+                              [axis]: value,
+                            }),
+                          )
+                        }}
                       />
                     </label>
                   ))}
@@ -443,6 +661,7 @@ export function SpritePlanReview({
                   name: `대상 ${plans.length + 1}`,
                   order: Math.max(...plans.map((p) => p.order)) + 1,
                   sourceBounds: { x: 0, y: 0, w: 1, h: 1 },
+                  placements: null,
                   requiresTransparency: true,
                   loop: false,
                   frameCount: 8,
@@ -486,8 +705,8 @@ export function SpritePlanReview({
       {dirty ? <p className={styles.hint}>변경한 계획을 저장한 뒤 승인해 주세요.</p> : null}
       {invalid ? (
         <p role="alert" className={styles.error}>
-          대상은 1..12개·최대 64프레임입니다. 이름·중복 없는 정수 순서·원본 내부의 양수 ROI·필수
-          투명 배경·4/8프레임·FPS 1..30·설명 500자 이하를 확인해 주세요.
+          대상은 1..12개·최대 64프레임입니다. 이름·중복 없는 정수 순서·원본 내부의 양수 ROI·오브젝트
+          자리 1..20개·필수 투명 배경·4/8프레임·FPS 1..30·설명 500자 이하를 확인해 주세요.
         </p>
       ) : null}
       {[update, approve].map((mutation, index) =>

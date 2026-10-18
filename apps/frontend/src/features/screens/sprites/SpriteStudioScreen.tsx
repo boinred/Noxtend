@@ -21,7 +21,6 @@ import { SpriteFrameReview } from './SpriteFrameReview'
 import { SpritePreview } from './SpritePreview'
 import { SpriteExport } from './SpriteExport'
 import { SpriteProgress } from './SpriteProgress'
-import { SpriteSourceCompare } from './SpriteSourceCompare'
 import { SpriteSourceDraftPanel } from './SpriteSourceDraftPanel'
 import { spriteStyles as styles } from './spriteStyles'
 
@@ -216,13 +215,6 @@ export function SpriteStudioScreen() {
           {analyzed && (sprite.phase !== 'planReview' || sprite.images.length > 0) ? (
             <>
               <SpritePreview sprite={sprite} timeMs={0} playing={false} />
-              {job.sourceImageId !== null ? (
-                <SpriteSourceCompare
-                  jobId={job.id}
-                  sourceImageId={job.sourceImageId}
-                  sprite={sprite}
-                />
-              ) : null}
               <SpriteFrameReview
                 key={job.id}
                 jobId={job.id}
