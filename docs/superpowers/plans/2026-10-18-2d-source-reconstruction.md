@@ -606,3 +606,41 @@ Azure(정의 확인 vs 미확인): `deploy/azure/main.bicep`의 API는 `siteConf
    ```
 
    lax 모드 `JSON_MODIFY`의 NULL은 키를 지운다. 일회용 SQL Server 2022 컨테이너(`mcr.microsoft.com/mssql/server:2022-latest`, 로컬 `deploy/k8s/mssql.yaml`과 같은 이미지)에서 자리 배열·명시적 null·키 없음 행과 NULL 열로 확인했고 실제 DB에는 실행하지 않았다.
+
+#### 수정 내용
+
+각 동작 변경은 테스트를 먼저 쓰고 수정 전 코드에서 기대한 이유로 실패하는지 확인했다. 이미 구현된 동작을 고정하는 테스트(5·6)는 구현을 잠시 바꾼 변이에서 실패를 확인한 뒤 원복했다.
+
+| 항목 | 커밋 | 변경 | 검증(적색 → 녹색) |
+| --- | --- | --- | --- |
+| 1a 롤백 호환 | `17877c4` | `SpriteJsonSerializer`에 resolver modifier를 두어 `SpriteAssetPlan.Placements`가 null이면 `placements` 키를 생략한다(전역 null 생략 아님, `PlanJson`·`SpriteInputJson`의 `value.plan` 모두) | `SpritePersistenceTests.PlanJson_OmitsNullPlacementsAndRoundTripsBoth`(기존 `PlanJson_WithoutPlacements_ReadsNullAndRoundTrips` 대체): null은 키 없이 저장·왕복, 값은 저장·왕복, `SpriteFrameInput` 직렬화에도 키 없음, 명시적 `null` 행 읽기. 수정 전 `ContainsKey("placements")`가 참이라 실패, 수정 후 SpritePersistence·SpriteCommand 83개 통과. `RoleGridCanvas_RoundTripAndLegacyNullColumns`(구형 role 없는 행) 통과 |
+| 1b 롤백 절차 | `17877c4` | 위 [롤백 절차](#롤백-절차), `docs/xHuman/backend.md`는 링크만 | 문서. 정리 SQL만 일회용 컨테이너에서 확인 |
+| 2 재시도 | `0aac583` | `useTileFill`이 `retryable`·`retry()`를 반환하고 시도 번호를 계산 key에 더한다. `SpritePlanReview`는 표시 실패나 `retryable` 오류에 `재구성 다시 계산` 버튼을 보이고 누르면 표시 실패 목록을 비우고 다시 계산한다(draft 유지). 칸 상한·시간 초과는 버튼 없이 기존 안내 | E2E `retrying a failed reconstruction keeps unsaved placement edits`(계산의 첫 이미지 fetch만 500 → 알림·버튼 → `자리 1 ROI x 3`을 0.4로 편집 → 다시 계산 → 재구성 표시·알림과 버튼 사라짐·편집값 유지·저장 활성·그려진 자리 x 128). 수정 전 버튼이 없어 실패. 칸 상한·시간 초과 기존 E2E에 버튼 없음 단언 추가 |
+| 3 타일 표시 실패 | `0aac583` | 타일 `<image>`의 `onError`를 같은 표시 실패 경로로 보낸다. 실패한 타일이 놓인 칸마다 투명도 묶음 밖 점선 윤곽(`polygon[data-failed-tile]`, isometric은 마름모, 빠진 에셋 윤곽과 같은 선) | E2E `failed tile images outline their cells and offer a retry`(계산 fetch는 성공, `resourceType() === 'image'` 표시 요청만 500). 수정 전 알림이 없어 실패 |
+| 4 칩 가로채기 | `0aac583` | `PartsOverlay`는 `selection`이 있을 때만 칩 묶음에 inline `zIndex: 2 * placed.length + 3`(상자 최대값 이상, 손잡이 `+4` 아래, 동률은 DOM 순서상 칩이 위). 3D 호출부는 `selection`이 없어 그대로 | E2E `a chip lying over a smaller box selects its own target`(응답에서 오브젝트 ROI를 원본 중앙으로 옮겨 원경 배경 칩이 오브젝트 상자 위에 놓임). 수정 전 칩 클릭이 오브젝트 상자에 가로채져 `aria-pressed` false |
+| 5 `fetchImageBlob` | `457af83` | `client.test.ts`에 `mode: 'cors'`·`cache: 'reload'` 호출과 `!ok` 던짐 테스트 2개 | 구현에서 옵션과 `!ok` 검사를 뺀 변이에서 2개 실패, 원복 후 10/10 |
+| 6 아래쪽 y 순서 | `0aac583` | 기존 E2E를 `objects are drawn at each stored placement in ascending bottom y`로 바꿔 GET 응답의 자리를 역순으로 넣는다 | 정렬을 뺀 변이에서 실패(x 160 기대, 80), 원복 후 통과 |
+| 7 문구 | `0aac583` | `tileFill.worker.ts` 주석과 위 P1 정정(내장 Error는 structured clone으로 전달, 명시적 형식이 이유). `worker.onerror`와 Worker 생성·전송 `catch`는 브라우저 원문 대신 `재구성 계산을 시작하지 못했습니다` | E2E `a worker that fails to start shows a fixed reason and a retry`(Worker 스크립트가 시작 시 throw). `event.message`를 쓰던 변이에서 원문 오류가 보여 실패 |
+| 8 `Equals` 주석 | `17877c4` | `SpriteAssetPlan.Equals` 위에 `// 새 필드 추가 시 Equals·GetHashCode 동시 갱신` | 해당 없음 |
+
+이로써 위 "남은 minor"의 T2 재시도·타일 `onError`·`worker.onerror` 원문·worker 주석, `fetchImageBlob` 단위 테스트, 같은 오브젝트 아래쪽 y 정렬 테스트, T4 `Equals` 주석과 `"placements":null` 롤백 문제, T7 칩 가로채기를 해소했다. 나머지 minor는 그대로 이월한다.
+
+#### 검증 (기준 `0aac583` + 이 문서)
+
+| 검사 | 명령 | 결과 |
+| --- | --- | --- |
+| Backend focused | `dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName~SpritePersistenceTests\|FullyQualifiedName~SpriteCommandTests'` | 통과 83·실패 0·건너뜀 0 |
+| Backend 빌드 | `dotnet build apps/backend/Noxtend.slnx` | 오류 0, 경고 8(NU1903·CS0618·xUnit2031, 기존) |
+| Backend 전체 | `dotnet test apps/backend/Noxtend.slnx --no-build --filter 'FullyQualifiedName!~TripoSmokeTests&FullyQualifiedName!~SimilaritySmokeTests'`(위 빌드 직후, Docker 사용) | 통과 2063·실패 0·건너뜀 0, 10분 51초(테스트 하나는 이름을 바꿔 대체해 개수 같음) |
+| Frontend | `pnpm test` / `pnpm lint` / `pnpm typecheck` | 61 파일 574 통과 / eslint·oxlint·prettier 통과 / 통과 |
+| Frontend build | `pnpm build` | 통과, 초기 JS 115.09 kB / 예산 122.55 kB, `tileFill.worker` 1.51 kB(gzip) |
+| Frontend E2E | `pnpm test:e2e`(포트 4173 비어 있음, 새 build·preview, Backend 회귀 종료 뒤 단독 실행) | 414 통과·실패 0·건너뜀 0·flaky 0, 8.1분(신규 4·변경 1) |
+| 문서 | `pnpm docs:check`, `git diff --check` | 통과(500행 초과 경고는 기존 계획 문서와 이 계획) |
+
+유료 smoke·실제 AI 공급자·실제 DB·Docker 재배포·push·merge는 하지 않았다.
+
+#### 사용자 결정 필요
+
+- 큰 칸·4096² 원본은 4,096칸 상한 안에서도 스펙의 8px 오프셋 탐색 때문에 5초 시간 초과가 난다(위 측정). 선택지: coarse-to-fine 탐색, 칸 크기에 비례한 탐색 간격, isometric 오프셋 중복 제거(약 2배).
+- V5는 수정되지 않은 V4 시드가 있는 모든 환경에서 배포 즉시 자동 활성화되며, 실제 모델 평가와 OpenAI·Gemini의 V5 schema 수락은 확인 전이다. 선택지: 승인을 받아 배포 전 평가, 또는 배포 후 확인 절차 문서화(되돌리기는 위 롤백 절차 1단계).
+- V5 파싱이 엄격하다. 모델이 타일·원경 배경에 자리를 주거나 `[]`를 주면 분석 전체가 무효가 되어 유료 재시도로 간다. 선택지: 오브젝트가 아닌 자리 삭제·`[]`→null 관대한 정규화(스펙 변경 필요).

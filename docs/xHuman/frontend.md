@@ -110,6 +110,7 @@ React 19·Vite·React Router·TanStack Query·Tailwind·shadcn/ui(Radix) 구성�
 ## 확인 기준과 미확인
 
 - 2D 오브젝트 자리·재구성 확인: 2026-10-18, 기준 `516a39d` + 이 변경. 자리 편집·재구성 층·reader/직렬화를 코드와 대조했다. unit 572/572(61 파일), lint·typecheck·build(초기 JS 115.09 kB / 예산 122.55 kB) 통과, 기본 포트 4173 새 build(기존 서버 없음 확인)의 Fake E2E 410/410(건너뜀 0). Fake 1440px·390px light·dark 화면과 로컬 실제 작업 `300f237d` 조회(변경 전 Docker API라 `placements` 키 없음, reader가 null로 읽음)를 관찰했다. 실제 Backend로 자리 저장·실 AI·Azure CORS는 확인하지 않았다. 측정·미확인 항목은 [실행 기록](../superpowers/plans/2026-10-18-2d-source-reconstruction.md#실행-기록)에 있다.
+- 재구성 재시도·타일 표시 실패·칩 순서 확인: 2026-10-18, 기준 `0aac583`. `useTileFill`의 `retry`·`retryable`, 타일 칸 윤곽, `PartsOverlay` 칩 zIndex를 코드와 대조했다. unit 574/574(61 파일), lint·typecheck·build 통과, 새 build의 Fake E2E 414/414(건너뜀·flaky 0). 실제 Backend·브라우저 이미지 실패 재현은 Fake 경로로만 확인했다.
 - 2D 원본 비교 확인: 2026-10-16, 기준 `d0bb151` + 이 변경. `SpriteSourceCompare`·`assetSourceRect`를 코드와 대조했다. unit·lint·typecheck·build·Fake E2E 결과와 로컬 Docker API 실제 작업 관찰, 한계는 [통합 기록](../verification/2026-10-16-2d-source-compare.md)에 있다.
   - 이 패널은 [계획 검수 재구성](../superpowers/plans/2026-10-18-2d-source-reconstruction.md)으로 대체되어 `SpriteSourceCompare`·`assetSourceRect`는 더 이상 없다.
 - 2D 원본 준비 최종 확인: 2026-10-13, 기준 `0385d0e`. 원본 준비 패널·진행 단계·공정 행·홈 표시를 코드와 대조했다. `pnpm test` 492/492(58 파일), lint·typecheck·build 통과(초기 JS 114.31 kB / 예산 122.55 kB), 포트 4197 새 build·`reuseExistingServer=false` Fake E2E 359/359(건너뜀 0) 통과. 실제 Backend 연결·실 AI는 확인하지 않았다.
