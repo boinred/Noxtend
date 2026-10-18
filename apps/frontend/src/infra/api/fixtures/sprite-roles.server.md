@@ -1,6 +1,6 @@
 # Sprite 역할 서버 연결 fixture
 
-기준 revision: `c2dc3f9` (Tasks 1–5) 위 Task 6 API 변경. 생성 원본은 `apps/backend/Noxtend.Tests/Api/SpriteApiTests.cs`의 `ServerRolesFixture_MatchesActualResponseMapperAndJsonOptions`다. 이 테스트는 실제 `JobResponse.From` → `SpriteResponse.From` 및 `Program.cs`와 공유하는 `ApiJson.Configure` MVC JSON 설정을 사용한다. ID·시간은 고정한다.
+기준 revision: `c2dc3f9` (Tasks 1–5) 위 Task 6 API 변경. 오브젝트 자리(`placements`)를 더한 서버 fixture는 `b3e5b79`에서 재생성했다. 생성 원본은 `apps/backend/Noxtend.Tests/Api/SpriteApiTests.cs`의 `ServerRolesFixture_MatchesActualResponseMapperAndJsonOptions`다. 이 테스트는 실제 `JobResponse.From` → `SpriteResponse.From` 및 `Program.cs`와 공유하는 `ApiJson.Configure` MVC JSON 설정을 사용한다. ID·시간은 고정한다.
 
 저장소 루트에서 명시적으로 재생성한다.
 
