@@ -28,6 +28,24 @@ test('reconstruction follows opacity after plan approval', async ({ page }) => {
   await expect(images).toHaveAttribute('opacity', '0.8')
   await expect(images.locator('image[data-tile-id]').first()).toHaveAttribute('width', '320')
   await expect(images.locator('image[data-asset-id]')).toHaveCount(2) // 원경 배경 1·오브젝트 자리 1
+  const { data } = await page.evaluate(
+    (id) => fetch(`/api/jobs/${id}`).then((response) => response.json()),
+    SPRITE_IDS.job,
+  )
+  const idOf = (role: string) =>
+    (data.sprite.assets as { id: string; plan: { role: string } }[]).find(
+      (asset) => asset.plan.role === role,
+    )!.id
+  // 원경 배경은 ROI가 아닌 원본 전체, 오브젝트는 자기 ROI
+  for (const [role, rect] of [
+    ['backdrop', { x: 0, y: 0, width: 320, height: 180 }],
+    ['object', { x: 0, y: 0, width: 160, height: 90 }],
+  ] as const)
+    for (const [name, value] of Object.entries(rect))
+      await expect(images.locator(`image[data-asset-id="${idOf(role)}"]`)).toHaveAttribute(
+        name,
+        String(value),
+      )
   // 재구성 층이 ROI 선택을 막지 않음
   const image = review.getByTestId('overlay-image')
   await image.scrollIntoViewIfNeeded()
