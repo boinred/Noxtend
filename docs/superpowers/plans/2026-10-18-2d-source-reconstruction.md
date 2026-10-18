@@ -644,3 +644,17 @@ Azure(정의 확인 vs 미확인): `deploy/azure/main.bicep`의 API는 `siteConf
 - 큰 칸·4096² 원본은 4,096칸 상한 안에서도 스펙의 8px 오프셋 탐색 때문에 5초 시간 초과가 난다(위 측정). 선택지: coarse-to-fine 탐색, 칸 크기에 비례한 탐색 간격, isometric 오프셋 중복 제거(약 2배).
 - V5는 수정되지 않은 V4 시드가 있는 모든 환경에서 배포 즉시 자동 활성화되며, 실제 모델 평가와 OpenAI·Gemini의 V5 schema 수락은 확인 전이다. 선택지: 승인을 받아 배포 전 평가, 또는 배포 후 확인 절차 문서화(되돌리기는 위 롤백 절차 1단계).
 - V5 파싱이 엄격하다. 모델이 타일·원경 배경에 자리를 주거나 `[]`를 주면 분석 전체가 무효가 되어 유료 재시도로 간다. 선택지: 오브젝트가 아닌 자리 삭제·`[]`→null 관대한 정규화(스펙 변경 필요).
+
+### 2026-10-18 전달 상태
+
+PR 병합과 작업 브랜치 정리 완료. 위 기록은 측정·검증 당시 결과를 그대로 유지한 후속 전달 기록이다.
+
+- PR: [#17](https://github.com/boinred/Noxtend/pull/17)
+- 브랜치 마지막 커밋: `e383b378d61b88f966d0eee724b4f2b7ab4e49fc`
+- main 병합 커밋: `5962d7281c4bcac8a0037b75cb8c30b47beccb09` (2026-10-18 16:54 KST, 사용자가 직접 병합)
+- 병합 결과와 브랜치 마지막 커밋의 전체 트리가 같다는 것을 `git diff`로 확인했다. 병합 충돌이나 추가 변경은 없었다.
+- `claude/2d-source-reconstruction` 로컬·원격 브랜치가 삭제되었고 기본 checkout이 main과 동기화되었다. 별도 worktree는 없다.
+- GitHub에 등록된 PR 상태 검사는 없었으므로 CI 성공으로 표현하지 않는다. 병합 전 검증은 위 표의 로컬 회귀다.
+- 로컬 Docker 반영(병합 전, 브랜치 `e383b37`): `deploy/local-up.sh -d`, API 컨테이너 이미지 config digest `sha256:4034eecffdab9825ae2f14c16b4a0cff315fe888234c11ac6b76dacaf6297a0e`, `/health` 전 항목 ok. 기동 시 `20261018080000_ReviseSpriteAnalyzePromptV5`가 적용되어 로컬 DB의 AnalyzeSprites/Background 활성 버전이 V5(`c7000000-0000-4000-8000-000000000005`)로 바뀌었다. 기존 작업 `300f237d`를 조회만 해서 재구성 타일 413칸과 오류 없음을 확인했다. Azure 배포와 실제 AI 호출은 하지 않았다.
+- 최종 재리뷰에서 남긴 Minor(후속 작업): 롤백 절차 3단계의 SWA 롤백은 선택이 아니라 필수, 1단계 생략 조건은 "활성 버전의 schema가 `placements`를 요구하지 않을 때", 4단계 정리 뒤 재확인·쓰기 중지 단계 보강. 그 밖에 Worker 내부의 예기치 않은 오류 메시지가 영문으로 보일 수 있는 경로, 입력이 바뀌어도 유지되는 실패 이미지 목록.
+- 유지되는 기본 checkout의 로컬 근거: `.superpowers/sdd/2026-10-18-2d-source-reconstruction/`(작업별 brief·보고서·리뷰 패키지·진행 원장). Git 제외 대상이며 이 문서가 저장소에 남는 요약이다.
