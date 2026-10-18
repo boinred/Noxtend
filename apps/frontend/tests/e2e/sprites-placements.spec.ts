@@ -221,6 +221,34 @@ for (const kind of ['generation', 'placement'] as const)
     else expect(saved.sourceBounds).toEqual(ROI)
   })
 
+test('a chip lying over a smaller box selects its own target', async ({ page }) => {
+  await installFakeApi(page, { sprites: { seed: 'baseReview', settings } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const body = await page.evaluate(
+    (id) => fetch(`/api/jobs/${id}`).then((response) => response.json()),
+    SPRITE_IDS.job,
+  )
+  const object = (body.data.sprite.assets as { plan: SavedPlan }[]).find(
+    (asset) => asset.plan.role === 'object',
+  )!
+  // 원경 배경 칩(원본 중앙)이 더 작은 오브젝트 상자 위에 놓임
+  object.plan.sourceBounds = { x: 0.4, y: 0.4, w: 0.5, h: 0.5 }
+  object.plan.placements = null
+  await page.route(`**/api/jobs/${SPRITE_IDS.job}`, (route) =>
+    route.request().method() === 'GET' ? route.fulfill({ json: body }) : route.fallback(),
+  )
+  await page.reload()
+  const review = reviewOf(page)
+  const chip = review.getByTestId('overlay-chip').filter({ hasText: '1. 후경 지면' })
+  await chip.scrollIntoViewIfNeeded()
+  const rect = (await chip.boundingBox())!
+  await page.mouse.click(rect.x + rect.width / 2, rect.y + rect.height / 2)
+  await expect(chip).toHaveAttribute('aria-pressed', 'true')
+  await expect(
+    review.getByRole('button', { name: '생성 기준 선택 3', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'false')
+})
+
 test('overlapping source and placement boxes are keyboard selectable', async ({ page }) => {
   const records: Records = []
   await installFakeApi(page, { sprites: { seed: 'baseReview', settings, records } })

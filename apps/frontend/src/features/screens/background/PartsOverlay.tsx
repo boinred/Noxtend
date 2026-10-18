@@ -487,6 +487,8 @@ export function PartsOverlay({
                     marginTop: 0,
                     marginLeft: flip ? -2 : 2,
                     flexDirection: flip ? 'row-reverse' : 'row',
+                    // 모든 상자보다 위, 손잡이보다 아래
+                    ...(selection ? { zIndex: 2 * placed.length + 3 } : {}),
                   }}
                 >
                   <button

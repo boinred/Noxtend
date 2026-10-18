@@ -1,6 +1,6 @@
 import { fillTiles } from '@/domain/sprites/reconstruction'
 
-// Error 하위 클래스는 postMessage 에서 사라져 name 으로 전달
+// 고정 { name, message } 형식, 사용자 정의 Error 하위 클래스는 structured clone 미보존
 self.onmessage = (event: MessageEvent<Parameters<typeof fillTiles>[0]>) => {
   try {
     self.postMessage({ fill: fillTiles(event.data) })

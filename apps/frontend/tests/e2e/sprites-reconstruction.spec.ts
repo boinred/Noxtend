@@ -81,16 +81,22 @@ const OBJECT_RECTS = [
   { x: 80, y: 90, width: 80, height: 90 },
 ]
 
-test('objects are drawn at each stored placement instead of the ROI', async ({ page }) => {
+test('objects are drawn at each stored placement in ascending bottom y', async ({ page }) => {
   await installFakeApi(page, { sprites: { seed: 'baseReview', settings } })
   await page.goto(`/2d/background/${SPRITE_IDS.job}`)
-  const { data } = await page.evaluate(
+  const body = await page.evaluate(
     (id) => fetch(`/api/jobs/${id}`).then((response) => response.json()),
     SPRITE_IDS.job,
   )
-  const object = (data.sprite.assets as { id: string; plan: { role: string } }[]).find(
-    (asset) => asset.plan.role === 'object',
-  )!
+  const object = (
+    body.data.sprite.assets as { id: string; plan: { role: string; placements: unknown[] } }[]
+  ).find((asset) => asset.plan.role === 'object')!
+  // 시드 저장 순서가 이미 정렬 순서라 응답에서만 역순
+  object.plan.placements.reverse()
+  await page.route(`**/api/jobs/${SPRITE_IDS.job}`, (route) =>
+    route.request().method() === 'GET' ? route.fulfill({ json: body }) : route.fallback(),
+  )
+  await page.reload()
   const drawn = page
     .getByRole('region', { name: '제작 계획 검수' })
     .getByRole('img', { name: '원본 재구성' })
@@ -230,6 +236,73 @@ test('failed displayed images show dashed outlines and a reason', async ({ page 
   await expect(images.locator('image[data-tile-id]').first()).toBeAttached()
 })
 
+test('retrying a failed reconstruction keeps unsaved placement edits', async ({ page }) => {
+  await installFakeApi(page, { sprites: { seed: 'baseReview', settings } })
+  // 재구성 계산의 첫 이미지 읽기만 실패
+  let failed = false
+  await page.route('**/sprites/images/**', (route) => {
+    if (failed || route.request().resourceType() !== 'fetch') return route.fallback()
+    failed = true
+    return route.fulfill({ status: 500 })
+  })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const review = page.getByRole('region', { name: '제작 계획 검수' })
+  const layer = review.getByRole('img', { name: '원본 재구성' })
+  const alert = review
+    .getByRole('alert')
+    .filter({ hasText: '재구성에 필요한 이미지를 불러오지 못했습니다' })
+  const retry = review.getByRole('button', { name: '재구성 다시 계산', exact: true })
+  await expect(alert).toBeVisible()
+  await expect(retry).toBeVisible()
+  await expect(layer).toHaveCount(0)
+  await review.getByRole('button', { name: '자리 1 선택 3', exact: true }).click()
+  await review.getByText('정밀 조정 3', { exact: true }).click()
+  await review.getByLabel('자리 1 ROI x 3', { exact: true }).fill('0.4')
+  await retry.click()
+  await expect(layer.locator('image[data-tile-id]').first()).toBeAttached()
+  await expect(alert).toHaveCount(0)
+  await expect(retry).toHaveCount(0)
+  // 미저장 자리 편집 유지
+  await expect(review.getByLabel('자리 1 ROI x 3', { exact: true })).toHaveValue('0.4')
+  await expect(review.getByRole('button', { name: '계획 저장', exact: true })).toBeEnabled()
+  await expect(
+    layer.getByTestId('reconstruction-images').locator('image[data-asset-id]').nth(1),
+  ).toHaveAttribute('x', '128')
+})
+
+test('failed tile images outline their cells and offer a retry', async ({ page }) => {
+  await installFakeApi(page, { sprites: { seed: 'baseReview', settings } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const review = page.getByRole('region', { name: '제작 계획 검수' })
+  const layer = review.getByRole('img', { name: '원본 재구성' })
+  const images = layer.getByTestId('reconstruction-images')
+  await expect(images.locator('image[data-tile-id]').first()).toBeAttached()
+  const { data } = await page.evaluate(
+    (id) => fetch(`/api/jobs/${id}`).then((response) => response.json()),
+    SPRITE_IDS.job,
+  )
+  const tile = (
+    data.sprite.assets as {
+      id: string
+      plan: { role: string }
+      frames: { currentImageId: string }[]
+    }[]
+  ).find((asset) => asset.plan.role === 'tile')!
+  // 계산 읽기는 성공, 표시만 실패
+  await page.route(`**/sprites/images/${tile.frames[0]!.currentImageId}`, (route) =>
+    route.request().resourceType() === 'image' ? route.fulfill({ status: 500 }) : route.fallback(),
+  )
+  await page.reload()
+  await expect(
+    review.getByRole('alert').filter({ hasText: '재구성 이미지 일부를 불러오지 못했습니다' }),
+  ).toBeVisible()
+  await expect(review.getByRole('button', { name: '재구성 다시 계산', exact: true })).toBeVisible()
+  await expect(images.locator('image[data-tile-id]')).toHaveCount(0)
+  // 빈칸 대신 칸 윤곽, 투명도와 무관
+  await expect(layer.locator(`polygon[data-failed-tile="${tile.id}"]`).first()).toBeAttached()
+  await expect(images.locator('polygon')).toHaveCount(0)
+})
+
 test('small cells keep editing usable without excessive SVG nodes', async ({ page }) => {
   const records: NonNullable<SpriteFakeOptions['records']> = []
   await installFakeApi(page, {
@@ -250,6 +323,8 @@ test('small cells keep editing usable without excessive SVG nodes', async ({ pag
       .getByRole('alert')
       .filter({ hasText: '재구성 칸이 너무 많습니다. 격자 칸 너비를 늘려 주세요' }),
   ).toBeVisible()
+  // 입력 조정 안내라 다시 계산 없음
+  await expect(review.getByRole('button', { name: '재구성 다시 계산' })).toHaveCount(0)
   await expect(review.getByRole('img', { name: '원본 재구성' })).toHaveCount(0)
   await expect(review.locator('image[data-tile-id]')).toHaveCount(0)
   // 원본·ROI·계획 저장 유지
@@ -276,6 +351,25 @@ new BroadcastChannel('tile-fill-e2e').onmessage = () => {
 `
 const release = (page: Page) =>
   page.evaluate(() => new BroadcastChannel('tile-fill-e2e').postMessage('release'))
+
+test('a worker that fails to start shows a fixed reason and a retry', async ({ page }) => {
+  await installFakeApi(page, { sprites: { seed: 'baseReview', settings } })
+  await page.route('**/tileFill.worker-*.js', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'text/javascript',
+      body: "throw new Error('worker boot failed')",
+    }),
+  )
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const review = page.getByRole('region', { name: '제작 계획 검수' })
+  await expect(
+    review.getByRole('alert').filter({ hasText: '재구성 계산을 시작하지 못했습니다' }),
+  ).toBeVisible()
+  // 브라우저 원문 오류 미노출
+  await expect(review.getByText('worker boot failed')).toHaveCount(0)
+  await expect(review.getByRole('button', { name: '재구성 다시 계산', exact: true })).toBeVisible()
+})
 
 test('timed out and superseded workers cannot publish results', async ({ page }) => {
   const errors: string[] = []
@@ -333,6 +427,7 @@ test('timed out and superseded workers cannot publish results', async ({ page })
   await expect(timedOut).toHaveCount(0)
   await page.clock.runFor(1)
   await expect(timedOut).toBeVisible()
+  await expect(review.getByRole('button', { name: '재구성 다시 계산' })).toHaveCount(0)
   await expect(calculating).toHaveCount(0)
   await expect.poll(() => tileWorkers(page).length).toBe(0)
   await release(page)

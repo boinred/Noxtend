@@ -333,6 +333,17 @@ export function SpritePlanReview({
               재구성 이미지 일부를 불러오지 못했습니다
             </p>
           ) : null}
+          {imagesFailed || tileFill.retryable ? (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFailedImages([])
+                tileFill.retry()
+              }}
+            >
+              재구성 다시 계산
+            </Button>
+          ) : null}
         </>
       ) : null}
       <PartsOverlay

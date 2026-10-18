@@ -513,7 +513,7 @@ git commit -m "docs: record 2D source reconstruction implementation"
 
 결정(Ruling, 원장의 전부):
 
-- P1: 워커 오류는 `{ error: { name, message } }`이고 `RangeError` 이름으로 칸 상한 문구를 고른다(Error 하위 클래스는 `postMessage`로 전달되지 않는다).
+- P1: 워커 오류는 `{ error: { name, message } }`이고 `RangeError` 이름으로 칸 상한 문구를 고른다(명시적·안정적인 전달 형식을 위해서다. `RangeError` 같은 내장 Error는 structured clone으로 전달되지만 사용자 정의 하위 클래스는 보존되지 않는다. 최종 수정에서 정정).
 - P2: Task 6이 `tests/e2e/sprites-reconstruction.spec.ts`를 고칠 수 있다(계획의 커밋 목록에는 있고 Files 머리글에서 빠진 것은 오기).
 - P3: T5~T6 사이 Frontend 계약 테스트 1건 적색을 허용했다(T5는 Backend만 검증, T6이 녹색으로 되돌림).
 - P4: 모든 작업은 경로를 지정해 stage한다(삭제는 `git rm`, 일괄 stage는 에이전트 훅이 막는다).
