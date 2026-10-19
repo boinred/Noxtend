@@ -68,11 +68,11 @@ OpenAI 텍스트·이미지 오류는 `ProviderHttp.OpenAiFailureAsync`를 공�
 
 `IImageTranscoder.InspectSpriteAsync`는 MIME 문자열 대신 PNG·JPEG·WebP 디코딩 결과를 검사하고 SpriteImageInfo.ContentType으로 실제 MIME을 반환한다. 입력 바이트는 비seek 스트림에서도 지정 상한+1바이트까지만 읽고, 64비트 픽셀 곱과 최대 16,777,216픽셀을 비트맵 할당 전에 확인한다. 잘린 디코딩·전체 투명 이미지·지원하지 않는 형식은 `ProviderBadResponseException`으로 실패한다. 원본 업로드는 호출자가 12 MiB를 지정하며 생성 응답·PNG 결과는 32 MiB 상한을 적용한다.
 
-`NormalizeSpriteAsync`는 EXIF 방향을 적용한 뒤 전달된 `SpriteCanvas`·`SpriteTransform`으로 배치한다. 프레임별 콘텐츠 경계를 자르거나 중심을 다시 계산하지 않는다. 투명 요구는 패딩·다이아몬드 마스크를 적용하기 전 실제 원본 알파로 확인한다. 출력은 알파를 유지한 PNG이며 다이아몬드 셀 밖은 투명하고 마스크 뒤 전체가 빈 결과는 거부한다. 입력 스트림은 호출자가 소유하고 반환 스트림은 position 0에서 읽고 닫는다. 취소는 `OperationCanceledException`으로 전파한다.
+`NormalizeSpriteAsync`는 EXIF 방향을 적용한 뒤 전달된 `SpriteCanvas`·`SpriteTransform`으로 배치한다. Square 레이아웃은 프레임별 콘텐츠 경계를 자르거나 중심을 다시 계산하지 않는다. Diamond는 예외로, 위 배치·마스크 결과가 비어 있지 않다고 확인한 뒤 방향 적용 이미지에서 알파 128 이상 픽셀의 경계 상자(`OpaqueBounds`)를 구해 캔버스 전체에 가로·세로 따로 늘려 다시 그리고 같은 다이아몬드로 자른다. 그런 픽셀이 없거나 상자가 이미 이미지 전체이면 늘리지 않으며, 루프 프레임도 이미지마다 따로 맞춘다. 투명 요구는 패딩·다이아몬드 마스크를 적용하기 전 실제 원본 알파로 확인한다. 출력은 알파를 유지한 PNG이며 다이아몬드 셀 밖은 투명하고 맞춤 전 마스크 결과가 전체 빈 경우는 거부한다. 입력 스트림은 호출자가 소유하고 반환 스트림은 position 0에서 읽고 닫는다. 취소는 `OperationCanceledException`으로 전파한다.
 
 - 계약·값: `apps/backend/Noxtend.Domain/Ports/IImageTranscoder.cs`, `Noxtend.Domain/Sprites/SpriteTypes.cs`의 `SpriteImageInfo`
 - 구현: `apps/backend/Noxtend.Infrastructure/Mesh/SkiaImageTranscoder.Sprites.cs`; EXIF 좌표 변환은 기존 `SkiaImageTranscoder.cs`와 공유
-- 픽셀·자원 상한 회귀: `apps/backend/Noxtend.Tests/Infrastructure/SpritePixelTests.cs`, 기존 `SkiaImageTranscoderTests.cs`
+- 픽셀·자원 상한 회귀: `apps/backend/Noxtend.Tests/Infrastructure/SpritePixelTests.cs`, 기존 `SkiaImageTranscoderTests.cs`. Diamond 맞춤은 같은 파일의 `DiamondFit_*`·`SquareLayout_DoesNotFitInsetContent`, 거부 판정이 맞춤 앞인 것은 `DiamondMask_RejectsContentEntirelyOutsideCell`이 검증한다.
 
 ## 프롬프트·공급자 규칙
 
@@ -122,6 +122,7 @@ OpenAI 텍스트·이미지 오류는 `ProviderHttp.OpenAiFailureAsync`를 공�
 
 - 역할별 2D 생성 확인: 2026-10-14, Task 4 기준 `20bc033` 후속 변경. 유효 role·에셋별 고정 캔버스·공통 anchor·Tile 전용 Diamond 및 GenerateSpriteV2 migration의 슬롯/운영자 버전/Down 복구를 focused Backend 146건(건너뜀 0)으로 검증했다. 전체 스택 통합 회귀는 후속 Task 9 대상이며 실 공급자는 호출하지 않았다.
 
+- 스프라이트 Diamond 타일 맞춤 확인: 2026-10-19, 기준 `7b70a6f` + 이 변경. `NormalizeSpriteAsync`의 거부 판정 뒤 알파 128 이상 경계 상자 맞춤과 `OpaqueBounds`를 코드·테스트와 대조했고 `SpritePixelTests`의 `DiamondFit_*`·`SquareLayout_DoesNotFitInsetContent` 4건과 기존 Diamond 2건이 통과했다. Backend 전체 회귀 2067 통과(건너뜀 0, 유료 smoke 제외)에 포함됐다. 실제 공급자 타일 이미지로 틈이 사라지는지는 실 호출을 하지 않아 확인하지 않았다.
 - 2D 분석 프롬프트 V5 확인: 2026-10-18, 기준 `516a39d` + 이 변경. `AnalyzeSpritesV5` 시드·변수·schema, `20261018080000` migration의 V4 보존 가드, 파서의 `placements` 허용, Fake 분석을 코드·테스트와 대조했고 Backend 전체 회귀 2063 통과(건너뜀 0)에 포함됐다. 실제 모델의 V5 자리 출력 품질, OpenAI strict·Gemini의 V5 schema 수락은 실 호출을 하지 않아 확인하지 않았다. [실행 기록](../superpowers/plans/2026-10-18-2d-source-reconstruction.md#실행-기록)
 - 2D 원본 준비 프롬프트 확인: 2026-10-13, 기준 `0385d0e`. `EnhanceSpriteSource`·`GenerateSpriteSource`·`AnalyzeSprites` V2 시드·변수·migration을 코드·테스트와 대조했고 Backend 전체 회귀(1872 통과, 건너뜀 0)에 포함됐다. 실제 모델 출력 품질은 확인하지 않았다(Fake만 사용).
 - Anthropic 스키마 정리 확인: 2026-10-13. `AnthropicJsonSchemaTests`가 2D 분석 시드 스키마와 이름 보존·중첩 정리 사례를 검증하고, 제거 대상 제약을 쓰는 시드 스키마별 파서·도메인 검증 위치를 대조했다. 실제 Anthropic 호출은 하지 않았으므로 실 API 수락 여부는 미확인이다.

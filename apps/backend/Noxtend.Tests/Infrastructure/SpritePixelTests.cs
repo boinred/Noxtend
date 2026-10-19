@@ -124,6 +124,51 @@ public sealed class SpritePixelTests
             source, new(8, 4), new(1, 0, 0), true, SpriteTileLayout.Diamond, default));
     }
 
+    [Fact]
+    public async Task DiamondFit_StretchesInsetContentToCellEdges()
+    {
+        using var source = Image(16, 8, (x, y) => Inset(x, y) ? SKColors.Red : SKColors.Transparent);
+        await using var output = await _transcoder.NormalizeSpriteAsync(
+            source, new(16, 8), new(1, 0, 0), true, SpriteTileLayout.Diamond, default);
+        using var decoded = SKBitmap.Decode(output);
+        foreach (var (x, y) in new[] { (8, 0), (1, 4), (14, 3), (8, 7) })
+            Assert.Equal(255, decoded.GetPixel(x, y).Alpha);
+        foreach (var (x, y) in new[] { (0, 0), (15, 0), (0, 7), (15, 7) })
+            Assert.Equal(0, decoded.GetPixel(x, y).Alpha);
+    }
+
+    [Fact]
+    public async Task DiamondFit_IgnoresFaintHalo()
+    {
+        using var source = Image(16, 8, (x, y) => Inset(x, y) ? SKColors.Red : new SKColor(0, 0, 255, 100));
+        await using var output = await _transcoder.NormalizeSpriteAsync(
+            source, new(16, 8), new(1, 0, 0), true, SpriteTileLayout.Diamond, default);
+        using var decoded = SKBitmap.Decode(output);
+        Assert.Equal(SKColors.Red, decoded.GetPixel(8, 0));
+    }
+
+    [Fact]
+    public async Task DiamondFit_KeepsFaintOnlyContentUnfitted()
+    {
+        using var source = Image(16, 8, (x, y) => Inset(x, y) ? new SKColor(0, 0, 255, 100) : SKColors.Transparent);
+        await using var output = await _transcoder.NormalizeSpriteAsync(
+            source, new(16, 8), new(1, 0, 0), true, SpriteTileLayout.Diamond, default);
+        using var decoded = SKBitmap.Decode(output);
+        Assert.Equal(0, decoded.GetPixel(8, 0).Alpha);
+        Assert.Equal(100, decoded.GetPixel(8, 4).Alpha);
+    }
+
+    [Fact]
+    public async Task SquareLayout_DoesNotFitInsetContent()
+    {
+        using var source = Image(16, 8, (x, y) => Inset(x, y) ? SKColors.Red : SKColors.Transparent);
+        await using var output = await _transcoder.NormalizeSpriteAsync(
+            source, new(16, 8), new(1, 0, 0), true, SpriteTileLayout.Square, default);
+        using var decoded = SKBitmap.Decode(output);
+        Assert.Equal(0, decoded.GetPixel(1, 4).Alpha);
+        Assert.Equal(SKColors.Red, decoded.GetPixel(5, 3));
+    }
+
     [Theory]
     [InlineData(SKEncodedImageFormat.Png)]
     [InlineData(SKEncodedImageFormat.Jpeg)]
@@ -268,6 +313,8 @@ public sealed class SpritePixelTests
         using var data = bitmap.Encode(format, 100);
         return new MemoryStream(data.ToArray());
     }
+
+    private static bool Inset(int x, int y) => x is >= 4 and < 12 && y is >= 2 and < 6;
 
     private static uint Crc(ReadOnlySpan<byte> bytes)
     {
