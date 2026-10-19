@@ -18,7 +18,6 @@ export function SpriteReconstructionLayer({
   plans,
   fill,
   cell,
-  opacity,
   failedImageIds,
   onImageError,
 }: {
@@ -27,7 +26,6 @@ export function SpriteReconstructionLayer({
   plans: SpriteAssetPlan[]
   fill: TileFill | null
   cell: CellSize | null
-  opacity: number
   failedImageIds: string[]
   onImageError: (imageId: string) => void
 }) {
@@ -69,7 +67,7 @@ export function SpriteReconstructionLayer({
       role="img"
       aria-label="원본 재구성"
     >
-      <g data-testid="reconstruction-images" opacity={opacity / 100}>
+      <g data-testid="reconstruction-images">
         {drawn(['backdrop', 'layer']).map((asset) => (
           <image
             key={asset.id}
@@ -114,7 +112,7 @@ export function SpriteReconstructionLayer({
             )),
         )}
       </g>
-      {/* 투명도와 무관하게 누락 대상 표시 */}
+      {/* 누락 대상 윤곽 */}
       {assets.flatMap((asset) =>
         asset.imageId
           ? []

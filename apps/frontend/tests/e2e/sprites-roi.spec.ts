@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { installFakeApi } from './fakeApi'
-import { SPRITE_IDS, type SpriteFakeOptions } from './spriteFakeApi'
+import { SPRITE_IDS, editBoxes, type SpriteFakeOptions } from './spriteFakeApi'
 
 test('ROI selects directly and commits local move, resize and precise fields only on save', async ({
   page,
@@ -9,6 +9,7 @@ test('ROI selects directly and commits local move, resize and precise fields onl
   await installFakeApi(page, { sprites: { seed: 'baseReview', records } })
   await page.goto(`/2d/background/${SPRITE_IDS.job}`)
   const panel = page.getByRole('region', { name: '제작 계획 검수' })
+  await editBoxes(panel)
   await panel.getByText('정밀 조정 1', { exact: true }).click()
   await page.getByLabel('ROI w 1', { exact: true }).fill('0.6')
   await page.getByLabel('ROI h 1', { exact: true }).fill('0.5')
@@ -69,6 +70,8 @@ for (const reason of ['Escape', 'pointercancel', 'blur']) {
   test(`ROI ${reason} cancels preview and outside release cannot commit`, async ({ page }) => {
     await installFakeApi(page, { sprites: { seed: 'baseReview' } })
     await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+    const panel = page.getByRole('region', { name: '제작 계획 검수' })
+    await editBoxes(panel)
     await page.getByText('정밀 조정 1', { exact: true }).click()
     await page.getByLabel('ROI w 1', { exact: true }).fill('0.6')
     await page.getByLabel('ROI h 1', { exact: true }).fill('0.5')
@@ -99,6 +102,8 @@ test('ROI locked target rejects drag and supports label selection without local 
 }) => {
   await installFakeApi(page, { sprites: { seed: 'baseReview', runningBase: true } })
   await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const panel = page.getByRole('region', { name: '제작 계획 검수' })
+  await editBoxes(panel)
   await page.getByTestId('overlay-chip').nth(1).click()
   await expect(page.getByRole('button', { name: '대상 선택 2', exact: true })).toBeDisabled()
   await expect(page.getByTestId('overlay-chip').nth(1)).toHaveAttribute('aria-pressed', 'true')
@@ -129,6 +134,8 @@ test('ROI rejects secondary input, preserves invalid precision and cancels on se
     response.url().endsWith(`/api/jobs/${SPRITE_IDS.job}`),
   )
   await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const panel = page.getByRole('region', { name: '제작 계획 검수' })
+  await editBoxes(panel)
   const envelope = await (await detail).json()
   await page.getByText('정밀 조정 1', { exact: true }).click()
   const width = page.getByLabel('ROI w 1', { exact: true })
@@ -174,6 +181,8 @@ test('ROI target becoming active cancels a pending drag', async ({ page }) => {
     response.url().endsWith(`/api/jobs/${SPRITE_IDS.job}`),
   )
   await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const panel = page.getByRole('region', { name: '제작 계획 검수' })
+  await editBoxes(panel)
   const envelope = await (await detail).json()
   await page.getByText('정밀 조정 1', { exact: true }).click()
   await page.getByLabel('ROI w 1', { exact: true }).fill('0.6')
@@ -201,6 +210,7 @@ test('ROI directly selects a small nested region above the later full-image regi
   await installFakeApi(page, { sprites: { seed: 'baseReview', records } })
   await page.goto(`/2d/background/${SPRITE_IDS.job}`)
   const panel = page.getByRole('region', { name: '제작 계획 검수' })
+  await editBoxes(panel)
   await panel.getByText('정밀 조정 1', { exact: true }).click()
   const bounds = { x: '0.32', y: '0.27', w: '0.08', h: '0.1' }
   for (const axis of ['w', 'h', 'x', 'y'] as const) {

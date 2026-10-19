@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSpriteRoiEditor } from './useSpriteRoiEditor'
 import { useTileFill } from './useTileFill'
+import { SpriteCompareDivider } from './SpriteCompareDivider'
 import { SpriteReconstructionLayer } from './SpriteReconstructionLayer'
 import {
   Select,
@@ -219,29 +220,6 @@ export function SpritePlanReview({
         ) ?? false
     )
   }
-  const roi = useSpriteRoiEditor({
-    plans,
-    parts: overlayParts(plans),
-    lockedIds: plans
-      .filter((plan) => isActive(plan.id))
-      .flatMap((plan) => [plan.id, plan.id + PLACEMENTS])
-      .join(','),
-    disabled: busy,
-    revision: `${draft.revision}:${sprite.reviewRevision}`,
-    onCommit: (partId, ordinal, bounds) =>
-      setPlans((current) => current.map((plan) => withBox(plan, partId, ordinal, bounds))),
-  })
-  const preview = roi.preview
-  const displayPlans = preview
-    ? plans.map((plan) => withBox(plan, preview.partId, preview.ordinal, preview.bounds))
-    : plans
-  const [opacity, setOpacity] = useState(50)
-  const [failedImages, setFailedImages] = useState<string[]>([])
-  const imagesFailed = sprite.assets.some((asset) =>
-    asset.frames.some(
-      (frame) => frame.index === 0 && failedImages.includes(frame.currentImageId ?? ''),
-    ),
-  )
   const reconstructing = reconstructionVisible(sprite)
   const tileCell = reconstructionCell(sprite.settings, sprite.sourceCanvas, cell)
   const tileFill = useTileFill({
@@ -252,6 +230,39 @@ export function SpritePlanReview({
     cell: tileCell,
     enabled: reconstructing,
   })
+  // 모드·경계는 화면 상태, 재계산 중에도 마지막 선택 유지
+  const [mode, setMode] = useState<'compare' | 'edit'>('compare')
+  const [divider, setDivider] = useState(50)
+  const ready = reconstructing && tileFill.status === 'ready'
+  const comparing = ready && mode === 'compare'
+  const roi = useSpriteRoiEditor({
+    plans,
+    parts: overlayParts(plans),
+    lockedIds: plans
+      .filter((plan) => isActive(plan.id))
+      .flatMap((plan) => [plan.id, plan.id + PLACEMENTS])
+      .join(','),
+    // 비교로 바뀌면 진행 중인 끌기 취소
+    disabled: busy || comparing,
+    revision: `${draft.revision}:${sprite.reviewRevision}`,
+    onCommit: (partId, ordinal, bounds) =>
+      setPlans((current) => current.map((plan) => withBox(plan, partId, ordinal, bounds))),
+  })
+  // 카드에서 고른 상자는 이미지에서 보여야 함
+  function selectBox(partId: string, ordinal: number) {
+    setMode('edit')
+    roi.select(partId, ordinal)
+  }
+  const preview = roi.preview
+  const displayPlans = preview
+    ? plans.map((plan) => withBox(plan, preview.partId, preview.ordinal, preview.bounds))
+    : plans
+  const [failedImages, setFailedImages] = useState<string[]>([])
+  const imagesFailed = sprite.assets.some((asset) =>
+    asset.frames.some(
+      (frame) => frame.index === 0 && failedImages.includes(frame.currentImageId ?? ''),
+    ),
+  )
   return (
     <section className={styles.panel} aria-label="제작 계획 검수">
       <h2 className={styles.title}>제작 계획 검수</h2>
@@ -304,20 +315,28 @@ export function SpritePlanReview({
       ) : null}
       {reconstructing ? (
         <>
-          <label className={styles.field}>
-            재구성 투명도 {opacity}%
-            <input
-              className="w-full accent-primary focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
-              type="range"
-              aria-label="재구성 투명도"
-              aria-valuetext={`${opacity}%`}
-              min="0"
-              max="100"
-              step="1"
-              value={opacity}
-              onChange={(e) => setOpacity(Number(e.target.value))}
-            />
-          </label>
+          {ready ? (
+            <div role="group" aria-label="재구성 보기" className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className={PRESSED}
+                aria-pressed={mode === 'compare'}
+                onClick={() => setMode('compare')}
+              >
+                비교
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className={PRESSED}
+                aria-pressed={mode === 'edit'}
+                onClick={() => setMode('edit')}
+              >
+                편집
+              </Button>
+            </div>
+          ) : null}
           {tileFill.status === 'loading' ? (
             <p role="status" className={styles.hint}>
               재구성 계산 중…
@@ -349,19 +368,24 @@ export function SpritePlanReview({
       <PartsOverlay
         sourceImageId={sourceImageId}
         underlay={
-          reconstructing && tileFill.status === 'ready' ? (
-            <SpriteReconstructionLayer
-              jobId={jobId}
-              sprite={sprite}
-              plans={displayPlans}
-              fill={tileFill.fill}
-              cell={tileCell}
-              opacity={opacity}
-              failedImageIds={failedImages}
-              onImageError={(id) =>
-                setFailedImages((current) => (current.includes(id) ? current : [...current, id]))
-              }
-            />
+          ready ? (
+            <div
+              data-testid="reconstruction-clip"
+              className="h-full w-full"
+              style={{ clipPath: `inset(0 0 0 ${divider}%)` }}
+            >
+              <SpriteReconstructionLayer
+                jobId={jobId}
+                sprite={sprite}
+                plans={displayPlans}
+                fill={tileFill.fill}
+                cell={tileCell}
+                failedImageIds={failedImages}
+                onImageError={(id) =>
+                  setFailedImages((current) => (current.includes(id) ? current : [...current, id]))
+                }
+              />
+            </div>
           ) : null
         }
         frameRef={roi.frameRef}
@@ -375,9 +399,16 @@ export function SpritePlanReview({
         editing={{ preview: roi.preview, onPointerHandleDown: roi.onPointerHandleDown }}
         parts={overlayParts(displayPlans)}
         alwaysShowBoxes
-      />
+        hideBoxes={comparing}
+      >
+        {ready ? (
+          <SpriteCompareDivider position={divider} onChange={setDivider} interactive={comparing} />
+        ) : null}
+      </PartsOverlay>
       <p className={styles.hint}>
-        영역이나 이름을 선택하고 끌어 이동하세요. 손잡이는 크기 조정, Esc는 취소입니다.
+        {comparing
+          ? '이미지를 좌우로 끌어 원본과 재구성을 비교하세요. 영역을 옮기려면 편집을 누르세요.'
+          : '영역이나 이름을 선택하고 끌어 이동하세요. 손잡이는 크기 조정, Esc는 취소입니다.'}
       </p>
       <div className={styles.stack}>
         {displayPlans.map((p, index) => {
@@ -402,7 +433,7 @@ export function SpritePlanReview({
                 type="button"
                 aria-label={`대상 선택 ${index + 1}`}
                 aria-pressed={selectedHere}
-                onClick={() => roi.select(p.id, 0)}
+                onClick={() => selectBox(p.id, 0)}
                 className="min-w-0 rounded text-left focus-visible:outline-2 focus-visible:outline-primary"
               >
                 <span className="block break-words font-semibold">
@@ -484,7 +515,7 @@ export function SpritePlanReview({
                       className={PRESSED}
                       aria-label={`생성 기준 선택 ${index + 1}`}
                       aria-pressed={roi.selected?.partId === p.id}
-                      onClick={() => roi.select(p.id, 0)}
+                      onClick={() => selectBox(p.id, 0)}
                     >
                       생성 기준
                     </Button>
@@ -496,7 +527,7 @@ export function SpritePlanReview({
                         className={PRESSED}
                         aria-label={`자리 ${k + 1} 선택 ${index + 1}`}
                         aria-pressed={ordinal === k}
-                        onClick={() => roi.select(placementsId, k)}
+                        onClick={() => selectBox(placementsId, k)}
                       >
                         자리 {k + 1}
                       </Button>

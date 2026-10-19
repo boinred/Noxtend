@@ -1,5 +1,5 @@
 import { assetOutputSize, cellWidthOf } from '../../src/domain/sprites/rules'
-import type { Page, Route } from '@playwright/test'
+import { expect, type Locator, type Page, type Route } from '@playwright/test'
 import { crc32, deflateSync } from 'node:zlib'
 import type { Job, JobTask } from '../../src/domain/job/types'
 import type {
@@ -248,6 +248,15 @@ function fail(route: Route, status: number, message: string, code?: string) {
 }
 const isSourceTask = (task: JobTask) =>
   task.kind === 'enhanceSpriteSource' || task.kind === 'generateSpriteSource'
+
+// 비교 모드에서 가려진 ROI 상자를 편집 모드로 되살림
+export async function editBoxes(review: Locator) {
+  const edit = review
+    .getByRole('group', { name: '재구성 보기' })
+    .getByRole('button', { name: '편집' })
+  await edit.click()
+  await expect(edit).toHaveAttribute('aria-pressed', 'true')
+}
 
 export async function installSpriteFakeApi(page: Page, options: SpriteFakeOptions) {
   let sequence = 1
