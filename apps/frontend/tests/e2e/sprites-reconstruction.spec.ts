@@ -1,6 +1,6 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Locator, type Page } from '@playwright/test'
 import { installFakeApi } from './fakeApi'
-import { SPRITE_IDS, type SpriteFakeOptions } from './spriteFakeApi'
+import { SPRITE_IDS, editBoxes, type SpriteFakeOptions } from './spriteFakeApi'
 const settings = { view: 'isometric', outputKind: 'tiles', tileWidth: 128, repeat: 'both' } as const
 
 test('plan review has no reconstruction before plan approval', async ({ page }) => {
@@ -9,31 +9,182 @@ test('plan review has no reconstruction before plan approval', async ({ page }) 
   const review = page.getByRole('region', { name: '제작 계획 검수' })
   await expect(review.getByTestId('overlay-image')).toBeVisible()
   await expect(review.getByRole('img', { name: '원본 재구성' })).toHaveCount(0)
-  await expect(review.getByRole('slider', { name: '재구성 투명도' })).toHaveCount(0)
+  await expect(review.getByRole('group', { name: '재구성 보기' })).toHaveCount(0)
+  await expect(review.getByRole('slider', { name: '원본·재구성 경계' })).toHaveCount(0)
 })
 
-test('reconstruction follows opacity after plan approval', async ({ page }) => {
+// 프레임 비율 좌표를 화면 좌표로
+async function frameOf(review: Locator) {
+  const image = review.getByTestId('overlay-image')
+  await image.scrollIntoViewIfNeeded()
+  const rect = (await image.boundingBox())!
+  return (x: number, y: number) => ({ x: rect.x + rect.width * x, y: rect.y + rect.height * y })
+}
+
+test('reconstruction compares by dragging the divider', async ({ page }) => {
   await installFakeApi(page, { sprites: { seed: 'baseReview', settings } })
   await page.goto(`/2d/background/${SPRITE_IDS.job}`)
   const review = page.getByRole('region', { name: '제작 계획 검수' })
   const layer = review.getByRole('img', { name: '원본 재구성' })
   const images = layer.getByTestId('reconstruction-images')
-  const opacity = review.getByRole('slider', { name: '재구성 투명도' })
+  const divider = review.getByRole('slider', { name: '원본·재구성 경계' })
+  const clip = review.getByTestId('reconstruction-clip')
   await expect(layer).toHaveAttribute('viewBox', '0 0 320 180')
   await expect(layer).toHaveAttribute('preserveAspectRatio', 'none')
-  await expect(opacity).toHaveValue('50')
-  await expect(images).toHaveAttribute('opacity', '0.5')
-  await opacity.fill('80')
-  await expect(opacity).toHaveAttribute('aria-valuetext', '80%')
-  await expect(images).toHaveAttribute('opacity', '0.8')
+  await expect(images).not.toHaveAttribute('opacity')
   await expect(images.locator('image[data-tile-id]').first()).toHaveAttribute('width', '320')
   await expect(images.locator('image[data-asset-id]')).toHaveCount(3) // 원경 배경 1·오브젝트 자리 2
+  // 처음은 비교 모드, 경계 50%
+  await expect(review.getByRole('button', { name: '비교', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(review.getByTestId('overlay-box')).toHaveCount(0)
+  await expect(divider).toHaveAttribute('aria-valuenow', '50')
+  await expect(divider).toHaveAttribute('aria-valuetext', '50%')
+  await expect(clip).toHaveCSS('clip-path', 'inset(0px 0px 0px 50%)')
+  const at = await frameOf(review)
+  const from = at(0.25, 0.5)
+  const to = at(0.1, 0.5)
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  await page.mouse.move(to.x, to.y)
+  await page.mouse.up()
+  await expect(divider).toHaveAttribute('aria-valuenow', '10')
+  await expect(clip).toHaveCSS('clip-path', 'inset(0px 0px 0px 10%)')
+  await divider.focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(divider).toHaveAttribute('aria-valuenow', '11')
+  await expect(divider).toHaveAttribute('aria-valuetext', '11%')
+})
+
+test('edit mode keeps the divider and edits boxes', async ({ page }) => {
+  await installFakeApi(page, { sprites: { seed: 'baseReview', settings } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const review = page.getByRole('region', { name: '제작 계획 검수' })
+  const divider = review.getByRole('slider', { name: '원본·재구성 경계' })
+  const clip = review.getByTestId('reconstruction-clip')
+  // 모드 버튼이 나타나 이미지가 밀린 뒤에 위치 측정
+  await expect(divider).toBeVisible()
+  const at = await frameOf(review)
+  const middle = at(0.3, 0.5)
+  await page.mouse.click(middle.x, middle.y)
+  await expect(divider).toHaveAttribute('aria-valuenow', '30')
+  await expect(clip).toHaveCSS('clip-path', 'inset(0px 0px 0px 30%)')
+  await editBoxes(review)
+  await expect(review.getByTestId('overlay-box').first()).toBeVisible()
+  // 경계선은 남고 끌기 면과 손잡이는 사라짐
+  await expect(divider).toHaveCount(0)
+  await expect(review.getByTestId('compare-surface')).toHaveCount(0)
+  await expect(review.getByTestId('compare-line')).toBeVisible()
+  await expect(clip).toHaveCSS('clip-path', 'inset(0px 0px 0px 30%)')
   // 재구성 층이 ROI 선택을 막지 않음
-  const image = review.getByTestId('overlay-image')
-  await image.scrollIntoViewIfNeeded()
-  const frame = (await image.boundingBox())!
-  await page.mouse.click(frame.x + frame.width * 0.1, frame.y + frame.height * 0.1)
+  const corner = at(0.1, 0.1)
+  await page.mouse.click(corner.x, corner.y)
   await expect(review.getByTestId('overlay-handle')).toHaveCount(8)
+  await expect(clip).toHaveCSS('clip-path', 'inset(0px 0px 0px 30%)')
+})
+
+test('selecting a box from a card switches to edit mode', async ({ page }) => {
+  await installFakeApi(page, { sprites: { seed: 'baseReview', settings } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const review = page.getByRole('region', { name: '제작 계획 검수' })
+  const compare = review.getByRole('button', { name: '비교', exact: true })
+  const edit = review.getByRole('button', { name: '편집', exact: true })
+  // 오브젝트는 3번째 대상
+  for (const name of ['대상 선택 3', '생성 기준 선택 3', '자리 1 선택 3']) {
+    await compare.click()
+    await expect(compare).toHaveAttribute('aria-pressed', 'true')
+    await expect(review.getByTestId('overlay-handle')).toHaveCount(0)
+    await review.getByRole('button', { name, exact: true }).click()
+    await expect(edit).toHaveAttribute('aria-pressed', 'true')
+    await expect(review.getByTestId('overlay-handle')).toHaveCount(8)
+  }
+})
+
+test('adding or deleting a placement keeps the compare mode', async ({ page }) => {
+  await installFakeApi(page, { sprites: { seed: 'baseReview', settings } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const review = page.getByRole('region', { name: '제작 계획 검수' })
+  const compare = review.getByRole('button', { name: '비교', exact: true })
+  await expect(compare).toHaveAttribute('aria-pressed', 'true')
+  await review.getByRole('button', { name: '자리 추가 3', exact: true }).click()
+  await expect(compare).toHaveAttribute('aria-pressed', 'true')
+  await review.getByRole('button', { name: '선택한 자리 삭제 3', exact: true }).click()
+  await expect(review.getByRole('button', { name: '자리 추가 3', exact: true })).toBeEnabled()
+  await expect(compare).toHaveAttribute('aria-pressed', 'true')
+  await expect(review.getByTestId('overlay-box')).toHaveCount(0)
+})
+
+test('entering compare cancels a box drag', async ({ page }) => {
+  const records: NonNullable<SpriteFakeOptions['records']> = []
+  await installFakeApi(page, { sprites: { seed: 'baseReview', settings, records } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const review = page.getByRole('region', { name: '제작 계획 검수' })
+  await editBoxes(review)
+  const object = review.locator('[data-testid="overlay-box"][data-kind="source"]').nth(2)
+  const at = await frameOf(review)
+  // 끌기 미리보기가 바꾸는 상자 위치
+  const geometry = () =>
+    object.evaluate((el) => [el.style.left, el.style.top, el.style.width, el.style.height].join())
+  const before = await geometry()
+  const start = at(0.25, 0.25)
+  const end = at(0.35, 0.35)
+  await page.mouse.move(start.x, start.y)
+  await page.mouse.down()
+  await page.mouse.move(end.x, end.y)
+  await expect.poll(geometry).not.toBe(before)
+  // 끄는 중 키보드로 비교 모드 진입
+  await review.getByRole('button', { name: '비교', exact: true }).focus()
+  await page.keyboard.press('Enter')
+  await expect(review.getByTestId('overlay-box')).toHaveCount(0)
+  await page.mouse.up()
+  await editBoxes(review)
+  await expect.poll(geometry).toBe(before)
+  await expect(review.getByRole('button', { name: '계획 저장', exact: true })).toBeDisabled()
+  expect(records.filter((record) => record.path.endsWith('/plan'))).toHaveLength(0)
+})
+
+test('recomputing keeps the chosen mode', async ({ page }) => {
+  await installFakeApi(page, { sprites: { seed: 'baseReview', settings } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const review = page.getByRole('region', { name: '제작 계획 검수' })
+  const tiles = review.getByRole('img', { name: '원본 재구성' }).locator('image[data-tile-id]')
+  await expect(tiles.first()).toHaveAttribute('width', '320')
+  await editBoxes(review)
+  await review.getByLabel('격자 칸 너비 (원본 px)', { exact: true }).fill('160')
+  await expect(tiles.first()).toHaveAttribute('width', '160')
+  await expect(review.getByRole('button', { name: '편집', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(review.getByRole('slider', { name: '원본·재구성 경계' })).toHaveCount(0)
+})
+
+test('touch scroll restores the divider', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await installFakeApi(page, { sprites: { seed: 'baseReview', settings } })
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const review = page.getByRole('region', { name: '제작 계획 검수' })
+  const surface = review.getByTestId('compare-surface')
+  const divider = review.getByRole('slider', { name: '원본·재구성 경계' })
+  await expect(surface).toHaveCSS('touch-action', 'pan-y')
+  const at = await frameOf(review)
+  await surface.dispatchEvent('pointerdown', {
+    clientX: at(0.2, 0.5).x,
+    clientY: at(0.2, 0.5).y,
+    pointerId: 1,
+    isPrimary: true,
+    button: 0,
+    bubbles: true,
+  })
+  await expect(divider).toHaveAttribute('aria-valuenow', '20')
+  // 세로 스크롤로 넘어가면 브라우저가 보내는 pointercancel
+  await page.evaluate(() =>
+    document.dispatchEvent(new PointerEvent('pointercancel', { pointerId: 1 })),
+  )
+  await expect(divider).toHaveAttribute('aria-valuenow', '50')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
 })
 
 test('backdrop fills the source canvas while objects without placements keep their own ROI', async ({
@@ -167,7 +318,7 @@ test('saving only placements keeps approvals and images and bumps only the revis
   expect(objectOf(changed).approval).toBeNull()
 })
 
-test('missing base images show dashed outlines regardless of opacity', async ({ page }) => {
+test('missing base images stay outlined in compare mode', async ({ page }) => {
   await installFakeApi(page, { sprites: { seed: 'baseReview', settings, partialBases: true } })
   await page.goto(`/2d/background/${SPRITE_IDS.job}`)
   const review = page.getByRole('region', { name: '제작 계획 검수' })
@@ -181,8 +332,10 @@ test('missing base images show dashed outlines regardless of opacity', async ({ 
   await expect(images.locator('rect')).toHaveCount(0)
   await expect(images.locator('image[data-tile-id]')).toHaveCount(0)
   await expect(images.locator('image[data-asset-id]')).toHaveCount(3)
-  await review.getByRole('slider', { name: '재구성 투명도' }).fill('0')
-  await expect(images).toHaveAttribute('opacity', '0')
+  await expect(review.getByRole('button', { name: '비교', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
   await expect(missing).toBeVisible()
 })
 
@@ -196,6 +349,8 @@ test('unreadable images show a reason instead of a partial reconstruction', asyn
   ).toBeVisible()
   await expect(review.getByRole('img', { name: '원본 재구성' })).toHaveCount(0)
   await expect(review.getByTestId('overlay-image')).toBeVisible()
+  // 계산 실패는 모드 없이 편집처럼 동작
+  await expect(review.getByRole('group', { name: '재구성 보기' })).toHaveCount(0)
 })
 
 test('failed displayed images show dashed outlines and a reason', async ({ page }) => {
@@ -327,6 +482,7 @@ test('small cells keep editing usable without excessive SVG nodes', async ({ pag
   await expect(review.getByRole('button', { name: '재구성 다시 계산' })).toHaveCount(0)
   await expect(review.getByRole('img', { name: '원본 재구성' })).toHaveCount(0)
   await expect(review.locator('image[data-tile-id]')).toHaveCount(0)
+  await expect(review.getByRole('group', { name: '재구성 보기' })).toHaveCount(0)
   // 원본·ROI·계획 저장 유지
   await expect(review.getByTestId('overlay-image')).toBeVisible()
   await expect(review.getByTestId('overlay-box')).toHaveCount(3)
@@ -369,6 +525,7 @@ test('a worker that fails to start shows a fixed reason and a retry', async ({ p
   // 브라우저 원문 오류 미노출
   await expect(review.getByText('worker boot failed')).toHaveCount(0)
   await expect(review.getByRole('button', { name: '재구성 다시 계산', exact: true })).toBeVisible()
+  await expect(review.getByRole('group', { name: '재구성 보기' })).toHaveCount(0)
 })
 
 test('timed out and superseded workers cannot publish results', async ({ page }) => {
@@ -394,6 +551,7 @@ test('timed out and superseded workers cannot publish results', async ({ page })
     .filter({ hasText: '재구성 계산 시간이 초과되었습니다. 격자 칸 너비를 조정해 주세요' })
   const cellWidth = review.getByLabel('격자 칸 너비 (원본 px)', { exact: true })
   await expect(calculating).toBeVisible()
+  await expect(review.getByRole('group', { name: '재구성 보기' })).toHaveCount(0)
   await expect.poll(() => tileWorkers(page).length).toBe(1)
   const first = tileWorkers(page)[0]!
 
@@ -434,6 +592,7 @@ test('timed out and superseded workers cannot publish results', async ({ page })
   await expect(layer).toHaveCount(0)
   // 생성 기준 3·오브젝트 자리 2
   await expect(review.getByTestId('overlay-box')).toHaveCount(5)
+  await expect(review.getByRole('group', { name: '재구성 보기' })).toHaveCount(0)
 
   // 화면 이탈 시 종료
   await page.clock.resume()
@@ -444,4 +603,30 @@ test('timed out and superseded workers cannot publish results', async ({ page })
   await expect.poll(() => tileWorkers(page).length).toBe(0)
   await release(page)
   expect(errors).toEqual([])
+})
+
+test('selecting a box before the reconstruction is ready still opens in compare mode', async ({
+  page,
+}) => {
+  await installFakeApi(page, { sprites: { seed: 'baseReview', settings } })
+  await page.route('**/tileFill.worker-*.js', (route) =>
+    route.fulfill({ status: 200, contentType: 'text/javascript', body: STUB_WORKER }),
+  )
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const review = page.getByRole('region', { name: '제작 계획 검수' })
+  const modes = review.getByRole('group', { name: '재구성 보기' })
+  await expect(review.getByRole('status').filter({ hasText: '재구성 계산 중…' })).toBeVisible()
+  await expect(modes).toHaveCount(0)
+  // 계산 전 카드에서 상자를 골라도 처음 모드는 비교
+  await review.getByRole('button', { name: '대상 선택 1', exact: true }).click()
+  await release(page)
+  await expect(modes).toBeVisible()
+  await expect(modes.getByRole('button', { name: '비교', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(modes.getByRole('button', { name: '편집', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  )
 })

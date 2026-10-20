@@ -47,10 +47,13 @@ public sealed partial class SkiaImageTranscoder
 
         ct.ThrowIfCancellationRequested();
         using var oriented = origin == SKEncodedOrigin.TopLeft ? null : ApplyOrigin(decoded, origin);
+        var source = oriented ?? decoded;
         using var output = new SKBitmap(new SKImageInfo(
             canvas.Width, canvas.Height, SKColorType.Rgba8888, SKAlphaType.Premul));
-        using (var drawing = new SKCanvas(output))
+
+        void Draw(SKRect src, SKRect dst)
         {
+            using var drawing = new SKCanvas(output);
             drawing.Clear(SKColors.Transparent);
             if (layout == SpriteTileLayout.Diamond)
             {
@@ -64,13 +67,25 @@ public sealed partial class SkiaImageTranscoder
                 drawing.ClipPath(diamond, SKClipOperation.Intersect, false);
             }
 
-            drawing.DrawBitmap(oriented ?? decoded, new SKRect(
-                (float)transform.OffsetX, (float)transform.OffsetY, (float)right, (float)bottom),
-                new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.None));
+            drawing.DrawBitmap(source, src, dst, new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.None));
         }
+
+        var fixedSrc = new SKRect(0, 0, source.Width, source.Height);
+        var fixedDst = new SKRect((float)transform.OffsetX, (float)transform.OffsetY, (float)right, (float)bottom);
+        Draw(fixedSrc, fixedDst);
 
         if (!SpriteAlpha(output, ct).HasVisiblePixels)
             throw new ProviderBadResponseException("정규화 결과에 보이는 픽셀이 없습니다");
+
+        // 거부 판정 뒤 아이소메트릭 타일 맞춤, 칸 밖 틈 제거
+        if (layout == SpriteTileLayout.Diamond && OpaqueBounds(source, ct) is { } bounds)
+        {
+            Draw(bounds, new SKRect(0, 0, canvas.Width, canvas.Height));
+            // 맞춤이 보이는 픽셀을 모두 칸 밖으로 밀면 맞춤 전 결과 유지
+            if (!SpriteAlpha(output, ct).HasVisiblePixels)
+                Draw(fixedSrc, fixedDst);
+        }
+
         using var png = output.Encode(SKEncodedImageFormat.Png, 100)
             ?? throw new ProviderBadResponseException("스프라이트 PNG를 인코딩할 수 없습니다");
         if (png.Size > SpriteMaxBytes)
@@ -206,5 +221,25 @@ public sealed partial class SkiaImageTranscoder
             }
         }
         return (transparent, visible);
+    }
+
+    private static SKRectI? OpaqueBounds(SKBitmap bitmap, CancellationToken ct)
+    {
+        int left = bitmap.Width, top = bitmap.Height, right = -1, bottom = -1;
+        for (var y = 0; y < bitmap.Height; y++)
+        {
+            ct.ThrowIfCancellationRequested();
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                // 알파 128 미만 흐린 테두리는 경계에서 제외
+                if (bitmap.GetPixel(x, y).Alpha < 128)
+                    continue;
+                left = Math.Min(left, x);
+                top = Math.Min(top, y);
+                right = Math.Max(right, x);
+                bottom = Math.Max(bottom, y);
+            }
+        }
+        return right < 0 ? null : new SKRectI(left, top, right + 1, bottom + 1);
     }
 }

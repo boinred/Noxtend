@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { installFakeApi } from './fakeApi'
-import { SPRITE_IDS, type SpriteFakeOptions } from './spriteFakeApi'
+import { SPRITE_IDS, editBoxes, type SpriteFakeOptions } from './spriteFakeApi'
 const settings = { view: 'isometric', outputKind: 'tiles', tileWidth: 128, repeat: 'both' } as const
 
 interface Box {
@@ -51,6 +51,7 @@ test('placement boxes are edited separately from the generation box', async ({ p
   await installFakeApi(page, { sprites: { seed: 'completed', settings, records } })
   await page.goto(`/2d/background/${SPRITE_IDS.job}`)
   const review = reviewOf(page)
+  await editBoxes(review)
   const object = review.locator('[data-testid="overlay-box"][data-part="오브젝트 바위"]')
   const placements = object.and(review.locator('[data-kind="placement"]'))
   const source = object.and(review.locator('[data-kind="source"]'))
@@ -99,6 +100,7 @@ test('add and delete placements stay within one to twenty', async ({ page }, tes
   await installFakeApi(page, { sprites: { seed: 'baseReview', settings, records } })
   await page.goto(`/2d/background/${SPRITE_IDS.job}`)
   const review = reviewOf(page)
+  await editBoxes(review)
   const boxes = review.locator('[data-testid="overlay-box"][data-kind="placement"]')
   const add = review.getByRole('button', { name: '자리 추가 3', exact: true })
   const remove = review.getByRole('button', { name: '선택한 자리 삭제 3', exact: true })
@@ -143,6 +145,7 @@ test('clicking the second placement deletes only that placement', async ({ page 
   await installFakeApi(page, { sprites: { seed: 'baseReview', settings, records } })
   await page.goto(`/2d/background/${SPRITE_IDS.job}`)
   const review = reviewOf(page)
+  await editBoxes(review)
   const pick = (k: number) => review.getByRole('button', { name: `자리 ${k} 선택 3`, exact: true })
   const remove = review.getByRole('button', { name: '선택한 자리 삭제 3', exact: true })
   // 자리 1 복사본을 세 번째 자리로
@@ -239,6 +242,7 @@ test('a chip lying over a smaller box selects its own target', async ({ page }) 
   )
   await page.reload()
   const review = reviewOf(page)
+  await editBoxes(review)
   const chip = review.getByTestId('overlay-chip').filter({ hasText: '1. 후경 지면' })
   await chip.scrollIntoViewIfNeeded()
   const rect = (await chip.boundingBox())!
@@ -267,6 +271,7 @@ test('overlapping source and placement boxes are keyboard selectable', async ({ 
   )
   await page.reload()
   const review = reviewOf(page)
+  await editBoxes(review)
   const boxes = review.locator('[data-testid="overlay-box"][data-part="오브젝트 바위"]')
   await expect(boxes).toHaveCount(2)
   expect(await boxes.nth(0).boundingBox()).toEqual(await boxes.nth(1).boundingBox())
@@ -335,6 +340,7 @@ test('unsaved placement edits survive refresh and conflict', async ({ page }) =>
   })
   await page.goto(`/2d/background/${SPRITE_IDS.job}`)
   const review = reviewOf(page)
+  await editBoxes(review)
   const boxes = review.locator('[data-testid="overlay-box"][data-kind="placement"]')
   const pick = (k: number) => review.getByRole('button', { name: `자리 ${k} 선택 3`, exact: true })
   const save = review.getByRole('button', { name: '계획 저장', exact: true })

@@ -71,6 +71,8 @@ export interface PartsOverlayProps {
   frameRef?: Ref<HTMLDivElement>
   /** 상자를 늘 보이게 한다. 검수 화면은 사람이 전체를 훑어야 해서 켠다. */
   alwaysShowBoxes?: boolean
+  /** 프레임 안 상자·손잡이·앵커 점과 칩 층을 그리지 않는다 — 2D 비교 모드. */
+  hideBoxes?: boolean
   /**
    * 상자 편집. 넘기면 지목한 파츠의 상자에 손잡이가 붙는다.
    *
@@ -200,6 +202,7 @@ export function PartsOverlay({
   frameProps,
   frameRef,
   alwaysShowBoxes = false,
+  hideBoxes = false,
   editing,
   highlightedPartId = null,
 }: PartsOverlayProps) {
@@ -259,7 +262,7 @@ export function PartsOverlay({
             </div>
           ) : null}
 
-          {placed.map(({ part, color }) => {
+          {(hideBoxes ? [] : placed).map(({ part, color }) => {
             const isShown = shown === part.id
             const isDimmed = shown !== null && !isShown
 
@@ -446,100 +449,102 @@ export function PartsOverlay({
           {children}
         </div>
 
-        <div className={styles.chipLayer}>
-          {placed.map(({ part, color, anchor, top }) => {
-            const isDimmed = shown !== null && shown !== part.id
-            const flip = anchor.x > FLIP_AT
+        {hideBoxes ? null : (
+          <div className={styles.chipLayer}>
+            {placed.map(({ part, color, anchor, top }) => {
+              const isDimmed = shown !== null && shown !== part.id
+              const flip = anchor.x > FLIP_AT
 
-            return (
-              <div key={part.id} className="min-w-0 max-w-full">
-                {/* 밀려난 만큼만 선을 긋는다 — 안 밀렸으면 없는 편이 조용하다 */}
-                {Math.abs(top - anchor.y) > 0.3 ? (
-                  <div
-                    className={styles.tether}
-                    data-dimmed={isDimmed}
-                    data-testid="overlay-tether"
-                    style={{
-                      left: `${Math.min(96, Math.max(4, anchor.x))}%`,
-                      top: `${Math.min(anchor.y, top)}%`,
-                      // 칩 위까지 확실히 닿게 몇 px 더 그린다. 남는 부분은 칩 뒤로 들어간다 —
-                      // %로만 계산하면 반올림·여백 때문에 선과 칩 사이가 벌어져 보인다
-                      height: `calc(${Math.abs(top - anchor.y)}% + 10px)`,
-                      background: color,
-                    }}
-                  />
-                ) : null}
+              return (
+                <div key={part.id} className="min-w-0 max-w-full">
+                  {/* 밀려난 만큼만 선을 긋는다 — 안 밀렸으면 없는 편이 조용하다 */}
+                  {Math.abs(top - anchor.y) > 0.3 ? (
+                    <div
+                      className={styles.tether}
+                      data-dimmed={isDimmed}
+                      data-testid="overlay-tether"
+                      style={{
+                        left: `${Math.min(96, Math.max(4, anchor.x))}%`,
+                        top: `${Math.min(anchor.y, top)}%`,
+                        // 칩 위까지 확실히 닿게 몇 px 더 그린다. 남는 부분은 칩 뒤로 들어간다 —
+                        // %로만 계산하면 반올림·여백 때문에 선과 칩 사이가 벌어져 보인다
+                        height: `calc(${Math.abs(top - anchor.y)}% + 10px)`,
+                        background: color,
+                      }}
+                    />
+                  ) : null}
 
-                {/*
+                  {/*
                 칩과 "이동" 을 한 자리에 묶는다 — `<button>` 안에 `<button>` 을 넣을 수 없다.
                 오른쪽 끝 파츠는 그룹째 뒤집혀 화면 밖으로 나가지 않는다
               */}
-                <div
-                  className={styles.chipGroup}
-                  style={{
-                    // 프레임 밖으로 나가지 않게 가둔다. 겹침 회피가 세로로만 밀기 때문에
-                    // 파츠가 많으면 아래쪽 칩이 프레임을 넘어가 영영 안 보인다
-                    left: `${Math.min(96, Math.max(4, anchor.x))}%`,
-                    top: `${top}%`,
-                    transform: flip ? 'translate(-100%, 0)' : undefined,
-                    // 선이 끝난 자리에서 칩이 바로 시작하게 한다 — 여백이 남으면 선과 칩이
-                    // 따로 떠 있는 것으로 보인다
-                    marginTop: 0,
-                    marginLeft: flip ? -2 : 2,
-                    flexDirection: flip ? 'row-reverse' : 'row',
-                    // 모든 상자보다 위, 손잡이보다 아래
-                    ...(selection ? { zIndex: 2 * placed.length + 3 } : {}),
-                  }}
-                >
-                  <button
-                    type="button"
-                    className={styles.chip}
-                    data-dimmed={isDimmed}
-                    data-stuck={selection ? selection.selectedId === part.id : stuck === part.id}
-                    aria-pressed={selection ? selection.selectedId === part.id : undefined}
-                    data-testid="overlay-chip"
+                  <div
+                    className={styles.chipGroup}
                     style={{
-                      background: color,
-                      // 검수 화면은 칩에 가림 관계까지 실어 여러 줄이 된다. 배경 결과
-                      // 화면은 한 줄짜리라 기존대로 둔다
-                      ...(alwaysShowBoxes
-                        ? {
-                            whiteSpace: 'normal' as const,
-                            maxWidth: 260,
-                            textAlign: 'left' as const,
-                          }
-                        : {}),
+                      // 프레임 밖으로 나가지 않게 가둔다. 겹침 회피가 세로로만 밀기 때문에
+                      // 파츠가 많으면 아래쪽 칩이 프레임을 넘어가 영영 안 보인다
+                      left: `${Math.min(96, Math.max(4, anchor.x))}%`,
+                      top: `${top}%`,
+                      transform: flip ? 'translate(-100%, 0)' : undefined,
+                      // 선이 끝난 자리에서 칩이 바로 시작하게 한다 — 여백이 남으면 선과 칩이
+                      // 따로 떠 있는 것으로 보인다
+                      marginTop: 0,
+                      marginLeft: flip ? -2 : 2,
+                      flexDirection: flip ? 'row-reverse' : 'row',
+                      // 모든 상자보다 위, 손잡이보다 아래
+                      ...(selection ? { zIndex: 2 * placed.length + 3 } : {}),
                     }}
-                    onMouseEnter={() => setHovered(part.id)}
-                    onMouseLeave={() => setHovered(null)}
-                    onFocus={() => setHovered(part.id)}
-                    onBlur={() => setHovered(null)}
-                    onClick={() =>
-                      selection
-                        ? selection.onSelect(part.id)
-                        : setStuck(stuck === part.id ? null : part.id)
-                    }
                   >
-                    {part.label ?? part.name}
-                  </button>
-
-                  {/* 고정했을 때만 나타난다 — 평소에 붙어 있으면 칩이 두 배로 넓어진다 */}
-                  {stuck === part.id && action ? (
                     <button
                       type="button"
-                      className={styles.chipJump}
-                      data-testid="overlay-jump"
-                      aria-label={`${part.label ?? part.name} ${action.label}`}
-                      onClick={() => action.onClick(part.id)}
+                      className={styles.chip}
+                      data-dimmed={isDimmed}
+                      data-stuck={selection ? selection.selectedId === part.id : stuck === part.id}
+                      aria-pressed={selection ? selection.selectedId === part.id : undefined}
+                      data-testid="overlay-chip"
+                      style={{
+                        background: color,
+                        // 검수 화면은 칩에 가림 관계까지 실어 여러 줄이 된다. 배경 결과
+                        // 화면은 한 줄짜리라 기존대로 둔다
+                        ...(alwaysShowBoxes
+                          ? {
+                              whiteSpace: 'normal' as const,
+                              maxWidth: 260,
+                              textAlign: 'left' as const,
+                            }
+                          : {}),
+                      }}
+                      onMouseEnter={() => setHovered(part.id)}
+                      onMouseLeave={() => setHovered(null)}
+                      onFocus={() => setHovered(part.id)}
+                      onBlur={() => setHovered(null)}
+                      onClick={() =>
+                        selection
+                          ? selection.onSelect(part.id)
+                          : setStuck(stuck === part.id ? null : part.id)
+                      }
                     >
-                      {action.label}
+                      {part.label ?? part.name}
                     </button>
-                  ) : null}
+
+                    {/* 고정했을 때만 나타난다 — 평소에 붙어 있으면 칩이 두 배로 넓어진다 */}
+                    {stuck === part.id && action ? (
+                      <button
+                        type="button"
+                        className={styles.chipJump}
+                        data-testid="overlay-jump"
+                        aria-label={`${part.label ?? part.name} ${action.label}`}
+                        onClick={() => action.onClick(part.id)}
+                      >
+                        {action.label}
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {placed.length === 0 ? (
