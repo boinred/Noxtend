@@ -191,4 +191,44 @@ git commit -m "feat(frontend): compare source and reconstruction with a draggabl
 
 ## 실행 기록
 
-(실행 시 작성)
+### 2026-10-20 구현·리뷰 (Task 1·2·4)
+
+실행 방식은 Subagent-driven이다. 작업별 구현(sonnet), 구현에 참여하지 않은 작업별 리뷰(sonnet), 브랜치 전체 최종 리뷰(opus), 수정 1회, 수정 범위 재리뷰(sonnet) 순서로 진행했다.
+
+| 단계 | 커밋 | 결과 |
+| --- | --- | --- |
+| Task 1 타일 캔버스 맞춤 | `3923bf6` | 작업 리뷰 Approved(Critical·Important 0) |
+| Task 2 비교/편집 전환 | `161b5e2` | 작업 리뷰 Approved(Critical·Important 0) |
+| 최종 리뷰 | — | With fixes: Important 2(계획 검수 중 카드 선택이 승인 뒤 첫 모드를 편집으로 바꿈, `frontend.md` 확인 기준 과장)와 Minor 2를 수정 대상으로 정함 |
+| 최종 수정 | `73aae5d`, `cc3a794` | F1~F4 반영, 재리뷰에서 모두 ADDRESSED·새 결함 없음 |
+
+최종 수정 뒤 회귀(`cc3a794` 기준, 수정 에이전트 실행):
+
+| 명령 | 결과 |
+| --- | --- |
+| `dotnet build apps/backend/Noxtend.slnx && dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName!~TripoSmokeTests&FullyQualifiedName!~SimilaritySmokeTests'` | 2069 통과·0 실패·0 건너뜀 |
+| `pnpm test` | 574 통과·0 실패 |
+| `pnpm lint`, `pnpm typecheck`, `pnpm build` | 통과 |
+| `pnpm test:e2e` | 421 통과·0 실패·0 건너뜀·flaky 0 |
+| `pnpm docs:check`, `git diff --check` | 통과(500행 초과 경고는 기존 계획 문서) |
+
+- 일시적 환경 실패: 수정 직후 첫 `SpriteGenerationTests` 실행에서 SQL Server Testcontainer 시간 초과(`SqlException` 35·258) 2건, F1 RED 첫 시도에서 Playwright `webServer` 120초 초과 1건이 있었다. 같은 명령 재실행과 전체 회귀에서 통과했고, 위 표는 재실행 결과다.
+- 수동 확인: 로컬 dev 서버(5173)에서 기존 작업 `a9f77a56`을 조회만 했다. `161b5e2` 기준으로 1440 dark 비교·편집 전환·경계 끌기·→ 키, 390 light 비교(`scrollWidth` 390, `touch-action: pan-y`)를 확인했다. `cc3a794` 기준으로는 기본 비교와 카드 선택 시 편집 전환(손잡이 8개)을 다시 확인했다. 저장 요청은 보내지 않았다.
+- 컨트롤러 결정:
+  - Task 3은 코드와 독립이라 구현·리뷰 뒤로 옮겼다. push·PR 확인과 함께 승인을 받는다.
+  - 표시 실패 테스트에서는 재구성 계산이 `ready`라 모드 버튼이 보이는 것이 맞다(설계 1절 기준).
+  - 맞춤 결과가 비면 예외 대신 맞춤 전 결과를 쓴다.
+  - 경계 상자가 있으면 생성 캔버스 비율과 관계없이 항상 칸 전체로 맞춘다(설계 2절에 반영).
+- 미확인·남은 제약:
+  - 실제 공급자 타일에서 틈이 사라지는지와 2:1이 아닌 생성 캔버스의 실 결과는 확인하지 않았다(유료 재생성 필요).
+  - 실기기 터치의 세로 스크롤→`pointercancel`은 합성 이벤트로만 검증했다.
+  - 칸 4096개 상한·저사양 기기에서 경계 끌기 재렌더 비용은 측정하지 않았다. 최종 리뷰어가 dev 빌드, `<image>` 424개에서 잰 값은 median 13.6 ms, p90 17.1 ms다.
+- 남은 Minor(후속):
+  - 알파 128 리터럴 이름
+  - Backend 테스트 공백(EXIF·127/128·취소)
+  - 비교 진입 뒤 선택 유지·비교 모드 입력 단정
+  - slider Home/End
+  - 재계산 때 모드 버튼 줄 레이아웃 이동
+  - `backend.md`의 contain 변환 문구 링크
+  - `frontend.md` 확인 기준의 "실제 Backend는 확인하지 않았다" 문구 범위(로컬 API 조회는 함)
+- Task 3(V5 실제 분석)은 아직 실행하지 않았다(사용자 승인 대기).
