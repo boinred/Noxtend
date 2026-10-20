@@ -159,6 +159,33 @@ public sealed class SpritePixelTests
     }
 
     [Fact]
+    public async Task DiamondFit_KeepsUnfittedResultWhenFitLeavesNothingVisible()
+    {
+        // 맞춤 전에는 칸 안, 늘리면 네 점 모두 다이아몬드 밖으로 밀림
+        var dots = new[] { (4, 2), (11, 2), (4, 5), (11, 5) };
+        using var source = Image(16, 8, (x, y) => dots.Contains((x, y)) ? SKColors.Red : SKColors.Transparent);
+        await using var output = await _transcoder.NormalizeSpriteAsync(
+            source, new(16, 8), new(1, 0, 0), true, SpriteTileLayout.Diamond, default);
+        using var decoded = SKBitmap.Decode(output);
+        foreach (var (x, y) in dots)
+            Assert.Equal(255, decoded.GetPixel(x, y).Alpha);
+    }
+
+    [Fact]
+    public async Task DiamondFit_FillsCellUnderContainTransform()
+    {
+        // 생성 캔버스가 출력과 비율이 달라 contain 여백이 생겨도 경계 상자는 이미지 전체
+        var transform = SpriteRules.Transform(new(24, 8), new(16, 8));
+        Assert.NotEqual(0, transform.OffsetY);
+        using var source = Image(24, 8, (x, y) => x == 0 && y == 0 ? SKColors.Transparent : SKColors.Red);
+        await using var output = await _transcoder.NormalizeSpriteAsync(
+            source, new(16, 8), transform, true, SpriteTileLayout.Diamond, default);
+        using var decoded = SKBitmap.Decode(output);
+        foreach (var (x, y) in new[] { (8, 0), (8, 7) })
+            Assert.Equal(255, decoded.GetPixel(x, y).Alpha);
+    }
+
+    [Fact]
     public async Task SquareLayout_DoesNotFitInsetContent()
     {
         using var source = Image(16, 8, (x, y) => Inset(x, y) ? SKColors.Red : SKColors.Transparent);
