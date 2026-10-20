@@ -71,6 +71,7 @@ flowchart LR
 - Docker Desktop의 Kubernetes와 `kubectl`
 - Node.js 24 이상, pnpm 11.9.0
 - Backend 빌드·테스트용 .NET 10 SDK
+- 로컬 배포 기록용 Python 3와 Git
 
 ### API와 로컬 서비스 실행
 
@@ -93,6 +94,12 @@ deploy/local-up.sh
 
 ```bash
 deploy/local-up.sh -d
+```
+
+Backend 배포의 커밋·dirty 여부·이미지·Pod 정보는 성공한 실행만 Git에서 제외된 `deploy/.local/deployments/`에 기록합니다. 최근 성공은 다음 명령으로 확인합니다. 기존 label 없는 이미지는 처음 한 번 `deploy/local-up.sh -d`로 다시 빌드해야 합니다.
+
+```bash
+cat deploy/.local/deployments/latest.json
 ```
 
 ### Frontend 실행
@@ -129,6 +136,20 @@ dotnet test apps/backend/Noxtend.slnx --filter 'FullyQualifiedName!~TripoSmokeTe
 ```
 
 테스트 환경과 유료 smoke 조건은 [검증 안내](.agents/skills/noxtend-workflow/references/verification.md)를 참고하세요.
+
+## 기여·PR 검사
+
+최신 `main`에서 기능별 작업 브랜치를 만들고 PR로 병합합니다. `develop`·`release` 상시 브랜치는 두지 않습니다. [GitHub CI](.github/workflows/ci.yml)는 main 대상 PR과 main push에서 다음 검사를 실행합니다.
+
+| 필수 검사 | 내용 |
+| --- | --- |
+| Repository checks | 설계 문서·커밋 훅·Shell 문법·격리 Fake 배포 회귀 |
+| Frontend | 기존 lint·포맷·계층 검사·typecheck·Vitest·build·Chromium E2E |
+| Backend | .NET build·유료 smoke 제외 전체 회귀·Docker image build |
+
+`main` 보호는 PR·세 검사·최신 main 반영·대화 해소를 요구하며 관리자에게도 적용합니다. GitHub 승인 인원은 0명이고 독립 에이전트 리뷰는 유지합니다. 보호 설정의 정본은 [main-protection.json](.github/main-protection.json)이며 적용·재조회 명령은 [운영 절차](.agents/skills/noxtend-workflow/references/deployment.md)에 있습니다.
+
+공개 포크 PR은 비밀값 없이 GitHub hosted runner에서 실행합니다. 실제 AI 호출이나 배포는 CI에 포함하지 않습니다. Azure 배포와 Azure Pipelines는 사용하지 않습니다.
 
 ## 범위와 보안
 

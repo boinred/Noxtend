@@ -197,6 +197,7 @@ for (const kind of ['generation', 'placement'] as const)
     )
     await page.reload()
     const review = reviewOf(page)
+    await editBoxes(review)
     const button = review.getByRole('button', {
       name: kind === 'generation' ? '생성 기준 선택 3' : '자리 1 선택 3',
       exact: true,

@@ -14,3 +14,6 @@ playwright-report/
 blob-report/
 coverage/
 .gstack/
+
+# Local Backend deployment records
+/deploy/.local/deployments/

@@ -17,7 +17,9 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 K8S_DIR="$REPO_ROOT/deploy/k8s"
 NAMESPACE=noxtend
-IMAGE=noxtend-api:local
+IMAGE_ALIAS=noxtend-api:local
+METADATA="$REPO_ROOT/deploy/local-deployment.py"
+RECORD="$REPO_ROOT/deploy/.local/deployments/latest.json"
 NODE_CONTAINER=desktop-control-plane
 
 SKIP_BUILD=false
@@ -37,7 +39,7 @@ die() { printf '\033[31m✗ %s\033[0m\n' "$1" >&2; exit 1; }
 
 # --- preflight -----------------------------------------------------------------
 
-for tool in kubectl docker curl lsof ps id sleep seq mktemp cat nohup; do
+for tool in kubectl docker curl lsof ps id sleep seq mktemp cat nohup python3; do
   command -v "$tool" >/dev/null || die "$tool not found"
 done
 
@@ -50,10 +52,10 @@ listeners() {
   printf '%s' "$result"
 }
 
+CONTEXT=$(kubectl config current-context) || die "cannot determine Kubernetes context"
+[ -n "$CONTEXT" ] || die "cannot determine Kubernetes context"
 LISTENERS=$(listeners)
 if [ -n "$LISTENERS" ]; then
-  CONTEXT=$(kubectl config current-context) || die "cannot determine Kubernetes context"
-  [ -n "$CONTEXT" ] || die "cannot determine Kubernetes context"
   OWNER=$(id -u)
   KUBECTL=$(command -v kubectl)
   # All-listener validation before TERM
@@ -71,6 +73,31 @@ if [ -n "$LISTENERS" ]; then
       *) die "port 18080 is occupied by an unverified process (PID $pid); stop it manually" ;;
     esac
   done
+fi
+
+image_metadata() {
+  local metadata extra
+  metadata=$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }} {{ index .Config.Labels "io.noxtend.source.dirty" }} {{ .Id }}' "$IMAGE_ALIAS") || \
+    die "cannot inspect $IMAGE_ALIAS; rebuild with deploy/local-up.sh without --skip-build"
+  read -r REVISION DIRTY IMAGE_ID extra <<< "$metadata"
+  [[ "$REVISION" =~ ^([a-f0-9]{40}|[a-f0-9]{64})$ ]] && \
+    [[ "$DIRTY" = true || "$DIRTY" = false ]] && \
+    [[ "$IMAGE_ID" =~ ^sha256:[a-f0-9]{64}$ ]] && [ -z "$extra" ] || \
+    die "image provenance is missing or invalid; rebuild with deploy/local-up.sh without --skip-build"
+}
+
+# Existing image provenance before terminating a working forward
+if [ "$SKIP_BUILD" = true ]; then
+  image_metadata
+else
+  command -v git >/dev/null || die "git not found"
+  REVISION=$(git -C "$REPO_ROOT" rev-parse HEAD) || die "cannot determine source revision"
+  STATUS=$(git -C "$REPO_ROOT" status --porcelain --untracked-files=normal) || die "cannot determine source dirty state"
+  DIRTY=false
+  [ -z "$STATUS" ] || DIRTY=true
+fi
+
+if [ -n "$LISTENERS" ]; then
   log "Stopping existing Noxtend port-forward on port 18080"
   for pid in $LISTENERS; do
     kill -TERM "$pid" || die "cannot stop port-forward PID $pid"
@@ -90,16 +117,23 @@ fi
 # --- 1. image ------------------------------------------------------------------
 
 if [ "$SKIP_BUILD" = false ]; then
-  log "Building $IMAGE"
-  docker build -t "$IMAGE" "$REPO_ROOT/apps/backend"
+  log "Building $IMAGE_ALIAS ($REVISION, dirty=$DIRTY)"
+  docker build --label "org.opencontainers.image.revision=$REVISION" \
+    --label "io.noxtend.source.dirty=$DIRTY" -t "$IMAGE_ALIAS" "$REPO_ROOT/apps/backend"
+  image_metadata
+fi
 
-  log "Importing image into the cluster's containerd namespace"
-  # Without this the kubelet cannot see the image, whatever `docker images` says
-  if docker inspect "$NODE_CONTAINER" >/dev/null 2>&1; then
-    docker save "$IMAGE" | docker exec -i "$NODE_CONTAINER" ctr -n k8s.io images import -
-  else
-    echo "  node container '$NODE_CONTAINER' not found — assuming the cluster shares the docker image store"
-  fi
+# Source SHA plus full config digest, including dirty builds
+IMAGE="noxtend-api:${REVISION:0:40}-$(if [ "$DIRTY" = true ]; then echo dirty; else echo clean; fi)-${IMAGE_ID#sha256:}"
+docker tag "$IMAGE_ID" "$IMAGE"
+log "Using $IMAGE (dirty=$DIRTY)"
+
+log "Importing image into the cluster's containerd namespace"
+# Without this the kubelet cannot see the image, whatever `docker images` says
+if docker inspect "$NODE_CONTAINER" >/dev/null 2>&1; then
+  docker save "$IMAGE" | docker exec -i "$NODE_CONTAINER" ctr -n k8s.io images import -
+else
+  echo "  node container '$NODE_CONTAINER' not found — assuming the cluster shares the docker image store"
 fi
 
 # --- 2. manifests ---------------------------------------------------------------
@@ -107,23 +141,24 @@ fi
 log "Applying manifests"
 # Namespace and secret first; the other four have no ordering constraint because the
 # API reports unmet dependencies through /health rather than failing to start
-kubectl apply -f "$K8S_DIR/namespace.yaml"
-kubectl apply -f "$K8S_DIR/secrets.yaml"
-kubectl apply -f "$K8S_DIR/mssql.yaml" \
+kubectl --context "$CONTEXT" apply -f "$K8S_DIR/namespace.yaml"
+kubectl --context "$CONTEXT" apply -f "$K8S_DIR/secrets.yaml"
+kubectl --context "$CONTEXT" apply -f "$K8S_DIR/mssql.yaml" \
                -f "$K8S_DIR/redis.yaml" \
-               -f "$K8S_DIR/azurite.yaml" \
-               -f "$K8S_DIR/api.yaml"
+               -f "$K8S_DIR/azurite.yaml"
+python3 "$METADATA" render "$K8S_DIR/api.yaml" "$IMAGE" | kubectl --context "$CONTEXT" apply -f -
 
 # A rollout restart is needed when the image changed but the manifest did not
-kubectl -n "$NAMESPACE" rollout restart deployment/api >/dev/null
+kubectl --context "$CONTEXT" -n "$NAMESPACE" rollout restart deployment/api >/dev/null
 
 # --- 3. wait --------------------------------------------------------------------
 
 log "Waiting for dependencies (mssql needs 30s-2m on first boot)"
-kubectl -n "$NAMESPACE" wait --for=condition=available --timeout=300s \
+kubectl --context "$CONTEXT" -n "$NAMESPACE" wait --for=condition=available --timeout=300s \
   deployment/mssql deployment/redis deployment/azurite deployment/api
 # Available can still point at the old pod mid-rollout; forward only after the new one
-kubectl -n "$NAMESPACE" rollout status deployment/api --timeout=300s
+kubectl --context "$CONTEXT" -n "$NAMESPACE" rollout status deployment/api --timeout=300s
+POD_METADATA=$(python3 "$METADATA" verify "$CONTEXT" "$NAMESPACE" "$IMAGE") || die "cannot verify the applied api image"
 
 # --- 4. verify -------------------------------------------------------------------
 
@@ -131,9 +166,9 @@ log "Port-forwarding and checking /health"
 # kind-backed clusters do not expose NodePort on the host, so forward instead
 FORWARD_LOG=$(mktemp "${TMPDIR:-/tmp}/noxtend-port-forward.XXXXXX")
 if [ "$DETACH" = true ]; then
-  nohup kubectl -n "$NAMESPACE" port-forward svc/api 18080:8080 --address 127.0.0.1 >"$FORWARD_LOG" 2>&1 </dev/null &
+  nohup kubectl --context "$CONTEXT" -n "$NAMESPACE" port-forward svc/api 18080:8080 --address 127.0.0.1 >"$FORWARD_LOG" 2>&1 </dev/null &
 else
-  kubectl -n "$NAMESPACE" port-forward svc/api 18080:8080 --address 127.0.0.1 >"$FORWARD_LOG" 2>&1 &
+  kubectl --context "$CONTEXT" -n "$NAMESPACE" port-forward svc/api 18080:8080 --address 127.0.0.1 >"$FORWARD_LOG" 2>&1 &
 fi
 FORWARD_PID=$!
 trap 'kill "$FORWARD_PID" 2>/dev/null || true' EXIT
@@ -157,10 +192,12 @@ if ! kill -0 "$FORWARD_PID" 2>/dev/null; then
   cat "$FORWARD_LOG" >&2
   die "port-forward ended; free port 18080 and retry"
 fi
-echo "  $HEALTH"
 
 case "$HEALTH" in
   *'"db":"ok"'*'"redis":"ok"'*'"blob":"ok"'*)
+    python3 "$METADATA" record "$RECORD" "$CONTEXT" "$NAMESPACE" "$REVISION" "$DIRTY" "$IMAGE" "$IMAGE_ID" "$POD_METADATA" || \
+      die "cannot record the verified Backend deployment"
+    printf '  latest successful Backend deployment: %s\n' "$RECORD"
     printf '\n\033[32m✓ Backend API is up — http://localhost:18080/health\033[0m\n'
     printf '  Frontend: run pnpm dev separately, then open http://localhost:5173\n'
     if [ "$DETACH" = true ]; then

@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  repository:
+    name: Repository checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: '11.9.0'
+      - run: mkdir -p ci-logs
+      - name: Check design documents
+        run: pnpm docs:check 2>&1 | tee ci-logs/docs.log
+      - name: Test repository hooks
+        run: pnpm hooks:test 2>&1 | tee ci-logs/hooks.log
+      - name: Check shell syntax
+        run: bash -n deploy/local-up.sh 2>&1 | tee ci-logs/shell.log
+      - name: Test local startup with fakes
+        run: python3 deploy/test_local_up.py 2>&1 | tee ci-logs/local-up.log
+      - name: Upload repository failure logs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: repository-failure-logs
+          path: ci-logs/
+          retention-days: 7
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: '11.9.0'
+      - run: mkdir -p ci-logs
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile 2>&1 | tee ci-logs/install.log
+      - name: Lint frontend
+        run: pnpm lint 2>&1 | tee ci-logs/lint.log
+      - name: Typecheck frontend
+        run: pnpm typecheck 2>&1 | tee ci-logs/typecheck.log
+      - name: Test frontend
+        run: pnpm test 2>&1 | tee ci-logs/unit.log
+      - name: Build frontend
+        run: pnpm build 2>&1 | tee ci-logs/build.log
+      - name: Install Chromium
+        run: pnpm --filter @nextend/frontend exec playwright install --with-deps chromium 2>&1 | tee ci-logs/chromium.log
+      - name: Test frontend in Chromium
+        run: pnpm test:e2e 2>&1 | tee ci-logs/e2e.log
+      - name: Upload frontend failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: frontend-failure-artifacts
+          path: |
+            ci-logs/
+            apps/frontend/test-results/
+          retention-days: 7
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
+      - run: mkdir -p ci-logs
+      - name: Verify Docker
+        run: docker info 2>&1 | tee ci-logs/docker-info.log
+      - name: Build backend
+        run: dotnet build apps/backend/Noxtend.slnx 2>&1 | tee ci-logs/build.log
+      - name: Test backend without paid smoke tests
+        run: >-
+          dotnet test apps/backend/Noxtend.slnx --no-build
+          --filter 'FullyQualifiedName!~TripoSmokeTests&FullyQualifiedName!~SimilaritySmokeTests'
+          --logger 'trx;LogFileName=backend.trx'
+          --results-directory "${{ github.workspace }}/test-results/backend"
+          2>&1 | tee ci-logs/test.log
+      - name: Build backend Docker image
+        run: docker build -t noxtend-api:ci apps/backend 2>&1 | tee ci-logs/docker-build.log
+      - name: Upload backend failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: backend-failure-artifacts
+          path: |
+            ci-logs/
+            test-results/backend/
+          retention-days: 7

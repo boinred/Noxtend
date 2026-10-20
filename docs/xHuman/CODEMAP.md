@@ -2,7 +2,7 @@
 
 AI 에이전트가 작업에 필요한 코드와 테스트를 찾는 첫 안내서다. 사람용 소개는 루트 `README.md`에 있다. 탐색 출발점일 뿐 코드 분석을 대신하지 않는다. 수정 전에는 실제 선언·호출·테스트를 확인하고, 작업 규칙은 [AGENTS.md](../../AGENTS.md)를 따른다.
 
-마지막 확인: 2026-10-18, 2D 오브젝트 자리·재구성 경로(자리 전용 저장·`placements` 계약·계획 검수 화면·`AnalyzeSpritesV5`)는 `516a39d` + 이 변경으로 확인. 2026-10-14, 2D 에셋 역할 경로는 Backend `99094b9`·Frontend `0362628`로 확인. 2026-10-13, 2D 원본 준비 경로는 revision `0385d0e`로 확인. 모델·단가 수집 경로는 2026-10-09 revision `7862b8b`. 나머지 영역의 기준은 각 지도에 기록한다.
+마지막 확인: 2026-10-20, GitHub CI·로컬 배포 추적은 `21babe5`·`40f6dd5`와 이번 지침 정리로 확인. 2026-10-18, 2D 오브젝트 자리·재구성 경로(자리 전용 저장·`placements` 계약·계획 검수 화면·`AnalyzeSpritesV5`)는 `516a39d` + 이 변경으로 확인. 2026-10-14, 2D 에셋 역할 경로는 Backend `99094b9`·Frontend `0362628`로 확인. 2026-10-13, 2D 원본 준비 경로는 revision `0385d0e`로 확인. 모델·단가 수집 경로는 2026-10-09 revision `7862b8b`. 나머지 영역의 기준은 각 지도에 기록한다.
 
 ## 저장소 구성
 
@@ -10,7 +10,8 @@ AI 에이전트가 작업에 필요한 코드와 테스트를 찾는 첫 안내�
 | --- | --- |
 | `apps/backend/` | .NET 10 ASP.NET Core. API와 Worker가 한 호스트에서 실행된다. 솔루션 `Noxtend.slnx` |
 | `apps/frontend/` | React 19·Vite 스튜디오·관리자 화면. 패키지 `@nextend/frontend` |
-| `deploy/` | Docker Desktop Kubernetes 로컬 기동(`local-up.sh`, `k8s/`), Azure 내부 테스트 정의(`azure/`) |
+| `deploy/` | Docker Desktop Kubernetes 로컬 기동·이미지 출처 확인·성공 배포 기록(`local-up.sh`, `local-deployment.py`, `k8s/`) |
+| `.github/` | PR·main 회귀 CI(`workflows/ci.yml`), main 원격 보호 설정 본문(`main-protection.json`) |
 | `packages/proto/` | Protobuf 계약 계획 문서뿐이다. 생성 코드·호출 없음 |
 | `docs/xHuman/` | 영역별 코드 지도와 [문서 유지 규칙](README.md#문서-유지-규칙) |
 | `docs/superpowers/` | 과거 설계·계획·실행 기록. 결정 이유 참고용이며 현재 구현 근거가 아니다 |
