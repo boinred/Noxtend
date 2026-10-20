@@ -267,3 +267,21 @@ git commit -m "feat(frontend): compare source and reconstruction with a draggabl
 - 의미 품질: 자리 위치의 정확도는 사람이 판단할 몫이다. 계획 검수 화면(`/2d/background/87a2debc-6516-4607-a33d-b3d39e8b8060`)에서 상자를 보는 것은 사용자에게 맡겼다. 화면을 훑어본 바로는 물탱크 두 곳처럼 실제 위치에 놓인 자리가 있다. 정확도 판정은 하지 않았다.
 - 관찰: 에셋 12개 상한에 닿았다. 건물은 통째 하나가 아니라 옥상·지붕·차양 같은 부분 오브젝트로 나뉘었다. 이름 하나에 공백이 섞였다(`street_drain_and_man hole`).
 - `Verdict` 기록과 프롬프트 활성화 변경은 하지 않았다. 이 결과는 한 사례이며 V5 전체 품질로 일반화하지 않는다. OpenAI 외 공급자의 V5 schema 수락은 미확인이다.
+
+### 2026-10-20 전달 상태
+
+PR 병합과 작업 브랜치 정리를 마쳤다. 위 기록은 측정·검증 당시 결과를 그대로 둔 것이고, 이 절은 그 뒤 전달 상태만 덧붙인다.
+
+- PR: [#18](https://github.com/boinred/Noxtend/pull/18)
+- 브랜치 마지막 커밋: `1c6e32e0a45542d9d5dcb7b8464f70ea119f9888`
+- main 병합 커밋: `c2424d4f0b8e3c8c728100cfe3433a475bcf074d`(2026-10-20 13:23 KST, 사용자가 직접 병합)
+- 병합 결과와 브랜치 마지막 커밋의 전체 트리가 같다는 것을 `git diff --quiet`로 확인했다.
+- `claude/2d-compare-tile-fit` 로컬·원격 브랜치를 삭제했고, 기본 checkout을 main과 동기화했다. 별도 worktree는 없다.
+- GitHub에 등록된 PR 상태 검사가 없어 CI 성공으로 쓰지 않는다. 병합 전 근거는 위 표의 로컬 회귀다.
+- 로컬 Docker 재배포와 Azure 배포는 하지 않았다. Backend 타일 맞춤은 재배포 뒤 새로 생성하는 타일부터 적용된다.
+- V5 확인 작업 `87a2debc`는 로컬 DB에 `planReview` 상태로 남아 있다(이미지 생성 없음).
+- 기본 checkout에 남겨 둔 로컬 근거(Git 제외 대상):
+  - `.superpowers/sdd/2026-10-19-2d-reconstruction-compare/`: 작업별 brief·보고서·리뷰 패키지·진행 원장
+  - `.superpowers/brainstorm/41596-1792322212/`, `.superpowers/brainstorm/22116-1792369291/`: 슬라이드 비교 시안
+
+  이 문서가 저장소에 남는 요약이다.
