@@ -51,8 +51,9 @@ spec:
     spec:
       containers:
         - name: api
+          # Reusable alias; local-up.sh applies a revision/config-digest tag
           image: noxtend-api:local
-          # Local image built straight into the Docker Desktop daemon — never pulled
+          # Local Docker image, imported into containerd when needed
           imagePullPolicy: Never
           ports:
             - containerPort: 8080
