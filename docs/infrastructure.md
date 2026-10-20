@@ -235,6 +235,16 @@ pnpm dev
 deploy/local-up.sh --skip-build
 ```
 
+## 배포 버전 기록
+
+`local-up.sh`는 Backend 이미지의 Git revision·dirty label·Docker ID를 확인해 고유 태그로 적용합니다. `--skip-build`는 기존 이미지의 출처를 읽으며 label 없는 기존 이미지는 정상 빌드로 갱신해야 합니다. rollout·Pod·health 확인이 모두 성공한 경우에만 Git에서 제외된 `deploy/.local/deployments/`에 UTC timestamp 이력과 `latest.json`을 저장합니다. 실패가 이전 성공 기록을 덮지 않습니다.
+
+```bash
+cat deploy/.local/deployments/latest.json
+```
+
+기록에는 context·namespace·커밋·dirty·이미지 태그/ID·Deployment/Pod 식별자만 포함합니다. Secret과 health 전체 본문은 저장하지 않습니다. Docker config ID와 Pod runtime imageID는 다른 형식일 수 있습니다. Frontend는 별도 Vite로 실행하므로 Backend 기록이 Frontend 버전이나 이후 수동 클러스터 변경을 추적하지는 않습니다.
+
 ## 종료와 데이터 수명
 
 프론트엔드와 `--forward` 포트 포워딩은 각 터미널에서 `Ctrl+C`로 종료합니다.
@@ -258,8 +268,7 @@ kubectl delete namespace noxtend
 - 현재 인증이 없어 외부 공개 배포를 금지합니다.
 - `deploy/k8s/secrets.yaml`과 공급자 키를 커밋하지 않습니다.
 - 외부 배포에서는 NodePort 대신 인증이 적용된 Ingress 또는 내부 Service를 사용합니다.
-- 실제 Azure와 관리형 Redis를 사용할 때도 Domain/Application 계약은 바뀌지 않고
-  연결 문자열과 Infrastructure 어댑터만 교체합니다.
+- 공개 GitHub 저장소의 CI와 로컬 기동만 운영하며 Azure 배포 정의는 사용하지 않습니다.
 
 더 자세한 수동 Kubernetes 절차는
 [`deploy/k8s/README.md`](../deploy/k8s/README.md)를 참고하세요.

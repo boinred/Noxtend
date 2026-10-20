@@ -1,43 +1,55 @@
-# 인프라·배포 작업 절차
+# GitHub CI·로컬 배포 절차
 
-명령과 경로는 저장소 루트 기준이다. 실제 실행의 승인·공개·데이터 보존 경계는 `deploy/AGENTS.md`를 먼저 따른다.
+저장소 루트 기준이다. 공개·승인·데이터 보존 경계는 [배포 지침](../../../../deploy/AGENTS.md)을 따른다. Azure 배포는 사용하지 않는다.
 
 ## 변경 전 확인
 
-- `docs/infrastructure.md`·`deploy/k8s/README.md`, 대상 스크립트/매니페스트/Bicep, API 시작 코드·`apps/backend/Dockerfile`을 읽는다. 로컬 구성은 API·SQL Server·Redis·Azurite의 4개 Deployment다.
-- 루트 CI는 `azure-pipelines.yml`과 실제 참조 스크립트를 읽는다. Slack 전송은 실제 외부 행동이며 DryRun·정적 확인과 구분한다.
+- CI: `.github/workflows/ci.yml`·실제 검사 명령·`.github/main-protection.json`.
+- 로컬 배포: `docs/infrastructure.md`·`deploy/k8s/README.md`·`deploy/local-up.sh`·`deploy/local-deployment.py`·매니페스트·API 시작 코드·Dockerfile.
+- 지원 구성은 API·SQL Server·Redis·Azurite의 4개 Deployment다. Frontend는 별도 Vite 실행이다.
 
-## 검증과 실행의 구분
+## GitHub flow와 main 보호
 
-명령은 저장소 루트 기준이다. 문서·문법 확인을 배포 완료로 보고하지 않는다.
+최신 main에서 기능별 작업 브랜치를 만들고 독립 리뷰·PR 검사를 거쳐 main에 병합한다. develop/release 상시 브랜치는 두지 않는다. CI는 main 대상 PR과 main push에서 경로 필터 없이 `Repository checks`·`Frontend`·`Backend`를 실행한다. 포크 PR은 읽기 전용 토큰·Fake·격리 Testcontainers만 사용한다.
 
-| 목적 | 명령 또는 절차 | 효과와 한계 |
-|---|---|---|
-| Shell 문법 | `bash -n deploy/local-up.sh deploy/azure/deploy.sh` | 로컬 파싱만 수행, 스택 기동 없음 |
-| Bicep 문법 | 설치된 `bicep build deploy/azure/main.bicep --stdout` | 로컬 컴파일, Azure 리소스 미생성. 도구가 없으면 설치와 리소스 검증을 구분 |
-| Kubernetes 확인 | context·namespace·대상 매니페스트 확인 후 `kubectl apply --dry-run=client --validate=false -f <파일>` | apply하지 않지만 discovery 등 클러스터 조회가 필요할 수 있음. 정책·동작·보안 검증을 대신하지 않음 |
-| 이미지 검증 | `docker build -t noxtend-api:local apps/backend` | 로컬 이미지 생성·베이스 이미지 다운로드 가능, 클러스터 배포는 아님 |
-| 로컬 기동 | `deploy/local-up.sh [--skip-build] [--forward \| -d \| --detach]` | 실제 Secret/PVC/Deployment 적용 및 API 재시작. `--skip-build`도 상태 변경이며 이미지 갱신을 생략함. `--forward`는 터미널 유지, `-d`/`--detach`는 확인 후 포트 포워딩만 백그라운드에 남김 |
-| Azure 변경 예측 | `az deployment group what-if` | Azure 조회와 인증 필요. 실제 리소스 생성과 별개이며 사전 권한·대상 확인 필요 |
-| Azure 배포 | `deploy/azure/deploy.sh` | 공인 IP 조회, 유료 리소스 생성·변경, ACR 빌드, API 재시작, 기본적으로 프론트엔드 배포까지 수행 |
+보호 설정은 PR·세 검사·최신 main 반영·대화 해소를 요구하고 관리자에게도 적용한다. 강제 push·삭제는 금지한다. GitHub 승인 인원은 1인 개발을 위해 0명이며 독립 에이전트 리뷰를 대체하지 않는다. 별도 사람 리뷰어를 운영하게 되면 승인 인원을 재검토한다.
 
-`local-up.sh`는 현재 Kubernetes context를 강제하지 않는다. 실행 전에 `kubectl config current-context`가 의도한 `docker-desktop`인지 확인한다. Azure 실행 전에는 subscription·resource group·지역·이름 접두어·이미지 태그·허용 IP·비용을 확인한다. 문서 수정이나 코드 검증 요청을 실제 배포 요청으로 확대하지 않는다.
+보호를 수정할 때는 의도한 GitHub 저장소와 실제 검사 이름을 먼저 확인하고, 사용자 승인 범위에서 다음 명령을 실행한 뒤 조회한다. 파일 변경만으로 원격 설정이 바뀌지는 않는다.
 
-## 변경 시 확인 사항
+```bash
+gh api --method PUT repos/boinred/Noxtend/branches/main/protection --input .github/main-protection.json
+gh api repos/boinred/Noxtend/branches/main/protection
+```
 
-- 로컬 API 이미지는 `noxtend-api:local`, `imagePullPolicy: Never`다. kind 기반 Docker Desktop에서는 `desktop-control-plane`의 containerd 이미지 저장소로 반입해야 한다. 이미지 이름·반입 방식·재시작을 함께 확인하고 `--skip-build`로 새 코드가 반영되었다고 보고하지 않는다.
-- API는 시작 시 Kestrel 바인딩 전에 EF Core `MigrateAsync`를 실행한다. DB 연결 또는 마이그레이션 실패는 API 기동 실패가 될 수 있다. 현재 단일 replica와 `Recreate` 전제를 바꾸기 전에 동시 마이그레이션·RWO 볼륨·Worker 중복 실행을 검토한다.
-- DB 스키마와 시드 데이터 변경은 Backend 지침을 함께 따른다. 기존 DB에 적용할 migration과 데이터 보존·복구 방법을 검토하고 실제 DB 적용을 테스트 대체로 사용하지 않는다.
-- 새 Backend 프로젝트나 native 의존성은 `apps/backend/Dockerfile`의 restore/publish 및 runtime 패키지에도 반영되어야 한다. 호스트 `dotnet build` 성공만으로 컨테이너 빌드를 확인했다고 하지 않는다.
-- 연결 문자열, `ASPNETCORE_ENVIRONMENT`, Data Protection 경로, lease/sweep, Fake 설정의 로컬/Azure 차이를 명시한다. Azure Redis는 암호화된 `10000` 포트이며 로컬 Redis의 `6379` 설정을 복사하지 않는다.
-- 프론트엔드 API 주소는 `VITE_API_BASE_URL`로 빌드에 반영된다. Azure 배포 스크립트는 API URL을 넣어 프론트엔드를 다시 빌드하며 `SKIP_FRONTEND=1`은 그 단계와 프론트엔드 배포를 생략한다. Production CORS는 App Service의 SWA origin 설정이므로 주소 변경 시 함께 확인한다.
+## 정적 검증과 실제 실행
 
-## 승인된 기동 확인·복구
+| 목적 | 명령 | 범위 |
+| --- | --- | --- |
+| Shell 문법 | `bash -n deploy/local-up.sh` | 기동 없음 |
+| Python 문법 | `python3 -m py_compile deploy/local-deployment.py deploy/test_local_up.py` | 기동 없음 |
+| 배포 회귀 | `python3 deploy/test_local_up.py` | 격리 PATH·Fake·fixture 프로세스만 사용 |
+| CI 문법 | `go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/ci.yml` | 선택적 로컬 도구, 실제 GitHub 실행과 별개 |
+| 이미지 빌드 | `docker build -t noxtend-api:local apps/backend` | 로컬 산출물만 생성, 추적 label 없음 |
+| 로컬 기동 | `deploy/local-up.sh [--skip-build] [--forward \| -d \| --detach]` | 실제 Secret/PVC/Deployment 적용·API 재시작 |
 
-- rollout·로그의 migration 결과, health, Frontend API 주소/CORS, 실제 이미지·환경을 확인한다. 필요한 최소 기능은 Fake로 확인하며 미실행 항목을 보고한다.
-- 기본 포트 포워딩은 스크립트 종료 시 사라진다. 사용자 터미널에서 `-d`/`--detach`로 백그라운드에 남기거나 `--forward` 또는 `kubectl -n noxtend port-forward svc/api 18080:8080`으로 유지한다. `-d`는 PID·로그 경로·종료 명령을 출력하며 API 파드 재시작 후 자동 재연결하지 않는다. 에이전트의 시간 제한 있는 백그라운드 실행에 맡기지 않는다.
-- 기동 전 18080 listener 전체를 확인하고 현재 사용자·kubectl 실행파일·`noxtend`·`svc/api 18080:8080`이 확인된 포워딩만 TERM으로 종료한다. 명시 context는 현재 context와 일치해야 하며 context 생략은 기존 스크립트 명령 형태에 한해 허용한다. 다른 대상이나 미확인 listener가 있으면 아무 listener도 종료하지 않고 빌드·apply 전에 실패한다. TERM 후 포트 해제는 최대 5초 기다리며 자동 재연결은 지원하지 않는다.
-- 스크립트 회귀는 `python3 deploy/test_local_up.py`로 확인한다. 임시 디렉터리의 가짜 Docker·kubectl·curl·lsof·ps와 격리 PATH를 사용하며 실제 호스트 listener 조회·종료 없이 fixture 프로세스의 포워딩 교체·충돌 보호·TERM 지연/거부·도구 누락·detach 수명·SIGHUP·실패 정리를 검증한다.
-- 복구 전 기존 이미지·환경과 DB·Blob·Data Protection 키 호환성을 확인한다. 식별 가능한 이미지 태그/digest·적용 migration을 배포 이력에 기록한다.
+직접 `docker build`한 label 없는 이미지는 `--skip-build`로 추적할 수 없다. 최초 한 번은 `deploy/local-up.sh -d`로 빌드한다. 현재 context를 강제하지 않으므로 실행 전 `kubectl config current-context`가 의도한 `docker-desktop`인지 확인한다. 스크립트는 실행 중 context를 고정한다.
 
-정적 검증 범위와 완료 보고는 [verification.md](verification.md)를 따른다.
+## 로컬 버전 추적
+
+- 새 빌드는 full Git revision·저장소 전체 dirty 여부를 label로 넣고 Docker image ID를 확인한다. dirty는 Backend 변경만을 뜻하지 않는다. 고유 revision/dirty/image ID 태그를 containerd로 반입하고 매니페스트에 렌더한다. `api.yaml`의 `:local`은 템플릿 alias다.
+- `--skip-build`도 실제 적용·재시작을 수행하며, 현재 checkout이 아니라 기존 이미지 label을 읽는다. 출처가 없거나 잘못되면 rebuild 안내로 종료하고 기존 포워딩을 보존한다.
+- rollout 뒤 Deployment·ReplicaSet·Pod 소유 관계, 단일 active Pod와 api 컨테이너의 기대 이미지·ready·runtime imageID를 확인한다. health 전후 같은 Pod인지 재확인한다. Docker config ID와 Pod runtime imageID를 같은 값이라고 가정하지 않는다.
+- 성공 기록은 `deploy/.local/deployments/latest.json`, 이전 성공은 같은 디렉터리의 UTC timestamp·Docker ID 이름 JSON이다. 안전 필드는 `recordedAt`, `context`, `namespace`, `revision`, `dirty`, `imageTag`, `imageID`, `deploymentUID`, `podName`, `podUID`, `podImageID`다.
+- 이 기록은 Backend 성공 당시 정보다. 별도 Vite의 Frontend revision, 이후 수동 클러스터 변경, 실 AI 검증, DB rollback을 보장하지 않는다.
+
+```bash
+cat deploy/.local/deployments/latest.json
+```
+
+## 포워딩·데이터 보존
+
+- 기본 포워딩은 종료 시 사라진다. `-d`는 PID·로그·종료 명령을 출력하고 백그라운드에 남긴다. `--forward`는 터미널을 유지한다. API Pod 재시작 뒤 자동 재연결하지 않는다.
+- 기동 전 18080 listener 전체를 확인하고 현재 사용자·kubectl·Noxtend 대상이 확인된 포워딩만 TERM 종료한다. 명시 context는 현재 context와 일치해야 하며 context 생략은 기존 스크립트 명령 형태에 한해 허용한다. 미확인 listener가 있으면 종료·build·apply 전에 실패한다. 포트 해제는 최대 5초 기다린다.
+- 단일 replica·Recreate·API 시작 migration·세 PVC·Data Protection 경로를 보존한다. 이미지 rollback은 DB rollback이 아니다. namespace/PVC 삭제로 배포 실패를 복구하지 않는다.
+
+검증 명령·완료 보고는 [verification.md](verification.md)를 따른다.

@@ -58,6 +58,19 @@ pnpm test:e2e
 - `tests/e2e/fakeApi.ts`의 가짜 API로 요청·응답·오류·단계 전이를 확인한다. 실제 공급자 생성은 비용·승인 범위를 확인한 별도 검증이다.
 - 계약·상태 변경은 `src/domain/job/backendParity.test.ts`, API client 테스트·관련 가짜 응답을 함께 검토한다. 테스트 파일 존재와 실제 수집·실행을 구분한다.
 
+## GitHub PR 검사
+
+`.github/workflows/ci.yml`은 main 대상 PR·main push에서 `Repository checks`·`Frontend`·`Backend`를 경로 필터 없이 실행한다. 기존 로컬 명령을 유지하고 유료 smoke·실 배포를 제외한다. 공개 포크 PR에는 비밀값과 자체 호스트 실행기를 제공하지 않는다. 실패 로그·Playwright 결과·Backend TRX는 해당 실행의 artifact에서 확인한다.
+
+main 보호의 필수 검사 이름과 GitHub Actions app ID는 `.github/main-protection.json`에 있다. 설정 파일만 수정해 원격 적용으로 보고하지 않고 실제 보호 API와 해당 PR checks를 조회한다. 관리자를 포함해 PR·최신 main 반영·미해결 대화 해소를 요구하며 승인 인원 0명은 독립 에이전트 리뷰 생략을 뜻하지 않는다.
+
+```bash
+gh pr checks <PR번호> --repo boinred/Noxtend
+gh api repos/boinred/Noxtend/branches/main/protection
+```
+
+CI 통과는 Fake·격리 DB·브라우저·이미지 빌드 검증이다. 개발자의 Kubernetes 배포 성공·실 AI 품질·저장 데이터 복구를 대신하지 않는다.
+
 ## 커밋 훅
 
 ```bash

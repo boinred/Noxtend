@@ -34,6 +34,18 @@ Frontend는 별도로 `pnpm dev`로 실행하고
 
 ---
 
+## 성공한 Backend 버전 확인
+
+로컬 기동에는 기존 도구 외에 Git·Python 3가 필요합니다. 스크립트가 이미지를 빌드할 때 full Git revision과 dirty label을 넣고 image ID까지 포함한 고유 태그를 적용합니다. `:local`은 마지막 빌드 재사용 alias입니다. `--skip-build`는 기존 이미지의 출처를 사용하며 label이 없으면 포워딩 종료·apply 전에 재빌드를 안내합니다.
+
+rollout·Pod 소유/이미지·health가 확인된 실행만 Git 제외된 `deploy/.local/deployments/`에 timestamp 이력과 `latest.json`으로 기록합니다. 실패하면 이전 성공 기록을 유지합니다.
+
+```bash
+cat deploy/.local/deployments/latest.json
+```
+
+`revision`·`dirty`·`imageTag`·`imageID`·`podImageID`로 실행한 Backend를 식별합니다. 별도 Vite Frontend의 버전은 포함하지 않습니다. 기록은 성공 당시 정보이며 DB rollback이나 삭제한 이미지 복원을 대신하지 않습니다. 직접 `docker build`한 label 없는 이미지는 `deploy/local-up.sh -d`로 한 번 정상 빌드한 뒤 재사용합니다.
+
 ## 1. 비밀 준비
 
 실제 secret 은 커밋하지 않는다. 예시를 복사해 값만 바꾼다.
