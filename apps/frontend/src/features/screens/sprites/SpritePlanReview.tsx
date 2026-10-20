@@ -248,9 +248,9 @@ export function SpritePlanReview({
     onCommit: (partId, ordinal, bounds) =>
       setPlans((current) => current.map((plan) => withBox(plan, partId, ordinal, bounds))),
   })
-  // 카드에서 고른 상자는 이미지에서 보여야 함
+  // 비교 중 카드에서 고른 상자는 이미지에서 보여야 함, 재구성 전에 고른 선택은 처음 모드 유지
   function selectBox(partId: string, ordinal: number) {
-    setMode('edit')
+    if (comparing) setMode('edit')
     roi.select(partId, ordinal)
   }
   const preview = roi.preview

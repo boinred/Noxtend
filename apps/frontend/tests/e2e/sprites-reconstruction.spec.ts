@@ -604,3 +604,29 @@ test('timed out and superseded workers cannot publish results', async ({ page })
   await release(page)
   expect(errors).toEqual([])
 })
+
+test('selecting a box before the reconstruction is ready still opens in compare mode', async ({
+  page,
+}) => {
+  await installFakeApi(page, { sprites: { seed: 'baseReview', settings } })
+  await page.route('**/tileFill.worker-*.js', (route) =>
+    route.fulfill({ status: 200, contentType: 'text/javascript', body: STUB_WORKER }),
+  )
+  await page.goto(`/2d/background/${SPRITE_IDS.job}`)
+  const review = page.getByRole('region', { name: '제작 계획 검수' })
+  const modes = review.getByRole('group', { name: '재구성 보기' })
+  await expect(review.getByRole('status').filter({ hasText: '재구성 계산 중…' })).toBeVisible()
+  await expect(modes).toHaveCount(0)
+  // 계산 전 카드에서 상자를 골라도 처음 모드는 비교
+  await review.getByRole('button', { name: '대상 선택 1', exact: true }).click()
+  await release(page)
+  await expect(modes).toBeVisible()
+  await expect(modes.getByRole('button', { name: '비교', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(modes.getByRole('button', { name: '편집', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  )
+})
