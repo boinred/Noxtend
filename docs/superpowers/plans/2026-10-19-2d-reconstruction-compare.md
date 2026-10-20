@@ -232,3 +232,38 @@ git commit -m "feat(frontend): compare source and reconstruction with a draggabl
   - `backend.md`의 contain 변환 문구 링크
   - `frontend.md` 확인 기준의 "실제 Backend는 확인하지 않았다" 문구 범위(로컬 API 조회는 함)
 - Task 3(V5 실제 분석)은 아직 실행하지 않았다(사용자 승인 대기).
+
+### 2026-10-20 Task 3 V5 실제 분석
+
+사용자 승인 범위는 분석 1회와 자동 재시도, 이미지 생성 없음이었다. 그 범위 안에서 실행했다.
+
+- 실행 모드: 로컬 Docker API(`localhost:18080`), 실제 공급자 호출
+- 입력: 업로드 `bdd66320-f5f9-49e9-a952-9f02a14458e6`(1536×1024), isometric·tiles·128·both. 비교 기준인 `a9f77a56`(V4 분석)과 같은 원본·설정이다.
+- 공급자·모델: 공급자 `4b3253f9-ef60-4e6c-8087-3755008d8ba0`, 텍스트 `gpt-5.6-luna`, 이미지 `gpt-image-2.5-sunburst`(작업 생성에만 지정, 호출 없음)
+- 프롬프트: AnalyzeSprites/Background 활성 V5 `c7000000-0000-4000-8000-000000000005`(`GET /api/prompts/AnalyzeSprites/versions?category=background`로 확인)
+- 작업: `87a2debc-6516-4607-a33d-b3d39e8b8060`. task는 `analyzeSprites` 하나다. 계획은 승인하지 않아 `planReview`에서 멈췄고 이미지는 생성하지 않았다.
+- 호출: 1회 성공, 재시도 0. 입력 2967·출력 2150 토큰, 18.7초, 예상 비용 $0.0031734(호출 내역의 `estimatedCostUsd`).
+- 응답 계약: 파싱·도메인 검증 성공, 에셋 12개(상한), `grid.cellWidth` 0.0833.
+
+| 순서 | 이름 | 역할 | 자리 |
+| --- | --- | --- | --- |
+| 1 | `distant_city_skyline` | backdrop | null |
+| 2 | `asphalt_ground_tile` | tile | null |
+| 3 | `paved_sidewalk_tile` | tile | null |
+| 4 | `flat_rooftop_facade` | object | 4 |
+| 5 | `terracotta_roof` | object | 4 |
+| 6 | `blue_metal_roof` | object | 2 |
+| 7 | `perimeter_wall_and_fence` | object | 5 |
+| 8 | `utility_pole_and_wires` | object | 4 |
+| 9 | `rooftop_water_tank` | object | 2 |
+| 10 | `street_tree_and_shrubbery` | object | 6 |
+| 11 | `roof_awning` | object | 2 |
+| 12 | `street_drain_and_man hole` | object | 4 |
+
+- 확인 항목:
+  - 담벼락·담장은 `perimeter_wall_and_fence` 오브젝트가 되었고 자리는 5곳이다. V4의 `masonry_wall_tile` 같은 벽 타일은 없다.
+  - 건물·나무·가로수 계열은 자리가 2~6곳이다(가로수·관목 6, 옥상·외벽 4, 기와지붕 4).
+  - `placements`는 오브젝트에만 있고 타일·원경 배경은 null이다.
+- 의미 품질: 자리 위치의 정확도는 사람이 판단할 몫이다. 계획 검수 화면(`/2d/background/87a2debc-6516-4607-a33d-b3d39e8b8060`)에서 상자를 보는 것은 사용자에게 맡겼다. 화면을 훑어본 바로는 물탱크 두 곳처럼 실제 위치에 놓인 자리가 있다. 정확도 판정은 하지 않았다.
+- 관찰: 에셋 12개 상한에 닿았다. 건물은 통째 하나가 아니라 옥상·지붕·차양 같은 부분 오브젝트로 나뉘었다. 이름 하나에 공백이 섞였다(`street_drain_and_man hole`).
+- `Verdict` 기록과 프롬프트 활성화 변경은 하지 않았다. 이 결과는 한 사례이며 V5 전체 품질로 일반화하지 않는다. OpenAI 외 공급자의 V5 schema 수락은 미확인이다.
